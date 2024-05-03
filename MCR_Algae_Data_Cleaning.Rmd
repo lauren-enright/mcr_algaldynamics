@@ -126,6 +126,18 @@ comb_wide[is.nan.data.frame(comb_wide)] <- 0
 comb_wide_quad_sum <- comb_wide %>%
   mutate(row_sums = rowSums(dplyr::select(., 8:91)))
 
+#do we have data for all transects?
+
+comb_wide_quad_sum %>%
+  dplyr::group_by(Year, Site) %>%
+  dplyr::summarise(count = n())
+
+#should be 200 per year per site (50 at each habitat * 4 habitats)
+#2005 and 2006 are one large collective survey
+#2021 sites are at 100 (did not do forereef habitats due to COVID)
+
+#do all quads = 100 ?
+
 non100_wide_quad_level <- comb_wide_quad_sum %>%
   dplyr::filter(row_sums != 100)
 
@@ -141,6 +153,9 @@ mistakes_wide_quad_level <- comb_wide_quad_sum %>%
   dplyr::filter(row_sums != 100) %>%
   dplyr::filter(row_sums != -1)
 
+comb_wide_quad_sum %>%
+ dplyr::filter(row_sums != 100) %>% dplyr::filter(Year == 2020)
+
 #remaining 85 have something weird happening! Will send to Bob for updates. For now, 
 # will filter these out
 
@@ -151,7 +166,43 @@ setdiff(mistakes_wide_quad_level$Location, mistakes_quad_level$Location)
 setdiff(mistakes_quad_level$Location, mistakes_wide_quad_level$Location)
 
 #yay, they are the same 85 
+
+
 ```
+```{r}
+
+test <- comb_wide_quad_sum %>%
+  dplyr::group_by(Year, Site, Habitat, Transect) %>%
+  dplyr::summarise(sum = sum(Quadrat))
+
+test <- comb_wide_quad_sum %>%
+  dplyr::group_by(Year, Site, Habitat) %>%
+  dplyr::summarise(sum = sum(Transect))
+
+test <- comb_wide_quad_sum %>%
+  dplyr::group_by(Year, Site) %>%
+  dplyr::summarise(count = n())
+
+
+unique(test$sum)
+
+test <- comb_wide_quad_sum %>%
+  dplyr::group_by(Year) %>%
+  dplyr::summarise(sum = sum(Transect))
+
+
+test <- wide_alldata_filtered %>%
+  dplyr::group_by(Year, Site, Habitat) %>%
+  dplyr::summarise(count = n())
+
+nique(comb_wide_quad_sum$Year)
+
+sum(test$sum)
+
+(1*10) + (2*10) + (3*10) + (4*10) + (5*10)
+
+```
+
 
 ```{r filter the wide dataset}
 
@@ -179,8 +230,22 @@ write.csv(wide_algaeonly_filtered, "algaeonly_cleaned.csv", row.names = FALSE)
 
 ```
 
+```{r filtered data QA QC}
+# you can use this to see which sites lost quads during filtering process 
+#should be 50 per year/site/habitat combo
 
-## Anything below this line was to help identify missing data, overall taxa levels, etc. and does not need to be run to get a cleaned dataframe 
+wide_alldata_filtered %>%
+  dplyr::group_by(Year, Site, Habitat) %>%
+  dplyr::summarise(count = n())
+
+wide_alldata_filtered %>%
+  dplyr::group_by(Year, Site) %>%
+  dplyr::summarise(count = n())
+
+```
+
+
+## Anything below this line was to help identify missing data, overall taxa levels, etc. and does not necessarily need to be run to get a cleaned dataframe 
 
 
 ```{r subsetting the data }
@@ -208,7 +273,6 @@ levels(as.factor(macro_df$Taxonomy_Substrate_Functional_Group )) # 63 levels
 ```
 
 
-
 ```{r create wide df - algae only}
 # using algae data
 # I don't think the date of the transect matters. Dropping that.
@@ -233,7 +297,7 @@ length(levels(algae_wide$Site_habitat)) # 24 sites
 
 ### NOTE - USED CHAT GPT FOR THIS NEXT PART
 # Step 1: Create a contingency table of counts for each combination of year and site
-year_site_counts <- table(algae_wide$Year, algae_wide$Site_habitat)
+year_site_counts <- table(comb_wide$Year, comb_wide$Site_habitat)
 
 # Step 2: Identify rows with zero counts (indicating missing sites)
 missing_years <- rownames(year_site_counts)[rowSums(year_site_counts == 0) > 0] # 2005, 2006, 2021 missing data
@@ -294,25 +358,5 @@ length(missing_quadrats) # 1800 missing quadrats, consistent with the missing si
 # extra missing values might be from quadrats with no algae in wide dataframe?
 
 ```
-
-```{r wide - with all data}
-
-comb_wide <- cast(data, Year + Location + Site + Habitat + Site_habitat + Transect + Quadrat ~ Taxonomy_Substrate_Functional_Group, fun.aggregate = mean, value = "Percent_Cover") # this is the correct number of rows given the missing data
-
-#change NAs to 0s 
-
-is.nan.data.frame <- function(x){
-  do.call(cbind, lapply(x, is.nan))}
-
-comb_wide[is.nan.data.frame(comb_wide)] <- 0
-
-# remove non-algae columns with subset
-algae_wide_2 <- comb_wide[ , -which(names(comb_wide) %in% not_algae)]
-
-
-
-```
-
-
 
 
