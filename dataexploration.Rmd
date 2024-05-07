@@ -1,0 +1,118 @@
+---
+title: "data_exploration"
+author: "L. Enright"
+date: "2024-05-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(here)
+library(dplyr)
+library(tidyverse)
+#install.packages("fishualize")
+library(fishualize)
+
+data <- read.csv(here("data", "allbenthicdata_cleaned.csv"), stringsAsFactors = F) # replacements don't work when strings are factors
+
+str(data)
+
+#pivot long 
+
+long_data <- pivot_longer(
+  data = data,
+  cols = 8:92,
+  names_to = "taxa",
+  values_to = "percent_cover") 
+
+```
+
+#look at sites by location (back, fringing, forereef)
+```{r backreef}
+
+transect_level <- long_data %>%
+  #dplyr::filter(Habitat == "Backreef") %>%
+  dplyr::group_by(Year, Site, Habitat, Transect, taxa) %>%
+  summarise(mean_cover = mean(percent_cover), 
+            se = sd(percent_cover)/sqrt(n()))
+
+site_level <- transect_level %>%
+  dplyr::group_by(Year, Site, Habitat, taxa) %>%
+  summarise(mean_site_cover = mean(mean_cover), 
+            site_se = sd(mean_cover)/sqrt(n()))
+
+#backreef
+site_level %>%
+  dplyr::filter(taxa %in% c("Coral", "Algal.Turf", "Crustose.Corallines", "Lobophora.variegata", 
+                            "Asparagopsis.taxiformis")) %>%
+  dplyr::filter(Habitat == "Backreef") %>%
+  #dplyr::filter(Site == "LTER 1") %>%
+  ggplot(aes(x = Year, y = mean_site_cover, color = taxa, group = taxa)) +
+  geom_point() +
+  scale_color_fish_d(option = "Coryphaena_hippurus")+
+  geom_line() +
+  geom_errorbar(aes(ymax = mean_site_cover + site_se,
+                ymin = mean_site_cover - site_se)) +
+  facet_wrap(~Site)
+
+site_level %>%
+  dplyr::filter(taxa %in% c("Algal.Turf")) %>%
+  dplyr::filter(Habitat == "Backreef") %>%
+   dplyr::filter(Site == "LTER 1")
+```
+
+```{r fringing}
+
+#fringing 
+
+site_level %>%
+  dplyr::filter(taxa %in% c("Coral", "Algal.Turf", "Crustose.Corallines", "Lobophora.variegata", 
+                            "Asparagopsis.taxiformis")) %>%
+  dplyr::filter(Habitat == "Fringing") %>%
+  #dplyr::filter(Site == "LTER 1") %>%
+  ggplot(aes(x = Year, y = mean_site_cover, color = taxa, group = taxa)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymax = mean_site_cover + site_se,
+                ymin = mean_site_cover - site_se)) +
+  facet_wrap(~Site) +
+  theme_classic()
+```
+
+```{r forereef 10}
+
+#forereef 
+
+site_level %>%
+  dplyr::filter(taxa %in% c("Coral", "Algal.Turf", "Crustose.Corallines", "Lobophora.variegata", 
+                            "Asparagopsis.taxiformis")) %>%
+  dplyr::filter(Habitat == "Outer 10") %>%
+  #dplyr::filter(Site == "LTER 1") %>%
+  ggplot(aes(x = Year, y = mean_site_cover, color = taxa, group = taxa)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymax = mean_site_cover + site_se,
+                ymin = mean_site_cover - site_se)) +
+  facet_wrap(~Site)
+
+```
+
+```{r forereef 17}
+
+#forereef 
+
+site_level %>%
+  dplyr::filter(taxa %in% c("Coral", "Algal.Turf", "Crustose.Corallines", "Lobophora.variegata", 
+                            "Asparagopsis.taxiformis", "Bare.Space")) %>%
+  dplyr::filter(Habitat == "Outer 17") %>%
+  #dplyr::filter(Site == "LTER 1") %>%
+  ggplot(aes(x = Year, y = mean_site_cover, color = taxa, group = taxa)) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymax = mean_site_cover + site_se,
+                ymin = mean_site_cover - site_se)) +
+  facet_wrap(~Site)
+
+```
+
