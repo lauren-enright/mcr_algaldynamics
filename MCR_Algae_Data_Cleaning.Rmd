@@ -169,39 +169,6 @@ setdiff(mistakes_quad_level$Location, mistakes_wide_quad_level$Location)
 
 
 ```
-```{r}
-
-test <- comb_wide_quad_sum %>%
-  dplyr::group_by(Year, Site, Habitat, Transect) %>%
-  dplyr::summarise(sum = sum(Quadrat))
-
-test <- comb_wide_quad_sum %>%
-  dplyr::group_by(Year, Site, Habitat) %>%
-  dplyr::summarise(sum = sum(Transect))
-
-test <- comb_wide_quad_sum %>%
-  dplyr::group_by(Year, Site) %>%
-  dplyr::summarise(count = n())
-
-
-unique(test$sum)
-
-test <- comb_wide_quad_sum %>%
-  dplyr::group_by(Year) %>%
-  dplyr::summarise(sum = sum(Transect))
-
-
-test <- wide_alldata_filtered %>%
-  dplyr::group_by(Year, Site, Habitat) %>%
-  dplyr::summarise(count = n())
-
-nique(comb_wide_quad_sum$Year)
-
-sum(test$sum)
-
-(1*10) + (2*10) + (3*10) + (4*10) + (5*10)
-
-```
 
 
 ```{r filter the wide dataset}
