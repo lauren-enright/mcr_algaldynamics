@@ -1,0 +1,389 @@
+---
+title: "noam_data_exploration_v1"
+author: "Noam Altman-Kurosaki"
+date: "2024-05-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(here)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(vegan)
+library(glmmTMB)
+library(car)
+library(effects)
+library(DHARMa)
+library(stringr)
+library(MuMIn)
+```
+
+```{r }
+data <- read.csv(here::here("data", "algaeonly_cleaned.csv"), stringsAsFactors = F) # replacements don't work when strings are factors
+
+str(data)
+
+#pivot long 
+
+long_data <- pivot_longer(
+  data = data,
+  cols = 8:77,
+  names_to = "Taxa",
+  values_to = "Percent_cover") 
+
+
+transect_level <- long_data %>%
+  dplyr::group_by(Year, Site, Habitat, Transect, Taxa) %>%
+  summarise(Mean_cover = mean(Percent_cover), 
+            SE = sd(Percent_cover)/sqrt(n()))
+
+site_level <- transect_level %>%
+  dplyr::group_by(Year, Site, Habitat, Taxa) %>%
+  summarise(Mean_site_cover = mean(Mean_cover), 
+            Site_se = sd(Mean_cover)/sqrt(n()))
+```
+
+```{r diversity indicies, fig.height = 15, fig.width=20}
+meta_cols <- colnames(data[1:7]) 
+species_cols <- colnames(data[8:77])
+
+wide_transect_level <- data %>%
+  dplyr::group_by(Year, Site, Habitat, Site_habitat, Transect) %>%
+  summarize(across(all_of(species_cols), mean, na.rm = TRUE))
+
+alpha_diversity <-
+  data.frame(
+    Year = as.factor(wide_transect_level$Year),
+    Site = as.factor(wide_transect_level$Site),
+    Habitat = as.factor(wide_transect_level$Habitat),
+    Site_habitat = as.factor(wide_transect_level$Site_habitat),
+    Transect = as.factor(wide_transect_level$Transect),
+    Site_habitat_transect = as.factor(paste(wide_transect_level$Site_habitat, wide_transect_level$Transect)),
+    Shannon = diversity(wide_transect_level[5:74], "shannon"),
+    Richness = rowSums(wide_transect_level[5:74] > 0)
+  )
+
+alpha_diversity_means <- alpha_diversity %>%
+  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  summarise(Richness_mean = mean(Richness), 
+            Richness_se = sd(Richness)/sqrt(n()),
+            Shannon_mean = mean(Shannon), 
+            Shannon_se = sd(Shannon)/sqrt(n()))
+
+
+site_colours <- c("LTER 1" = "cornflowerblue",
+               "LTER 2" = "darkblue",
+               "LTER 3" = "yellowgreen",
+               "LTER 4" = "forestgreen",
+               "LTER 5" = "mediumorchid",
+               "LTER 6" = "orange")
+habitat_linetypes <- c("Fringing" = "solid",
+                       "Backreef" = "longdash",
+                       "Outer 10" = "twodash",
+                       "Outer 17" = "dotted")
+habitat_shapes <- c("Fringing" = 16,
+                     "Backreef" = 17,
+                     "Outer 10" = 15,
+                     "Outer 17" = 18)
+
+(richness_plot <-
+  ggplot(data = alpha_diversity_means) +
+  geom_point(aes(x = Year, y = Richness_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8) +
+  geom_line(aes(x = Year, y = Richness_mean, colour = Site, group = Site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = Year, ymin = Richness_mean - Richness_se , ymax = Richness_mean + Richness_se, colour = Site,
+                    group = Site_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Habitat)+
+  labs(title = "a. Richness\n", y = "Richness\n") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        )
+    )
+  
+(shannon_plot <-
+  ggplot(data = alpha_diversity_means) +
+  geom_point(aes(x = Year, y = Shannon_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8) +
+  geom_line(aes(x = Year, y = Shannon_mean, colour = Site, group = Site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = Year, ymin = Shannon_mean - Shannon_se , ymax = Shannon_mean + Shannon_se, colour = Site,
+                    group = Site_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Habitat)+
+  labs(title = "b. Shannon\n", y = "shannon\n") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        )
+    )
+
+
+```
+
+```{r alpha diversity panel graph, fig.height = 30, fig.width= 20}
+
+ggarrange(richness_plot + rremove("x.text"), shannon_plot, common.legend = T,
+          nrow = 2)
+
+# seems like patterns in alpha diversity different depending on if you look at richness or shannon diversity 
+```
+
+```{r basic alpha diversity stats}
+# these violate all sorts of assumptions I'm just messing around
+richness_mod <- glmmTMB(Richness ~ Year*Site*Habitat + (1|Site_habitat_transect), data = alpha_diversity, family = poisson())
+Anova(richness_mod)
+
+# shannon_mod <- glmmTMB(Shannon ~ Year*Site*Habitat + (1|Site_habitat_transect), data = alpha_diversity, family = Gamma(link = "log")) # 0 values fuck this up. Return to this when not tired. 
+```
+
+```{r nmds, fig.height = 15, fig.width = 15}
+species_matrix <- as.matrix(wide_transect_level[6:74])
+rownames(species_matrix) <- paste(wide_transect_level$Year, wide_transect_level$Site_habitat, wide_transect_level$Transect)
+rows_to_remove <- rowSums(species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+species_matrix <- species_matrix[!rows_to_remove,] 
+wide_transect_level_subset <- wide_transect_level[!rows_to_remove,] # make sure rows are also removed from dataframe
+wide_transect_level_subset$Stratum <- paste(wide_transect_level_subset$Year, "-", wide_transect_level_subset$Site, "-", wide_transect_level_subset$Habitat )
+
+# WARNING - Before you run this, know that it will take a long time
+set.seed(1032) 
+ord2 <- metaMDS(species_matrix, dist	= "bray",	trymax	= 100,	k	= 2) # looks like it automatically wisconsin transforms now?
+ord2 # stress = 0.22
+stressplot(ord2)
+
+set.seed(1032)
+ord3 <- metaMDS(species_matrix, dist	= "bray",	trymax	= 100,	k	= 3)
+ord3 # 0.166
+stressplot(ord3)
+
+pro <- procrustes(ord2, ord3) # visually compare w procrustes rotation
+
+plot(pro, cex=1.5)
+
+site.scores <- as.data.frame(vegan::scores(ord3)$sites)  # extract the site scores and convert to a data.frame
+# add back in metadata
+site.scores$Year <- as.factor(wide_transect_level_subset$Year)
+site.scores$Site <- as.factor(wide_transect_level_subset$Site)
+site.scores$Habitat <- as.factor(wide_transect_level_subset$Habitat)
+site.scores$Site_habitat <- as.factor(wide_transect_level_subset$Site_habitat)
+site.scores$Transect <- as.factor(wide_transect_level_subset$Transect)
+site.scores$Stratum <- as.factor(wide_transect_level_subset$Stratum)
+
+cent <- aggregate(cbind(NMDS1, NMDS2) ~ Stratum, data = site.scores, FUN = mean) # compute centroids for NMDS1 and NMDS2 
+cent$NMDS1 <- as.numeric(cent$NMDS1) # read in as characters for some reason
+cent$NMDS2 <- as.numeric(cent$NMDS2)
+# Need to split stratum up for plotting later
+cent<- 
+  cent %>%
+    separate(Stratum, into = c("Year", "Site", "Habitat"), sep = "-")
+cent$Site_habitat <- paste(cent$Site, cent$Habitat)
+# Add back in stratum column
+cent$Stratum <-  aggregate(cbind(NMDS1, NMDS2) ~ Stratum, data = site.scores, FUN = mean)$Stratum
+# A lot of extra spaces
+
+cent <- cent %>%
+  mutate(across(everything(), str_trim))
+cent$Year <- as.factor(cent$Year)
+cent$Habitat <- as.factor(cent$Habitat)
+cent$Site <- as.factor(cent$Site)
+cent$Site_habitat <- as.factor(cent$Site_habitat)
+
+species.scores <- as.data.frame(scores(ord3)$species)  # extract the species scores and convert to a data.frame
+species.scores$Species <- rownames(species.scores) 
+
+ggplot() + 
+  geom_point(data= site.scores, aes(x=NMDS1,y=NMDS2, shape = Habitat, colour = Site),
+             alpha = 0.25, size=2) + # add the point markers
+#  geom_text(data= species.scores,aes(x=NMDS1,y=NMDS2, label = Species), size = 4) +  # add the species labels
+  
+  geom_path(data = cent, aes(x = NMDS1, y = NMDS2, group = Site_habitat, colour = Site),
+            arrow = arrow(length=unit(0.5,"cm"), ends="last", type = "closed"), size = 1) +
+  facet_wrap(~Habitat) +
+  scale_linetype_manual(values = habitat_linetypes) +
+  scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        strip.text.x = element_text(size = 25),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(1.5)), # increase legend text
+        legend.title = element_text(size = rel(1.5)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) + # add box around legend
+  guides(colour=guide_legend(title.position="top", # make color legend title go above legend
+                                     title.hjust =0.5, nrow = 2),
+         shape=guide_legend(title.position="top",  # make shape legend title go above legend
+                                     title.hjust =0.5,
+                            nrow = 2),
+         path = guide_legend(title.position="top",  # make shape legend title go above legend
+                                     title.hjust =0.5)
+         )  
+
+
+# looks like stochasticity increases from outer 17 --> Fringing
+# Even in lagoon though it looks like communities return to initial state... except for North Shore LTER sites
+# ways to test stochasticity vs. determinism?
+# seems like deterministic trajectories, although we're not starting from a clean slate
+# accounting for founder effects?
+
+# Want to plot mean distance to centroid, but not sure how to do that with so many factors/interactions...
+bray_matrix <- vegdist(species_matrix, method = "bray")
+year_beta_disper <- vegan::betadisper(bray_matrix, wide_transect_level_subset$Year)
+year_beta_disper # 
+
+# plot of dispersion test
+plot(year_beta_disper, sub = "") # lol
+boxplot(year_beta_disper, main = "Year", xlab = "") 
+
+site_beta_disper <- vegan::betadisper(bray_matrix, wide_transect_level_subset$Site)
+plot(site_beta_disper, sub = "") # site five stands out
+boxplot(site_beta_disper, main = "Site", xlab = "") 
+
+
+habitat_beta_disper <- vegan::betadisper(bray_matrix, wide_transect_level_subset$Habitat)
+plot(habitat_beta_disper, sub = "") 
+boxplot(habitat_beta_disper, main = "Habitat", xlab = "") # greatest variance in fringing it seems (as expected)
+
+site_habitat_beta_disper <- vegan::betadisper(bray_matrix, wide_transect_level_subset$Site_habitat)
+plot(site_habitat_beta_disper, sub = "") 
+boxplot(site_habitat_beta_disper, main = "Site_habitat", xlab = "") 
+
+
+```
+
+```{r CV, fig.height = 10, fig.width = 10}
+# coefficient of variation
+CV<-function(x){
+  return(sd(x,na.rm=T)/mean(x,na.rm=T))
+}
+
+alpha_diversity$Cover <- rowSums(wide_transect_level[5:74])/100
+
+diversity_stability <- alpha_diversity %>%
+  dplyr::group_by(Site, Habitat, Site_habitat) %>%
+  summarise(Richness_mean = mean(Richness), 
+            Richness_se = sd(Richness)/sqrt(n()),
+            Richness_cv = CV(Richness),
+            Shannon_mean = mean(Shannon), 
+            Shannon_se = sd(Shannon)/sqrt(n()),
+            Shannon_cv = CV(Shannon),
+            Cover_mean = mean(Cover),
+            Cover_se = sd(Cover)/sqrt(n()),
+            Cover_cv = CV(Cover))
+  
+
+diversity_mod_1 <- glmmTMB(Cover_cv ~ Richness_mean, family = Gamma(link = "log"), data = diversity_stability)
+summary(diversity_mod_1)
+plot(allEffects(diversity_mod_1)) # richness reduces cv (i.e. enhances diversity!)
+
+diversity_mod_2 <- glmmTMB(Cover_cv ~ Shannon_mean, family = Gamma(link = "log"), data = diversity_stability)
+summary(diversity_mod_2) # similar results
+
+diversity_mod_3 <- glmmTMB(Cover_cv ~ Habitat*Site, family = Gamma(link = "log"), data = diversity_stability)
+summary(diversity_mod_3) # christ 
+Anova(diversity_mod_3) # all highly sig but what the fuck am I doing here
+
+diversity_mod_4 <- glmmTMB(Cover_cv ~ Habitat, family = Gamma(link = "log"), data = diversity_stability)
+summary(diversity_mod_4)
+Anova(diversity_mod_4)
+plot(allEffects(diversity_mod_4)) # greatest variance in the lagoon (makes sense given beta diversity trends above)
+
+diversity_mod_5 <- glmmTMB(Cover_cv ~ Site, family = Gamma(link = "log"), data = diversity_stability)
+summary(diversity_mod_5)
+Anova(diversity_mod_5) # first non-significant model! Variance in cover not driven by site
+# Also makes sense given nmds plots above
+# Maybe site as a random effect similar to Cline and Allgeier 2022?
+
+diversity_mod_6 <- glmmTMB(Cover_cv ~ Shannon_mean*Habitat + (1|Site), family = Gamma(link = "log"), data = diversity_stability)
+summary(diversity_mod_6) # negligible variance in random effects
+Anova(diversity_mod_6) # Diversity the strongest predictor of "stability" by far!
+
+AICc(diversity_mod_1, diversity_mod_2, diversity_mod_4, diversity_mod_6) # Model with just Shannon diversity best
+
+(richness_cv_plot = 
+  ggplot(data = diversity_stability) +
+  geom_point(aes(x = Richness_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 8) + 
+   scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+(shannon_cv_plot = 
+  ggplot(data = diversity_stability) +
+  geom_point(aes(x = Shannon_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 8) + 
+   scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+# maybe some heteroskedasticity?
+# just eyeballing but it looks like "stability" is highest in LTER 2 Fringe, which also has low diversity
+# Possibility for context-dependence. Alternative mechanisms drive stability?
+# Functional form vs. portfolio effects?
+  
+# Stopping for now
+# GOALS: test portfolio effects, look at turnover and temporal beta diversity stats, ways to test beta dispersion
+
+```
