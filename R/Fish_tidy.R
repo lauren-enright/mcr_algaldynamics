@@ -47,20 +47,22 @@ combined_df <- left_join(fish, fish_functional_no_na_fixed[,c("herbivore_status"
 #Ok, so now we need to fix all the species that it didn't know where herbivores before because the herbivore_status was only in the recharge table that only has 116 species...
 herbivore_groups <- c("Cropper", "Browser", "Excavator", "Herbivore/Detritivore", "Brusher", "Scraper", "Concealed Cropper")
 cleaned_fish <- combined_df %>%
-  mutate(herbivore_status = if_else(functional_group %in% herbivore_groups, "Y", "N"))
+  mutate(herbivore_status = if_else(functional_group %in% herbivore_groups, "Y", "N")) %>%
+  mutate(Habitat = if_else(Habitat == "BA", "Backreef", Habitat)) %>% 
+  mutate(Habitat = if_else(Habitat == "FR", "Fringing", Habitat))
 
 #now lets summarize it for actual use:
 biomass_by_functional_group_wide <- cleaned_fish %>%
-  group_by(Year, Site, Habitat, Functional_group) %>%
-  summarize(total_biomass = sum(Biomass, na.rm = TRUE), .groups = 'drop') %>%
-  pivot_wider(names_from = Functional_group, values_from = total_biomass)
+  dplyr::group_by(Year, Site, Habitat, Functional_group) %>%
+  dplyr::summarize(total_biomass = sum(Biomass, na.rm = TRUE), .groups = 'drop') %>%
+  tidyr::pivot_wider(names_from = Functional_group, values_from = total_biomass)
 
 biomass_by_herb_status_wide <- cleaned_fish %>%
-  group_by(Year, Site, Habitat, herbivore_status) %>%
-  summarize(total_biomass = sum(Biomass, na.rm = TRUE), .groups = 'drop') %>%
-  pivot_wider(names_from = herbivore_status, values_from = total_biomass) %>% 
-  rename('Non-Herbivore Biomass' = N) %>% 
-  rename('Herbivore Biomass' = Y)
+  dplyr::group_by(Year, Site, Habitat, herbivore_status) %>%
+  dplyr::summarize(total_biomass = sum(Biomass, na.rm = TRUE), .groups = 'drop') %>%
+  tidyr::pivot_wider(names_from = herbivore_status, values_from = total_biomass) %>% 
+  dplyr::rename('Non-Herbivore Biomass' = N) %>% 
+  dplyr::rename('Herbivore Biomass' = Y)
 
 write_csv(biomass_by_herb_status_wide, here("data", "biomass_herb_summary.csv"))
 write_csv(biomass_by_functional_group_wide, here("data", "biomass_functional_summary.csv"))
