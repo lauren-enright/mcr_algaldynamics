@@ -49,7 +49,8 @@ herbivore_groups <- c("Cropper", "Browser", "Excavator", "Herbivore/Detritivore"
 cleaned_fish <- combined_df %>%
   mutate(herbivore_status = if_else(functional_group %in% herbivore_groups, "Y", "N")) %>%
   mutate(Habitat = if_else(Habitat == "BA", "Backreef", Habitat)) %>% 
-  mutate(Habitat = if_else(Habitat == "FR", "Fringing", Habitat))
+  mutate(Habitat = if_else(Habitat == "FR", "Fringing", Habitat)) %>% 
+  mutate(Habitat = if_else(Habitat == "FO", "Outer 10", Habitat))
 
 #now lets summarize it for actual use:
 biomass_by_functional_group_wide <- cleaned_fish %>%
