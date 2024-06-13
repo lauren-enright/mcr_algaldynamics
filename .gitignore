@@ -1,9 +1,0 @@
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
-
-# Ignore large CSV file
-/data/MCR_LTER_Annual_Fish_Survey_*.csv
-/data/algaeonly_cleaned.csv
-/data/recharge_fish_fun_groups.csv
