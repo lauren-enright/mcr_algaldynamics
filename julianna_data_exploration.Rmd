@@ -17,7 +17,7 @@ require(tidyverse)
 # Bring in the data
 
 ```{r}
-algae <- read.csv(here("data", "allbenthicdata_cleaned.csv"), stringsAsFactors = F) 
+benthos <- read.csv(here("data", "allbenthicdata_cleaned_colnames.csv"), stringsAsFactors = F) 
 
 ```
 
