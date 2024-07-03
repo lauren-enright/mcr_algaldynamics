@@ -40,7 +40,7 @@ algae %>%
 
 
 ```{r}
-diversity(algae)
+diversity(algae, "shannon")
 ```
 
 
