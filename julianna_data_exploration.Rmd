@@ -40,7 +40,10 @@ algae %>%
 
 
 ```{r}
-diversity(algae, "shannon")
+algae %>% 
+  # grab the metadata info that is in the same order (can re-join after)
+  select(year, location, site, habitat, site_habitat, transect, quadrat) %>% 
+  mutate(Shannon = diversity(sppMat, "shannon"))
 ```
 
 
