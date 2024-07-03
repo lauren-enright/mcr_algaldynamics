@@ -275,6 +275,8 @@ wide_alldata_filtered %>%
   dplyr::group_by(Year, Site, Habitat) %>%
   dplyr::summarise(count = n())
 
+#should be 200 per year/site combo
+
 wide_alldata_filtered %>%
   dplyr::group_by(Year, Site) %>%
   dplyr::summarise(count = n())
