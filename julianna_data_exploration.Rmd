@@ -1,5 +1,5 @@
 ---
-title: "Pre working group data exploration: Julianna"
+title: "Pre working group data exploration: Mainly wrt coral cover"
 output: html_document
 date: "2024-07-02"
 editor_options: 
@@ -9,10 +9,15 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+# clean up
+rm(list=ls()) 
+
 # load packages
 require(here) # relative file paths
 require(tidyverse) # data wrangling
 require(vegan) # community/diversity analyses
+require(lme4) # glmer()
+require(emmeans) # emmeans()
 ```
 
 # Bring in the data
@@ -24,18 +29,14 @@ allbenthos <- read_csv(here("data", "allbenthicdata_cleaned_colnames.csv"))
 algae <- read_csv(here("data", "algaeonly_cleaned_colnames.csv"))
 ```
 
-# Calculate algal diversity metrics
+# Algal alpha diversity 
 
 Make a spp matrix to use with vegan
 
 ```{r}
-# matrix of just species and their relative percent covers
+# matrix of just species and their relative percent covers in the same order as the algae tibble
 algae %>% 
   select(-year, -location, -site, -habitat, -site_habitat, -transect, -quadrat) -> sppMat
-
-# metadata info that is in the same order (can re-join after)
-algae %>% 
-  select(year, location, site, habitat, site_habitat, transect, quadrat) -> sppMeta
 ```
 
 
@@ -43,16 +44,197 @@ algae %>%
 algae %>% 
   # grab the metadata info that is in the same order (can re-join after)
   select(year, location, site, habitat, site_habitat, transect, quadrat) %>% 
-  mutate(Shannon = diversity(sppMat, "shannon"))
+  mutate(Richness = specnumber(sppMat),
+         Shannon = diversity(sppMat, "shannon"),
+         Richness = specnumber(sppMat)) -> algDiv
 ```
 
+## Plot
 
-# Join algae and coral data
+Broken out by year
+ 
+```{r}
+algDiv %>% 
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) %>% 
+  ggplot(aes(x = habitat, y = Shannon, group = habitat)) +
+  geom_boxplot() +
+  facet_grid(site~year) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+```
+
+Or without:
+
+```{r}
+algDiv %>% 
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) %>% 
+  ggplot(aes(x = habitat, y = Shannon, group = habitat)) +
+  geom_boxplot() +
+  facet_wrap(~site) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+```
+
+Even simpler:
+
+```{r}
+# shannon
+algDiv %>% 
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) %>% 
+  ggplot(aes(x = habitat, y = Shannon, group = habitat)) +
+  geom_boxplot() +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+# richness
+algDiv %>% 
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) %>% 
+  ggplot(aes(x = Richness, group = habitat, fill = habitat)) +
+  geom_histogram() +
+  theme_bw() +
+  facet_wrap(~habitat) +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+```
+
+Richness on top of each other
+
+```{r}
+algDiv %>% 
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) %>% 
+  ggplot(aes(x = Richness, group = habitat, fill = habitat)) +
+  geom_bar(position = "dodge") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+```
+
+# Compare algal alpha diversity and coral cover
+
+Make a joined dataframe for comparisons
 
 ```{r}
 allbenthos %>% 
   select(year, location, site, habitat, site_habitat, transect, quadrat, coral) %>% 
-  full_join(algae) -> coralAlg  
+  full_join(algDiv) %>% 
+  # add column for each transect ID
+  rowwise() %>% 
+  mutate(transect_id = paste0(site, habitat, year, transect)) -> coralAlgDiv  
 ```
+
+## Plot shannon
+
+Plot Shannon diversity across sites and habitats--what's up with this structure? Emailed Jamie and asked Lauren. TBD
+
+```{r}
+coralAlgDiv %>% 
+  ggplot(aes(x = coral, y = Shannon, color = year)) +
+  geom_point() + 
+  facet_grid(habitat~site) +
+  theme_classic()
+```
+
+Try by year:
+
+```{r}
+coralAlgDiv %>% 
+  filter(habitat == "backreef") %>% 
+  ggplot(aes(x = coral, y = Shannon, color = as.factor(transect))) +
+  geom_point() + 
+  facet_grid(year~site) +
+  theme_classic()
+```
+
+
+## Plot richness
+
+Plot richness across habitats and years
+
+As points:
+
+
+```{r}
+coralAlgDiv %>% 
+  ggplot(aes(x = coral, y = Richness, color = year, group = Richness)) +
+  geom_jitter() + 
+  facet_grid(habitat~site) +
+  theme_classic()
+```
+
+```{r}
+coralAlgDiv %>% 
+  ggplot(aes(x = Richness, y = coral, color = year, group = Richness)) +
+  geom_boxplot() + 
+  facet_grid(year ~ habitat) +
+  theme_classic()
+```
+
+Plot richness across sites and habitats
+
+```{r}
+coralAlgDiv %>% 
+  ggplot(aes(x = Richness, y = coral, color = year, group = Richness)) +
+  geom_boxplot() + 
+  facet_grid(site ~ habitat) +
+  theme_classic()
+```
+
+
+## Make a bad richness model 
+
+Dumb model--need to think more about random effects and figure out time component, but instructive to see there may be a relationship
+
+```{r}
+m1 <- glmer(Richness ~ scale(coral) + habitat + (1|site) + (1|transect_id) + (1|year), 
+            family = poisson(link = "log"), data = coralAlgDiv)
+  plot(m1)
+  summary(m1)
+  emmeans(m1, ~ habitat)
+```
+
+# Beta diversity
+
+## Distance matrix
+
+We get an error message if we run vegdist right away saying that we have empty rows and that their dissimilarities may be meaningless. Let's look to see if any rows have no algae at all:
+
+```{r}
+sppMat %>% 
+  mutate(AlgSum = rowSums(across(where(is.numeric)))) %>% 
+  filter(AlgSum == 0) %>% dim() # 672 with no algae at all
+```
+
+Need to run this without zero observations, so we'll exclude quadrats with no algae and make a species matrix
+
+```{r}
+# spp matrix
+algae %>% 
+  mutate(AlgSum = rowSums(across(where(is.numeric)))) %>% 
+  filter(AlgSum != 0) %>% 
+  select(-year, -location, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgSum) -> sppMat0
+
+# metadata matrix
+algae %>% 
+  mutate(AlgSum = rowSums(across(where(is.numeric)))) %>% 
+  filter(AlgSum != 0) %>%
+  select(year, location, site, habitat, site_habitat, transect, quadrat) -> sppMeta0
+
+```
+
+Calculate Bray Curtis distances
+
+```{r}
+brayMat <- vegdist(sppMat0, "bray") # 1 is maximum dissimilarity
+```
+
+Calculate dispersion (this is using Noam's code)
+
+```{r}
+siteHabBetaDisper <- vegan::betadisper(bray_matrix, sppMeta0$site_habitat)
+
+# plot of dispersion test
+plot(year_beta_disper, sub = "") # lol
+boxplot(year_beta_disper, main = "Year", xlab = "") 
+```
+
 
 
