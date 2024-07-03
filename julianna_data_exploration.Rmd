@@ -49,7 +49,7 @@ diversity(algae)
 ```{r}
 allbenthos %>% 
   select(year, location, site, habitat, site_habitat, transect, quadrat, coral) %>% 
-  full_join(algae) -> coralAlg 
+  full_join(algae) -> coralAlg  
 ```
 
 
