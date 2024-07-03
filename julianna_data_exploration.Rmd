@@ -10,14 +10,46 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 
 # load packages
-require(here)
-require(tidyverse)
+require(here) # relative file paths
+require(tidyverse) # data wrangling
+require(vegan) # community/diversity analyses
 ```
 
 # Bring in the data
 
-```{r}
-benthos <- read.csv(here("data", "allbenthicdata_cleaned_colnames.csv"), stringsAsFactors = F) 
+These are the most recent file versions done by Lauren as of July 2, 2024
 
+```{r}
+allbenthos <- read_csv(here("data", "allbenthicdata_cleaned_colnames.csv")) 
+algae <- read_csv(here("data", "algaeonly_cleaned_colnames.csv"))
 ```
+
+# Calculate algal diversity metrics
+
+Make a spp matrix to use with vegan
+
+```{r}
+# matrix of just species and their relative percent covers
+algae %>% 
+  select(-year, -location, -site, -habitat, -site_habitat, -transect, -quadrat) -> sppMat
+
+# metadata info that is in the same order (can re-join after)
+algae %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat) -> sppMeta
+```
+
+
+```{r}
+diversity(algae)
+```
+
+
+# Join algae and coral data
+
+```{r}
+allbenthos %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, coral) %>% 
+  full_join(algae) -> coralAlg
+```
+
 
