@@ -268,24 +268,22 @@ write.csv(wide_alldata_filtered, "allbenthicdata_cleaned.csv", row.names = FALSE
 
 wide_alldata_filtered_cleaned_column_names <- 
   wide_alldata_filtered %>%
-  janitor::clean_names()
-
-# Julianna is adding this code here IF we want it:
-wide_alldata_filtered_cleaned_column_names %>% 
+  janitor::clean_names() %>% 
+  # Julianna is adding this code here IF we want it to clean the inside:
   mutate(location = gsub(" ", "_", str_to_lower(location)),
          site = gsub(" ", "_", str_to_lower(site)),
          habitat = gsub(" ", "_", str_to_lower(habitat)),
          site_habitat = gsub(" ", "_", str_to_lower(site_habitat)),
-         ) # would want to save this then do it for the algae dataset as well
+         ) 
 
 
-write.csv(wide_alldata_filtered_cleaned_column_names, "allbenthicdata_cleaned_colnames.csv", row.names = FALSE)
+write.csv(wide_alldata_filtered_cleaned_column_names, "data/allbenthicdata_cleaned_colnames.csv", row.names = FALSE)
 
 #we also want a copy that only includes taxa we care about 
 #not_algae character string created by Noam in Chunk 4 (Subsetting the data) and includes 14 
 #categories  -- these categories will be listed in a separate document as well 
 
-wide_algaeonly_filtered <- wide_alldata_filtered[ , -which(names(wide_alldata_filtered) 
+wide_algaeonly_filtered <- wide_alldatsa_filtered[ , -which(names(wide_alldata_filtered) 
                                                            %in% not_algae)]
 
 #need to still remove the row_sums column for algae only 
@@ -299,9 +297,16 @@ write.csv(wide_algaeonly_filtered, "algaeonly_cleaned.csv", row.names = FALSE)
 
 wide_algaeonly_cleaned_column_names <- 
   wide_algaeonly_filtered %>%
-  janitor::clean_names()
+  # clean column names
+  janitor::clean_names() %>% 
+  # clean the inside as well
+  mutate(location = gsub(" ", "_", str_to_lower(location)),
+         site = gsub(" ", "_", str_to_lower(site)),
+         habitat = gsub(" ", "_", str_to_lower(habitat)),
+         site_habitat = gsub(" ", "_", str_to_lower(site_habitat)),
+         ) 
 
-write.csv(wide_algaeonly_cleaned_column_names, "algaeonly_cleaned_colnames.csv", row.names = FALSE)
+write.csv(wide_algaeonly_cleaned_column_names, "data/algaeonly_cleaned_colnames.csv", row.names = FALSE)
 
 ```
 
