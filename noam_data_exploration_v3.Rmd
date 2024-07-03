@@ -3,6 +3,8 @@ title: "noam_data_exploration_v1"
 author: "Noam Altman-Kurosaki"
 date: "2024-05-09"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -38,12 +40,12 @@ long_data <- pivot_longer(
 
 transect_level <- long_data %>%
   dplyr::group_by(Year, Site, Habitat, Transect, Taxa) %>%
-  summarise(Mean_cover = mean(Percent_cover), 
+  dplyr::summarise(Mean_cover = mean(Percent_cover), 
             SE = sd(Percent_cover)/sqrt(n()))
 
 site_level <- transect_level %>%
   dplyr::group_by(Year, Site, Habitat, Taxa) %>%
-  summarise(Mean_site_cover = mean(Mean_cover), 
+  dplyr::summarise(Mean_site_cover = mean(Mean_cover), 
             Site_se = sd(Mean_cover)/sqrt(n()))
 ```
 
@@ -53,7 +55,7 @@ species_cols <- colnames(data[8:77])
 
 wide_transect_level <- data %>%
   dplyr::group_by(Year, Site, Habitat, Site_habitat, Transect) %>%
-  summarize(across(all_of(species_cols), mean, na.rm = TRUE))
+  dplyr::summarize(across(all_of(species_cols), mean, na.rm = TRUE))
 
 alpha_diversity <-
   data.frame(
@@ -69,7 +71,7 @@ alpha_diversity <-
 
 alpha_diversity_means <- alpha_diversity %>%
   dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
-  summarise(Richness_mean = mean(Richness), 
+  dplyr::summarise(Richness_mean = mean(Richness), 
             Richness_se = sd(Richness)/sqrt(n()),
             Shannon_mean = mean(Shannon), 
             Shannon_se = sd(Shannon)/sqrt(n()))
@@ -314,7 +316,7 @@ stratum_distances$Site_habitat <- wide_transect_level_subset$Site_habitat
 
 beta_disper_means <- stratum_distances %>%
   dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
-  summarise(Distance_mean = mean(Distance), 
+  dplyr::summarise(Distance_mean = mean(Distance), 
             Distance_se = sd(Distance)/sqrt(n()))
 
 (Distance_plot <-
@@ -361,7 +363,7 @@ alpha_diversity$Cover <- rowSums(wide_transect_level[5:74])/100
 
 diversity_stability <- alpha_diversity %>%
   dplyr::group_by(Site, Habitat, Site_habitat, Transect) %>%
-  summarise(Richness_mean = mean(Richness), 
+  dplyr::summarise(Richness_mean = mean(Richness), 
             Richness_se = sd(Richness)/sqrt(n()),
             Richness_cv = CV(Richness),
             Shannon_mean = mean(Shannon), 
@@ -569,7 +571,7 @@ total_turnover$Habitat <- as.factor(total_turnover$Habitat)
 turnover_means <-
   total_turnover %>%
   dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
-  summarise(Turnover_mean = mean(total), 
+  dplyr::summarise(Turnover_mean = mean(total), 
             Turnover_se = sd(total)/sqrt(n()))
 
 (turnover_plot <-
@@ -638,7 +640,7 @@ appearance$Habitat <- as.factor(appearance$Habitat)
 appearance_means <-
   appearance %>%
   dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
-  summarise(Appearance_mean = mean(appearance), 
+  dplyr::summarise(Appearance_mean = mean(appearance), 
             Appearance_se = sd(appearance)/sqrt(n()))
 
 (appearance_plot <-
@@ -705,7 +707,7 @@ disappearance$Habitat <- as.factor(disappearance$Habitat)
 disappearance_means <-
   disappearance %>%
   dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
-  summarise(Disappearance_mean = mean(disappearance), 
+  dplyr::summarise(Disappearance_mean = mean(disappearance), 
             Disappearance_se = sd(disappearance)/sqrt(n()))
 
 (disappearance_plot <-
@@ -772,7 +774,7 @@ rank_shift$Habitat <- as.factor(rank_shift$Habitat)
 rank_shift_means <-
   rank_shift %>%
   dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
-  summarise(Rank_shift_mean = mean(MRS), 
+  dplyr::summarise(Rank_shift_mean = mean(MRS), 
             Rank_shift_se = sd(MRS)/sqrt(n()))
 
 (rank_shift_plot <-
