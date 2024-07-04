@@ -26,7 +26,9 @@ These are the most recent file versions done by Lauren as of July 2, 2024
 
 ```{r}
 allbenthos <- read_csv(here("data", "allbenthicdata_cleaned_colnames.csv")) 
-algae <- read_csv(here("data", "algaeonly_cleaned_colnames.csv"))
+algae <- read_csv(here("data", "algaeonly_cleaned_colnames.csv")) %>% 
+  # going to run everything without algal turf
+  select(-algal_turf)
 ```
 
 # Algal alpha diversity 
@@ -46,6 +48,7 @@ algae %>%
   select(year, location, site, habitat, site_habitat, transect, quadrat) %>% 
   mutate(Richness = specnumber(sppMat),
          Shannon = diversity(sppMat, "shannon"),
+        # Evenness = diversity(sppMat, "ev")
          Richness = specnumber(sppMat)) -> algDiv
 ```
 
@@ -108,6 +111,26 @@ algDiv %>%
   theme(axis.text.x = element_text(angle = 45, hjust=1))
 ```
 
+# Compare algal and coral cover
+
+```{r}
+# get ranges to calculate over
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+
+algae %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) -> algSum
+
+algSum %>% 
+  full_join(allbenthos) %>% 
+  ggplot(aes(x = coral, y = AlgSum, color = year)) +
+  geom_point() +
+  facet_grid(site~habitat)
+  
+```
+
+
 # Compare algal alpha diversity and coral cover
 
 Make a joined dataframe for comparisons
@@ -118,19 +141,20 @@ allbenthos %>%
   full_join(algDiv) %>% 
   # add column for each transect ID
   rowwise() %>% 
-  mutate(transect_id = paste0(site, habitat, year, transect)) -> coralAlgDiv  
+  mutate(transect_id = paste0(site, habitat, "_", year, "_", transect)) -> coralAlgDiv  
 ```
 
-## Plot shannon
+## Plot Shannon
 
 Plot Shannon diversity across sites and habitats--what's up with this structure? Emailed Jamie and asked Lauren. TBD
 
 ```{r}
 coralAlgDiv %>% 
-  ggplot(aes(x = coral, y = Shannon, color = year)) +
-  geom_point() + 
+  ggplot(aes(x = coral, y = Shannon, color = as.factor(Richness))) +
+  geom_point(alpha = 0.5) + 
   facet_grid(habitat~site) +
-  theme_classic()
+  theme_classic() + 
+  geom_hline(yintercept = 0.693, color = "red", linetype = "dashed") # this is when two species are equally distributed (half half)--not sure why that would be
 ```
 
 Try by year:
@@ -143,6 +167,125 @@ coralAlgDiv %>%
   facet_grid(year~site) +
   theme_classic()
 ```
+
+Or look at Shannon vs. the percent cover of algae in the plot
+
+```{r}
+coralAlgDiv %>% 
+  full_join(algSum) %>% 
+  ggplot(aes(x = AlgSum, y = Shannon, color = as.factor(Richness))) +
+  geom_point(alpha = 0.5) + 
+  facet_grid(habitat~site) +
+  theme_classic() + 
+  geom_hline(yintercept = 0.693, color = "red", linetype = "dashed")
+```
+
+What about this when Richness == 2?
+
+```{r}
+coralAlgDiv %>% 
+  full_join(algSum) %>% view()
+  filter(Richness == 2) %>% 
+  ggplot(aes(x = AlgSum, y = Shannon, color = as.factor(Richness))) +
+  geom_point(alpha = 0.5) + 
+  facet_grid(habitat~site) +
+  theme_classic() + 
+  geom_hline(yintercept = 0.693, color = "red", linetype = "dashed")
+```
+
+Could this be because the only way to get a high enough imbalance/unevenness is having a large enough algal N
+
+What does it look like relative to turf algae?
+
+```{r}
+coralAlgDiv %>% 
+  full_join(algSum) %>% 
+  filter(Richness == 2) %>% 
+  ggplot(aes(x = algal_turf, y = Shannon, color = as.factor(Richness))) +
+  geom_point(alpha = 0.5) + 
+  facet_grid(habitat~site) +
+  theme_classic() + 
+  geom_hline(yintercept = 0.693, color = "red", linetype = "dashed")
+```
+
+Nic: are these lines all turf but 1 line, all turf but 2 points line, all turf but 3 points line?
+
+```{r}
+coralAlgDiv %>% 
+  full_join(algSum) %>% 
+  filter(Richness == 2) %>% 
+  mutate(Nonturf = AlgSum - algal_turf) %>% select(Nonturf) %>% unique() %>% view()
+  ggplot(aes(x = algal_turf, y = Shannon, color = as.factor(Nonturf))) +
+  geom_point(alpha = 0.5) + 
+  facet_grid(habitat~site) +
+  theme_classic() + 
+  geom_hline(yintercept = 0.693, color = "red", linetype = "dashed")
+```
+
+^This seems to be true here. It seems like lines have to do with how much of the non-turf you have. They only do 25 points and multiply by 4 so everything is a multiple of 4. But then how can we have a 2 there???
+
+
+## Problem solve Shannon
+
+Trying to instead calculate Shannon manually with 100 as the denominator? 
+
+```{r}
+shannon100 <- function(x, equalize.groups = FALSE, base = exp(1)) {
+  x <- drop(as.matrix(x))
+  if (length(dim(x)) > 1) {
+        x <- sweep(x, MARGIN = 1, 100, FUN = "/") # MARGIN = 1 I think means to do this rowwise; FUN = "/" means to divide by 100 (replaced the row sum with 100 here)
+    }
+    else {
+        x <- x/(100 <- sum(x)) # replaced total with 100 here
+    }
+  x <- -x * log(x, base)
+  if (length(dim(x)) > 1) 
+        H <- apply(x, MARGIN = 1, sum, na.rm = TRUE)
+    else H <- sum(x, na.rm = TRUE)
+  H
+}
+
+
+# add this to the df
+algae %>% 
+  # grab the metadata info that is in the same order (can re-join after)
+  select(year, location, site, habitat, site_habitat, transect, quadrat) %>% 
+  mutate(Richness = specnumber(sppMat),
+         Shannon = diversity(sppMat, "shannon"),
+         Shannon100 = shannon100(sppMat),
+         Richness = specnumber(sppMat)) -> algDiv100
+```
+
+Plot
+
+```{r}
+algDiv100 %>% 
+  ggplot(aes(x = Shannon100, y = Shannon)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") 
+```
+
+Re-make old plot
+
+```{r}
+# re-join with coral
+allbenthos %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, coral) %>% 
+  full_join(algDiv100) %>% 
+  # add column for each transect ID
+  rowwise() %>% 
+  mutate(transect_id = paste0(site, habitat, "_", year, "_", transect)) -> coralAlgDiv100
+
+
+# plot  
+coralAlgDiv100 %>% 
+  ggplot(aes(x = coral, y = Shannon, color = year)) +
+  geom_point() + 
+  facet_grid(habitat~site) +
+  theme_classic() # NOPE very much still there 
+```
+
+
 
 
 ## Plot richness
@@ -186,7 +329,7 @@ Dumb model--need to think more about random effects and figure out time componen
 ```{r}
 m1 <- glmer(Richness ~ scale(coral) + habitat + (1|site) + (1|transect_id) + (1|year), 
             family = poisson(link = "log"), data = coralAlgDiv)
-  plot(m1)
+  plot(m1) # I think this looks pretty weird right?
   summary(m1)
   emmeans(m1, ~ habitat)
 ```
