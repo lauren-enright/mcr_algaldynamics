@@ -18,6 +18,8 @@ require(tidyverse) # data wrangling
 require(vegan) # community/diversity analyses
 require(lme4) # glmer()
 require(emmeans) # emmeans()
+require(viridis) # color palette
+require(MoMAColors) # another color palette
 ```
 
 # Bring in the data
@@ -27,8 +29,19 @@ These are the most recent file versions done by Lauren as of July 2, 2024
 ```{r}
 allbenthos <- read_csv(here("data", "allbenthicdata_cleaned_colnames.csv")) 
 algae <- read_csv(here("data", "algaeonly_cleaned_colnames.csv")) %>% 
+  mutate(island_side = case_when(site == "lter_1" ~ "north",
+                                 site == "lter_2" ~ "north",
+                                 site == "lter_3" ~ "east",
+                                 site == "lter_4" ~ "east",
+                                 site == "lter_5" ~ "west",
+                                 site == "lter_6" ~ "west",
+                                 TRUE ~ "UdINGLEbUTT"))
   # going to run everything without algal turf
-  select(-algal_turf)
+  # select(-algal_turf)
+
+macroalgae <- algae %>% 
+  select(-algal_turf, -crustose_corallines, -cyanophyta, -damselfish_turf, -lithophyllum_kotschyanum,
+         -neogoniolithon_brassica_florida, -sporolithon_sp) # got this from the cleaning code--should Peysonellia be included?
 ```
 
 # Algal alpha diversity 
@@ -38,18 +51,21 @@ Make a spp matrix to use with vegan
 ```{r}
 # matrix of just species and their relative percent covers in the same order as the algae tibble
 algae %>% 
-  select(-year, -location, -site, -habitat, -site_habitat, -transect, -quadrat) -> sppMat
+  select(-year, -location, -site, -island_side, -habitat, -site_habitat, -transect, -quadrat) -> sppMat
 ```
 
 
 ```{r}
 algae %>% 
   # grab the metadata info that is in the same order (can re-join after)
-  select(year, location, site, habitat, site_habitat, transect, quadrat) %>% 
+  select(year, location, site, island_side, habitat, site_habitat, transect, quadrat) %>% 
   mutate(Richness = specnumber(sppMat),
          Shannon = diversity(sppMat, "shannon"),
-        # Evenness = diversity(sppMat, "ev")
-         Richness = specnumber(sppMat)) -> algDiv
+         Evenness = Shannon/log(Richness), # I'm pretty sure this is right but double check (Pielou's evenness)
+         Richness = specnumber(sppMat)) %>% 
+  # clean for graphing
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17")),
+         island_side = factor(island_side, levels = c("north", "east", "west"))) -> algDiv
 ```
 
 ## Plot
@@ -77,6 +93,20 @@ algDiv %>%
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, hjust=1))
 ```
+
+Island side:
+
+```{r}
+algDiv %>% 
+  ggplot(aes(x = island_side, y = Shannon, group = island_side, fill = island_side)) +
+  geom_boxplot() +
+  facet_wrap(~habitat) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+```
+
+
 
 Even simpler:
 
@@ -111,6 +141,21 @@ algDiv %>%
   theme(axis.text.x = element_text(angle = 45, hjust=1))
 ```
 
+Broken up by island side
+
+```{r}
+algDiv %>% 
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) %>% 
+  ggplot(aes(x = Richness, group = habitat, fill = habitat)) +
+  geom_bar(position = "dodge") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) +
+  scale_fill_viridis_d() +
+  facet_wrap(~island_side)
+```
+
+
+
 # Compare algal and coral cover
 
 ```{r}
@@ -141,12 +186,15 @@ allbenthos %>%
   full_join(algDiv) %>% 
   # add column for each transect ID
   rowwise() %>% 
-  mutate(transect_id = paste0(site, habitat, "_", year, "_", transect)) -> coralAlgDiv  
+  mutate(transect_id = paste0(site, habitat, "_", year, "_", transect)) %>% 
+  # clean for graphing
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17")),
+         island_side = factor(island_side, levels = c("north", "east", "west"))) -> coralAlgDiv  
 ```
 
 ## Plot Shannon
 
-Plot Shannon diversity across sites and habitats--what's up with this structure? Emailed Jamie and asked Lauren. TBD
+Plot Shannon diversity across sites and habitats--what's up with this structure? 
 
 ```{r}
 coralAlgDiv %>% 
@@ -184,7 +232,7 @@ What about this when Richness == 2?
 
 ```{r}
 coralAlgDiv %>% 
-  full_join(algSum) %>% view()
+  full_join(algSum) %>% 
   filter(Richness == 2) %>% 
   ggplot(aes(x = AlgSum, y = Shannon, color = as.factor(Richness))) +
   geom_point(alpha = 0.5) + 
@@ -214,78 +262,15 @@ Nic: are these lines all turf but 1 line, all turf but 2 points line, all turf b
 coralAlgDiv %>% 
   full_join(algSum) %>% 
   filter(Richness == 2) %>% 
-  mutate(Nonturf = AlgSum - algal_turf) %>% select(Nonturf) %>% unique() %>% view()
-  ggplot(aes(x = algal_turf, y = Shannon, color = as.factor(Nonturf))) +
+  mutate(Nonturf = AlgSum - algal_turf) %>% 
+  ggplot(aes(x = AlgSum, y = Shannon, color = as.factor(Nonturf))) +
   geom_point(alpha = 0.5) + 
   facet_grid(habitat~site) +
   theme_classic() + 
   geom_hline(yintercept = 0.693, color = "red", linetype = "dashed")
 ```
 
-^This seems to be true here. It seems like lines have to do with how much of the non-turf you have. They only do 25 points and multiply by 4 so everything is a multiple of 4. But then how can we have a 2 there???
-
-
-## Problem solve Shannon
-
-Trying to instead calculate Shannon manually with 100 as the denominator? 
-
-```{r}
-shannon100 <- function(x, equalize.groups = FALSE, base = exp(1)) {
-  x <- drop(as.matrix(x))
-  if (length(dim(x)) > 1) {
-        x <- sweep(x, MARGIN = 1, 100, FUN = "/") # MARGIN = 1 I think means to do this rowwise; FUN = "/" means to divide by 100 (replaced the row sum with 100 here)
-    }
-    else {
-        x <- x/(100 <- sum(x)) # replaced total with 100 here
-    }
-  x <- -x * log(x, base)
-  if (length(dim(x)) > 1) 
-        H <- apply(x, MARGIN = 1, sum, na.rm = TRUE)
-    else H <- sum(x, na.rm = TRUE)
-  H
-}
-
-
-# add this to the df
-algae %>% 
-  # grab the metadata info that is in the same order (can re-join after)
-  select(year, location, site, habitat, site_habitat, transect, quadrat) %>% 
-  mutate(Richness = specnumber(sppMat),
-         Shannon = diversity(sppMat, "shannon"),
-         Shannon100 = shannon100(sppMat),
-         Richness = specnumber(sppMat)) -> algDiv100
-```
-
-Plot
-
-```{r}
-algDiv100 %>% 
-  ggplot(aes(x = Shannon100, y = Shannon)) +
-  geom_point() +
-  geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") 
-```
-
-Re-make old plot
-
-```{r}
-# re-join with coral
-allbenthos %>% 
-  select(year, location, site, habitat, site_habitat, transect, quadrat, coral) %>% 
-  full_join(algDiv100) %>% 
-  # add column for each transect ID
-  rowwise() %>% 
-  mutate(transect_id = paste0(site, habitat, "_", year, "_", transect)) -> coralAlgDiv100
-
-
-# plot  
-coralAlgDiv100 %>% 
-  ggplot(aes(x = coral, y = Shannon, color = year)) +
-  geom_point() + 
-  facet_grid(habitat~site) +
-  theme_classic() # NOPE very much still there 
-```
-
-
+^This seems to be true here. It seems like lines have to do with how much of the non-turf you have. They only do 25 points and multiply by 4 so everything is a multiple of 4. But then how can we have a 2 there??? Answer: 2020 averaging
 
 
 ## Plot richness
@@ -315,9 +300,10 @@ Plot richness across sites and habitats
 
 ```{r}
 coralAlgDiv %>% 
-  ggplot(aes(x = Richness, y = coral, color = year, group = Richness)) +
+  ggplot(aes(x = Richness, y = coral, fill = habitat, group = Richness)) +
   geom_boxplot() + 
-  facet_grid(site ~ habitat) +
+  facet_grid(island_side ~ habitat) +
+  scale_fill_viridis_d() +
   theme_classic()
 ```
 
@@ -327,12 +313,282 @@ coralAlgDiv %>%
 Dumb model--need to think more about random effects and figure out time component, but instructive to see there may be a relationship
 
 ```{r}
-m1 <- glmer(Richness ~ scale(coral) + habitat + (1|site) + (1|transect_id) + (1|year), 
+m1 <- glmer(Richness ~ scale(coral) + habitat + island_side + (1|site) + (1|transect_id) + (1|year), 
             family = poisson(link = "log"), data = coralAlgDiv)
   plot(m1) # I think this looks pretty weird right?
   summary(m1)
   emmeans(m1, ~ habitat)
 ```
+
+## Plot evenness
+
+Plot evennes across habitats and years
+
+As points:
+
+
+```{r}
+coralAlgDiv %>% 
+  ggplot(aes(x = coral, y = Evenness, color = year, group = Evenness)) +
+  geom_jitter() + 
+  facet_grid(habitat~site) +
+  theme_classic()
+```
+
+# Plot changes of algae, coral, etc. through time
+
+```{r make a big joined tibble}
+startMAlg <- grep("acanthophora_spicifera", colnames(macroalgae))
+endMAlg <- grep("valonia_ventricosa", colnames(macroalgae))
+
+macroalgae %>% 
+  mutate(macroalgae_sum = rowSums(macroalgae[startMAlg:endMAlg])) %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side, macroalgae_sum) %>% 
+  full_join(coralAlgDiv) %>% 
+  full_join(algae) %>% 
+  rowwise() %>% 
+  mutate(turf_sum = sum(algal_turf, damselfish_turf),
+         CCA_sum = sum(lithophyllum_kotschyanum, crustose_corallines, neogoniolithon_brassica_florida, sporolithon_sp)) %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side, turf_sum, CCA_sum, coral, macroalgae_sum) %>% 
+  # pivot key columns longer
+  pivot_longer(cols = c(turf_sum, CCA_sum, coral, macroalgae_sum),
+               names_to = "substrate",
+               values_to = "sum_cover") %>% 
+  # summarize and group quadrats by transects
+  group_by(year, site, habitat, site_habitat, transect, island_side, substrate) %>% 
+  summarise(avg_cov = mean(sum_cover)) -> transect4mean
+  
+            
+
+```
+
+## Quadrat level island-habitat
+
+```{r make a df for island side/habitat}
+macroalgae %>% 
+  mutate(macroalgae_sum = rowSums(macroalgae[startMAlg:endMAlg])) %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side, macroalgae_sum) %>% 
+  full_join(coralAlgDiv) %>% 
+  full_join(algae) %>% 
+  rowwise() %>% 
+  mutate(turf_sum = sum(algal_turf, damselfish_turf),
+         CCA_sum = sum(lithophyllum_kotschyanum, crustose_corallines, neogoniolithon_brassica_florida, sporolithon_sp)) %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side, turf_sum, CCA_sum, coral, macroalgae_sum) %>% 
+  # pivot key columns longer
+  pivot_longer(cols = c(turf_sum, CCA_sum, coral, macroalgae_sum),
+               names_to = "substrate",
+               values_to = "sum_cover") %>% 
+  # summarize and group quadrats by island/habitat
+  group_by(year, habitat, island_side, substrate) %>% 
+  summarise(mean_cov = mean(sum_cover),
+            sd_cov = sd(sum_cover, na.rm = TRUE),
+            n = n(),
+            CI95 = 1.96*(sd_cov)/sqrt(n)) %>% 
+  # relevel for graphing
+  mutate(island_side = factor(island_side, levels = c("north", "east", "west")),
+         habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) -> quadHabIS
+  
+            
+```
+
+```{r plot cover through time}
+quadHabIS %>% 
+  ggplot(aes(x = year, y = mean_cov, group = substrate, fill = substrate)) +
+  geom_ribbon(aes(ymin = mean_cov -CI95, 
+                    ymax = mean_cov + CI95),
+              alpha  = 0.7) +
+  geom_line() +
+  theme_bw() +
+  scale_fill_manual(values = c(
+    moma.colors("Klein", type = "discrete")[2], # CCA
+    moma.colors("Klein", type = "discrete")[1], # coral
+    moma.colors("Klein", type = "discrete")[5], # macro
+    moma.colors("Klein", type = "discrete")[4] # turf
+  )) +
+  facet_grid(island_side ~ habitat) +
+  ylab("Mean cover (%)") +
+  xlab("Year")
+```
+
+## Transect-level island/habitat
+
+```{r make a df for island side/habitat}
+transect4mean %>% 
+  group_by(year, habitat, island_side, substrate) %>% 
+  summarise(mean_cov = mean(avg_cov),
+            sd_cov = sd(avg_cov, na.rm = TRUE),
+            n = n(),
+            CI95 = 1.96*(sd_cov)/sqrt(n)) %>% 
+  # relevel for graphing
+  mutate(island_side = factor(island_side, levels = c("north", "east", "west")),
+         habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) -> transectHabIS
+  
+            
+```
+
+```{r plot cover through time}
+# this color palette:
+#moma.colors("Abbott", type = "discrete")
+
+transectHabIS %>% 
+  ggplot(aes(x = year, y = mean_cov, group = substrate, fill = substrate)) +
+  geom_ribbon(aes(ymin = mean_cov -CI95, 
+                    ymax = mean_cov + CI95),
+              alpha  = 0.7) +
+  geom_line() +
+  theme_bw() +
+  scale_fill_manual(values = c(
+    moma.colors("Klein", type = "discrete")[2], # CCA
+    moma.colors("Klein", type = "discrete")[1], # coral
+    moma.colors("Klein", type = "discrete")[5], # macro
+    moma.colors("Klein", type = "discrete")[4] # turf
+  )) +
+  facet_grid(island_side ~ habitat) +
+  ylab("Mean cover (%)") +
+  xlab("Year")
+```
+
+
+## Transect-level habitat
+
+```{r make a df for island side/habitat}
+transect4mean %>% 
+  group_by(year, habitat, substrate) %>% 
+  summarise(mean_cov = mean(avg_cov),
+            sd_cov = sd(avg_cov, na.rm = TRUE),
+            n = n(),
+            CI95 = 1.96*(sd_cov)/sqrt(n)) %>% 
+  # relevel for graphing
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) -> transectHab
+  
+            
+```
+
+```{r plot cover through time}
+# this color palette:
+#moma.colors("Abbott", type = "discrete")
+
+transectHab %>% 
+  ggplot(aes(x = year, y = mean_cov, group = substrate, fill = substrate)) +
+  geom_ribbon(aes(ymin = mean_cov -CI95, 
+                    ymax = mean_cov + CI95),
+              alpha  = 0.7) +
+  geom_line() +
+  theme_bw() +
+  scale_fill_manual(values = c(
+    moma.colors("Klein", type = "discrete")[2], # CCA
+    moma.colors("Klein", type = "discrete")[1], # coral
+    moma.colors("Klein", type = "discrete")[5], # macro
+    moma.colors("Klein", type = "discrete")[4] # turf
+  )) +
+  facet_wrap(~habitat) +
+  ylab("Mean cover (%)") +
+  xlab("Year")
+```
+
+## Transect level island side
+
+```{r make a df for island side}
+transect4mean %>% 
+  group_by(year, island_side, substrate) %>% 
+  summarise(mean_cov = mean(avg_cov),
+            sd_cov = sd(avg_cov, na.rm = TRUE),
+            n = n(),
+            CI95 = 1.96*(sd_cov)/sqrt(n)) %>% 
+  # relevel for graphing
+  mutate(island_side = factor(island_side, levels = c("north", "east", "west"))) -> transectIS
+  
+            
+```
+
+```{r plot cover through time}
+
+transectIS %>% 
+  ggplot(aes(x = year, y = mean_cov, group = substrate, fill = substrate)) +
+  geom_ribbon(aes(ymin = mean_cov -CI95, 
+                    ymax = mean_cov + CI95),
+              alpha  = 0.7) +
+  geom_line() +
+  theme_bw() +
+  scale_fill_manual(values = c(
+    moma.colors("Klein", type = "discrete")[2], # CCA
+    moma.colors("Klein", type = "discrete")[1], # coral
+    moma.colors("Klein", type = "discrete")[5], # macro
+    moma.colors("Klein", type = "discrete")[4] # turf
+  )) +
+  facet_grid(~island_side) +
+  ylab("Mean cover (%)") +
+  xlab("Year")
+```
+
+
+# Examine most abundant algae
+
+Reformat so that the data are easier to summarize: 
+
+```{r}
+# get ranges to calculate over
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+
+algae %>% 
+  pivot_longer(cols = colnames(algae)[startAlg:endAlg],
+               names_to = "taxa",
+               values_to = "percent") -> algaeLong
+```
+
+Get some summary statistics
+
+## Across all time, by habitat:
+
+```{r}
+algaeLong %>% 
+  group_by(site, habitat, year, transect, island_side, taxa) %>% # get transect summaries
+  summarize(Mean_cov = mean(percent), 
+            Num_occur = n(), 
+            sd_cov = sd(percent)) -> algTaxTrans
+  
+```
+
+Plot
+
+```{r}
+algTaxTrans %>% 
+  ggplot(aes(x = reorder(taxa, -Mean_cov), y = Mean_cov, fill = habitat)) +
+  geom_boxplot() + 
+  scale_fill_viridis_d() +
+  facet_wrap(~habitat) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+With just macroalgae:
+
+```{r}
+algTaxTrans %>% 
+  filter(! taxa %in% c("algal_turf", "crustose_corallines", "cyanophyta", "damselfish_turf", "lithophyllum_kotschyanum", "neogoniolithon_brassica_florida", "sporolithon_sp" )) %>% # this list taken from the cleaning code
+  ggplot(aes(x = reorder(taxa, -Mean_cov), y = Mean_cov, fill = habitat)) +
+  geom_boxplot() + 
+  scale_fill_viridis_d() +
+  facet_wrap(~habitat) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Not by habitat
+
+```{r}
+algTaxTrans %>% 
+  filter(! taxa %in% c("algal_turf", "crustose_corallines", "cyanophyta", "damselfish_turf", "lithophyllum_kotschyanum", "neogoniolithon_brassica_florida", "sporolithon_sp" )) %>% # this list taken from the cleaning code
+  ggplot(aes(x = reorder(taxa, -Mean_cov), y = Mean_cov)) +
+  geom_boxplot() + 
+  scale_fill_viridis_d() +
+  #facet_wrap(~habitat) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
 
 # Beta diversity
 
@@ -349,17 +605,22 @@ sppMat %>%
 Need to run this without zero observations, so we'll exclude quadrats with no algae and make a species matrix
 
 ```{r}
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
 # spp matrix
 algae %>% 
-  mutate(AlgSum = rowSums(across(where(is.numeric)))) %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
   filter(AlgSum != 0) %>% 
-  select(-year, -location, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgSum) -> sppMat0
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgSum) -> sppMat0
 
 # metadata matrix
 algae %>% 
-  mutate(AlgSum = rowSums(across(where(is.numeric)))) %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
   filter(AlgSum != 0) %>%
-  select(year, location, site, habitat, site_habitat, transect, quadrat) -> sppMeta0
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
+  # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year)) -> sppMeta0
 
 ```
 
@@ -371,12 +632,16 @@ brayMat <- vegdist(sppMat0, "bray") # 1 is maximum dissimilarity
 
 Calculate dispersion (this is using Noam's code)
 
+- Talking with Lauren, decided want to be smart about which groupings we do for `betadisper()`. Priorities are:
+  1. Year-habitat as the group: include turf/cyano/everything
+  2. Island side - year - habitat
+
 ```{r}
-siteHabBetaDisper <- vegan::betadisper(bray_matrix, sppMeta0$site_habitat)
+habBetaDisper <- vegan::betadisper(brayMat, sppMeta0$hab_year)
 
 # plot of dispersion test
-plot(year_beta_disper, sub = "") # lol
-boxplot(year_beta_disper, main = "Year", xlab = "") 
+plot(habBetaDisper, sub = "") # lol
+boxplot(habBetaDisper, main = "Habitat", xlab = "") 
 ```
 
 
