@@ -20,6 +20,9 @@ require(lme4) # glmer()
 require(emmeans) # emmeans()
 require(viridis) # color palette
 require(MoMAColors) # another color palette
+require(patchwork) # putting figures together
+require(BiodiversityR)
+require(ggsci) # scientific jounral and sci-fi themed color palette
 ```
 
 # Bring in the data
@@ -52,6 +55,14 @@ Make a spp matrix to use with vegan
 # matrix of just species and their relative percent covers in the same order as the algae tibble
 algae %>% 
   select(-year, -location, -site, -island_side, -habitat, -site_habitat, -transect, -quadrat) -> sppMat
+
+# metadata matrix
+algae %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
+  # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, "_", hab_year)) -> sppMeta
 ```
 
 
@@ -171,7 +182,9 @@ algSum %>%
   full_join(allbenthos) %>% 
   ggplot(aes(x = coral, y = AlgSum, color = year)) +
   geom_point() +
-  facet_grid(site~habitat)
+  facet_grid(site~habitat) +
+  ylab("Algal cover (%)") +
+  xlab("Coral cover (%)")
   
 ```
 
@@ -284,9 +297,22 @@ As points:
 coralAlgDiv %>% 
   ggplot(aes(x = coral, y = Richness, color = year, group = Richness)) +
   geom_jitter() + 
-  facet_grid(habitat~site) +
+  facet_grid(habitat~island_side) +
   theme_classic()
 ```
+
+As boxplots
+
+```{r}
+coralAlgDiv %>% 
+  ggplot(aes(x = Richness, y = coral, color = island_side, group = Richness)) +
+  geom_boxplot() + 
+  facet_grid(habitat~island_side) +
+  scale_color_manual(values = c("darkblue", "darkred", "darkgreen")) +
+  theme_classic()
+
+```
+
 
 ```{r}
 coralAlgDiv %>% 
@@ -335,6 +361,200 @@ coralAlgDiv %>%
   theme_classic()
 ```
 
+# Species accummulation curves
+
+## Set special theme
+
+From https://rpubs.com/Roeland-KINDT/694021 
+
+```{r}
+BioR.theme <- theme(
+        panel.background = element_blank(),
+        panel.border = element_blank(),
+        panel.grid = element_blank(),
+        axis.line = element_line("gray25"),
+        text = element_text(size = 12),
+        axis.text = element_text(size = 10, colour = "gray25"),
+        axis.title = element_text(size = 14, colour = "gray25"),
+        legend.title = element_text(size = 14),
+        legend.text = element_text(size = 14),
+        legend.key = element_blank())
+```
+
+
+## By habitat (all time)
+
+Noam suggested doing this on July 10, 2024 in response to the richness plots. To learn how to do this, I used this tutorial: https://rpubs.com/Roeland-KINDT/694021 
+
+```{r accumpcomp}
+# use accumcomp() to calculate accumulated species richness
+# conditioned = FALSE switches estimation of standard deviation to a formula based on the estimation of extrapolated species richness
+# returns data on species accumulations separately for each different level of a factor
+accum.Hab <- accumcomp(sppMat, # spp matrix
+                     y = sppMeta, # metadata df (same length)
+                     factor = 'habitat', # factor to group by in the metadata file
+    method='exact', conditioned = FALSE, plotit = FALSE)
+```
+
+To plot, use accumcomp.long() to get it into long/ggplot format
+
+```{r make long}
+accum.Hablong <- accumcomp.long(accum.Hab, ci=NA, 
+                              label.freq=2000) # lebel.freq adjusts the labelit variabel to show how often a symbol will be plotted on the SAC
+```
+
+Plot
+
+```{r plot}
+accum.Hablong %>% 
+  mutate(Grouping = factor(Grouping, levels = c("fringing", "backreef", "outer_10", "outer_17"))) %>% 
+  ggplot(aes(x = Sites, y = Richness, ymax = UPR, ymin = LWR)) +
+  scale_x_continuous(expand=c(0, 1), sec.axis = dup_axis(labels=NULL, name=NULL)) + # this moves it so zero is right at the origin
+  scale_y_continuous(sec.axis = dup_axis(labels=NULL, name=NULL)) + # this makes it more like a box
+  geom_line(aes(colour=Grouping), linewidth=2) + # adds line
+  #geom_point(data=subset(accum.Hablong, labelit==TRUE), 
+  #             aes(colour=Grouping, shape=Grouping), size=.5) +
+  geom_ribbon(aes(colour=Grouping), alpha=0.2, show.legend=FALSE) + 
+  BioR.theme +
+  scale_colour_viridis_d(direction = -1) +
+  labs(x = "Quadrats", y = "Richness", colour = "Haitat", shape = "Haitat")
+```
+
+
+## By island side (all time)
+
+```{r accumpcomp}
+# use accumcomp() to calculate accumulated species richness
+# conditioned = FALSE switches estimation of standard deviation to a formula based on the estimation of extrapolated species richness
+# returns data on species accumulations separately for each different level of a factor
+accum.IS <- accumcomp(sppMat, # spp matrix
+                     y = sppMeta, # metadata df (same length)
+                     factor = 'island_side', # factor to group by in the metadata file
+    method='exact', conditioned = FALSE, plotit = FALSE)
+```
+
+To plot, use accumcomp.long() to get it into long/ggplot format
+
+```{r make long}
+accum.ISlong <- accumcomp.long(accum.IS, ci=NA, 
+                              label.freq=2000) # lebel.freq adjusts the labelit variabel to show how often a symbol will be plotted on the SAC
+```
+
+Plot
+
+```{r plot}
+accum.ISlong %>% 
+  mutate(Grouping = factor(Grouping, levels = c("north", "east", "west"))) %>% 
+  ggplot(aes(x = Sites, y = Richness, ymax = UPR, ymin = LWR)) +
+  scale_x_continuous(expand=c(0, 1), sec.axis = dup_axis(labels=NULL, name=NULL)) + # this moves it so zero is right at the origin
+  scale_y_continuous(sec.axis = dup_axis(labels=NULL, name=NULL)) + # this makes it more like a box
+  geom_line(aes(colour=Grouping), linewidth=2) + # adds line
+  #geom_point(data=subset(accum.Hablong, labelit==TRUE), 
+  #             aes(colour=Grouping, shape=Grouping), size=.5) +
+  geom_ribbon(aes(colour=Grouping), alpha=0.2, show.legend=FALSE) + 
+  BioR.theme +
+  scale_color_manual(values = c("darkblue", "darkred", "darkgreen")) +
+  labs(x = "Quadrats", y = "Richness", colour = "Haitat", shape = "Haitat")
+```
+
+## By habitat-time
+
+Noam suggested doing this on July 10, 2024 in response to the richness plots. To learn how to do this, I used this tutorial: https://rpubs.com/Roeland-KINDT/694021 
+
+```{r accumpcomp}
+# use accumcomp() to calculate accumulated species richness
+# conditioned = FALSE switches estimation of standard deviation to a formula based on the estimation of extrapolated species richness
+# returns data on species accumulations separately for each different level of a factor
+accum.HabYr <- accumcomp(sppMat, # spp matrix
+                     y = sppMeta, # metadata df (same length)
+                     factor = 'hab_year', # factor to group by in the metadata file
+    method='exact', conditioned = FALSE, plotit = FALSE)
+```
+
+To plot, use accumcomp.long() to get it into long/ggplot format
+
+```{r make long}
+accum.HabYrlong <- accumcomp.long(accum.HabYr, ci=NA, 
+                              label.freq=2000) %>% # lebel.freq adjusts the labelit variabel to show how often a symbol will be plotted on the SAC
+  # get metadata back
+  rowwise() %>% 
+  mutate(Year = (str_split(Grouping, pattern = "_")[[1]])[length(str_split(Grouping, pattern = "_")[[1]])]) %>% 
+  mutate(Habitat = case_when(
+    str_split(Grouping, pattern = "_")[[1]][[2]] == "17" ~ "outer_17",
+    str_split(Grouping, pattern = "_")[[1]][[2]] == "10" ~ "outer_10",
+    str_split(Grouping, pattern = "_")[[1]][[1]] == "fringing" ~ "fringing",
+    str_split(Grouping, pattern = "_")[[1]][[1]] == "backreef" ~ "backreef",
+    TRUE ~ "Error"
+    )) %>% 
+  mutate(Habitat = factor(Habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) 
+```
+
+Plot
+
+```{r plot}
+accum.HabYrlong %>% 
+  ggplot(aes(x = Sites, y = Richness, ymax = UPR, ymin = LWR)) +
+  scale_x_continuous(expand=c(0, 1), sec.axis = dup_axis(labels=NULL, name=NULL)) + # this moves it so zero is right at the origin
+  scale_y_continuous(sec.axis = dup_axis(labels=NULL, name=NULL)) + # this makes it more like a box
+  geom_line(aes(colour=Year), linewidth=2) + # adds line
+  #geom_point(data=subset(accum.Hablong, labelit==TRUE), 
+  #             aes(colour=Grouping, shape=Grouping), size=.5) +
+  #geom_ribbon(aes(colour=Year), alpha=0.2, show.legend=FALSE) + 
+  BioR.theme +
+  scale_colour_viridis_d(direction = -1) +
+  facet_wrap(~Habitat) +
+  labs(x = "Quadrats", y = "Richness", colour = "Haitat", shape = "Haitat")
+```
+
+
+## By habitat-time-island side
+
+```{r accumpcomp}
+# use accumcomp() to calculate accumulated species richness
+# conditioned = FALSE switches estimation of standard deviation to a formula based on the estimation of extrapolated species richness
+# returns data on species accumulations separately for each different level of a factor
+accum.HabISYr <- accumcomp(sppMat, # spp matrix
+                     y = sppMeta, # metadata df (same length)
+                     factor = 'island_side_hab_year', # factor to group by in the metadata file
+    method='exact', conditioned = FALSE, plotit = FALSE)
+```
+
+To plot, use accumcomp.long() to get it into long/ggplot format
+
+```{r make long}
+accum.HabISYrlong <- accumcomp.long(accum.HabISYr, ci=NA, 
+                              label.freq=2000) %>% # lebel.freq adjusts the labelit variabel to show how often a symbol will be plotted on the SAC
+  # get metadata back
+  rowwise() %>% 
+  mutate(Year = (str_split(Grouping, pattern = "_")[[1]])[length(str_split(Grouping, pattern = "_")[[1]])]) %>% 
+  mutate(Habitat = case_when(
+    str_split(Grouping, pattern = "_")[[1]][[3]] == "17" ~ "outer_17",
+    str_split(Grouping, pattern = "_")[[1]][[3]] == "10" ~ "outer_10",
+    str_split(Grouping, pattern = "_")[[1]][[2]] == "fringing" ~ "fringing",
+    str_split(Grouping, pattern = "_")[[1]][[2]] == "backreef" ~ "backreef",
+    TRUE ~ "Error"
+    )) %>% 
+  mutate(island_side = str_split(Grouping, pattern = "_")[[1]][[1]]) %>% 
+  mutate(Habitat = factor(Habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) 
+```
+
+Plot
+
+```{r plot}
+accum.HabISYrlong %>% 
+  ggplot(aes(x = Sites, y = Richness, ymax = UPR, ymin = LWR)) +
+  scale_x_continuous(expand=c(0, 1), sec.axis = dup_axis(labels=NULL, name=NULL)) + # this moves it so zero is right at the origin
+  scale_y_continuous(sec.axis = dup_axis(labels=NULL, name=NULL)) + # this makes it more like a box
+  geom_line(aes(colour=Year), linewidth=1) + # adds line
+  #geom_point(data=subset(accum.Hablong, labelit==TRUE), 
+  #             aes(colour=Grouping, shape=Grouping), size=.5) +
+  #geom_ribbon(aes(colour=Year), alpha=0.2, show.legend=FALSE) + 
+  BioR.theme +
+  scale_colour_viridis_d(direction = -1) +
+  facet_grid(island_side~Habitat) +
+  labs(x = "Quadrats", y = "Richness")
+```
+
 # Plot changes of algae, coral, etc. through time
 
 ```{r make a big joined tibble}
@@ -377,7 +597,9 @@ macroalgae %>%
   # pivot key columns longer
   pivot_longer(cols = c(turf_sum, CCA_sum, coral, macroalgae_sum),
                names_to = "substrate",
-               values_to = "sum_cover") %>% 
+               values_to = "sum_cover") -> quad4sum
+
+quad4sum %>% 
   # summarize and group quadrats by island/habitat
   group_by(year, habitat, island_side, substrate) %>% 
   summarise(mean_cov = mean(sum_cover),
@@ -409,6 +631,37 @@ quadHabIS %>%
   ylab("Mean cover (%)") +
   xlab("Year")
 ```
+
+## Quadrat-level habitat
+
+```{r make a df for island side/habitat}
+quad4sum %>% 
+  # summarize and group quadrats by island/habitat
+  group_by(year, habitat, substrate) %>% 
+  summarise(mean_cov = mean(sum_cover),
+            sd_cov = sd(sum_cover, na.rm = TRUE),
+            n = n(),
+            CI95 = 1.96*(sd_cov)/sqrt(n)) %>% 
+  # relevel for graphing
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) %>% 
+  ggplot(aes(x = year, y = mean_cov, group = substrate, fill = substrate)) +
+  geom_ribbon(aes(ymin = mean_cov -CI95, 
+                    ymax = mean_cov + CI95),
+              alpha  = 0.7) +
+  geom_line() +
+  theme_bw() +
+  scale_fill_manual(values = c(
+    moma.colors("Klein", type = "discrete")[2], # CCA
+    moma.colors("Klein", type = "discrete")[1], # coral
+    moma.colors("Klein", type = "discrete")[5], # macro
+    moma.colors("Klein", type = "discrete")[4] # turf
+  )) +
+  facet_wrap(~habitat, nrow = 1) +
+  ylab("Mean cover (%)") +
+  xlab("Year")
+            
+```
+
 
 ## Transect-level island/habitat
 
@@ -481,7 +734,7 @@ transectHab %>%
     moma.colors("Klein", type = "discrete")[5], # macro
     moma.colors("Klein", type = "discrete")[4] # turf
   )) +
-  facet_wrap(~habitat) +
+  facet_wrap(~habitat, nrow = 1) +
   ylab("Mean cover (%)") +
   xlab("Year")
 ```
@@ -520,6 +773,80 @@ transectIS %>%
   ylab("Mean cover (%)") +
   xlab("Year")
 ```
+
+## Quadrat-level island side
+
+```{r}
+quad4sum %>% 
+  # summarize and group quadrats by island/habitat
+  group_by(year, island_side, substrate) %>% 
+  summarise(mean_cov = mean(sum_cover),
+            sd_cov = sd(sum_cover, na.rm = TRUE),
+            n = n(),
+            CI95 = 1.96*(sd_cov)/sqrt(n)) %>% 
+  # relevel for graphing
+  mutate(island_side = factor(island_side, levels = c("north", "east", "west"))) %>% 
+  ggplot(aes(x = year, y = mean_cov, group = substrate, fill = substrate)) +
+  geom_ribbon(aes(ymin = mean_cov -CI95, 
+                    ymax = mean_cov + CI95),
+              alpha  = 0.7) +
+  geom_line() +
+  theme_bw() +
+  scale_fill_manual(values = c(
+    moma.colors("Klein", type = "discrete")[2], # CCA
+    moma.colors("Klein", type = "discrete")[1], # coral
+    moma.colors("Klein", type = "discrete")[5], # macro
+    moma.colors("Klein", type = "discrete")[4] # turf
+  )) +
+  facet_wrap(~island_side, nrow = 1) +
+  ylab("Mean cover (%)") +
+  xlab("Year")
+```
+
+
+## Plot by substrate with habitat as the facet
+
+By transect
+
+```{r plot}
+transectHabIS %>% 
+  ggplot(aes(x = year, y = mean_cov, group = habitat, fill = habitat)) +
+  geom_ribbon(aes(ymin = mean_cov -CI95, 
+                    ymax = mean_cov + CI95),
+              alpha  = 0.7) +
+  geom_line() +
+  theme_bw() +
+  scale_fill_viridis_d(direction = -1) +
+  facet_grid(substrate ~ island_side) +
+  ylab("Mean cover (%)") +
+  xlab("Year")
+```
+
+By quadrat
+
+```{r}
+quad4sum %>% 
+  # summarize and group quadrats by island/habitat
+  group_by(year, habitat, island_side, substrate) %>% 
+  summarise(mean_cov = mean(sum_cover),
+            sd_cov = sd(sum_cover, na.rm = TRUE),
+            n = n(),
+            CI95 = 1.96*(sd_cov)/sqrt(n)) %>% 
+  # relevel for graphing
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17")),
+         island_side = factor(island_side, levels = c("north", "east", "west"))) %>% 
+  ggplot(aes(x = year, y = mean_cov, group = habitat, fill = habitat)) +
+  geom_ribbon(aes(ymin = mean_cov -CI95, 
+                    ymax = mean_cov + CI95),
+              alpha  = 0.7) +
+  geom_line() +
+  theme_bw() +
+  scale_fill_viridis_d(direction = -1) +
+  facet_grid(substrate ~ island_side) +
+  ylab("Mean cover (%)") +
+  xlab("Year")
+```
+
 
 
 # Examine most abundant algae
@@ -592,11 +919,11 @@ algTaxTrans %>%
 
 # Beta diversity
 
-## Distance matrix
+## Distance matrix: habitat-year
 
 We get an error message if we run vegdist right away saying that we have empty rows and that their dissimilarities may be meaningless. Let's look to see if any rows have no algae at all:
 
-```{r}
+```{r look for zeros}
 sppMat %>% 
   mutate(AlgSum = rowSums(across(where(is.numeric)))) %>% 
   filter(AlgSum == 0) %>% dim() # 672 with no algae at all
@@ -604,7 +931,7 @@ sppMat %>%
 
 Need to run this without zero observations, so we'll exclude quadrats with no algae and make a species matrix
 
-```{r}
+```{r get spp mat df}
 startAlg <- grep("acanthophora_spicifera", colnames(algae))
 endAlg <- grep("valonia_ventricosa", colnames(algae))
 
@@ -624,10 +951,36 @@ algae %>%
 
 ```
 
+Start with just one habitat at a time
+
+### Fringing
+
+```{r get fringe mat}
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+# spp matrix
+algae %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgSum != 0) %>% 
+  filter(habitat == "fringing") %>% 
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgSum) -> sppMat0fring
+
+# metadata matrix
+algae %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgSum != 0) %>%
+   filter(habitat == "fringing") %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
+  # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year)) -> sppMeta0fring
+```
+
+
 Calculate Bray Curtis distances
 
-```{r}
-brayMat <- vegdist(sppMat0, "bray") # 1 is maximum dissimilarity
+```{r calculate distances}
+brayMatFring <- vegdist(sppMat0fring, "bray") # 1 is maximum dissimilarity
 ```
 
 Calculate dispersion (this is using Noam's code)
@@ -636,13 +989,160 @@ Calculate dispersion (this is using Noam's code)
   1. Year-habitat as the group: include turf/cyano/everything
   2. Island side - year - habitat
 
-```{r}
-habBetaDisper <- vegan::betadisper(brayMat, sppMeta0$hab_year)
+```{r calculate beta dispersion}
+yrBetaDisperFring <- vegan::betadisper(brayMatFring, sppMeta0fring$year) # warning: some squared distances are negative and changed to zero (ask Jamie??)
 
 # plot of dispersion test
-plot(habBetaDisper, sub = "") # lol
-boxplot(habBetaDisper, main = "Habitat", xlab = "") 
+plot(yrBetaDisperFring, sub = "") 
+boxplot(yrBetaDisperFring, main = "Fringing reef", xlab = "") 
 ```
+
+### Backreef
+
+```{r get backreef df}
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+# spp matrix
+algae %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgSum != 0) %>% 
+  filter(habitat == "backreef") %>% 
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgSum) -> sppMat0back
+
+# metadata matrix
+algae %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgSum != 0) %>%
+   filter(habitat == "backreef") %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
+  # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year)) -> sppMeta0back
+```
+
+
+Calculate Bray Curtis distances
+
+```{r calculate distance}
+brayMatBack <- vegdist(sppMat0back, "bray") # 1 is maximum dissimilarity
+```
+
+Calculate beta disperion
+
+```{r calculate beta dispersion}
+yrBetaDisperBack <- vegan::betadisper(brayMatBack, sppMeta0back$year) 
+
+# plot of dispersion test
+plot(yrBetaDisperBack, sub = "") # lol
+boxplot(yrBetaDisperBack, main = "Backreef", xlab = "") 
+```
+
+### Outer 10
+
+```{r get outer 10 df}
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+# spp matrix
+algae %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgSum != 0) %>% 
+  filter(habitat == "outer_10") %>% 
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgSum) -> sppMat0outer10
+
+# metadata matrix
+algae %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgSum != 0) %>%
+   filter(habitat == "outer_10") %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
+  # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year)) -> sppMeta0outer10
+```
+
+
+Calculate Bray Curtis distances
+
+```{r calculate distance}
+brayMatOuter10 <- vegdist(sppMat0outer10, "bray") # 1 is maximum dissimilarity
+```
+
+Calculate beta disperion
+
+```{r calculate beta dispersion}
+yrBetaDisperOuter10 <- vegan::betadisper(brayMatOuter10, sppMeta0outer10$year) # error: some squared distances are negative and changed to zero
+
+# plot of dispersion test
+plot(yrBetaDisperOuter10, sub = "") # lol
+boxplot(yrBetaDisperOuter10, main = "Outer 10", xlab = "") 
+```
+
+### Outer 17
+
+```{r get outer 17 df}
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+# spp matrix
+algae %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgSum != 0) %>% 
+  filter(habitat == "outer_17") %>% 
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgSum) -> sppMat0outer17
+
+# metadata matrix
+algae %>% 
+  mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgSum != 0) %>%
+   filter(habitat == "outer_17") %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
+  # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year)) -> sppMeta0outer17
+```
+
+
+Calculate Bray Curtis distances
+
+```{r calculate distance}
+brayMatOuter17 <- vegdist(sppMat0outer17, "bray") # 1 is maximum dissimilarity
+```
+
+Calculate beta disperion
+
+```{r calculate beta dispersion}
+yrBetaDisperOuter17 <- vegan::betadisper(brayMatOuter17, sppMeta0outer17$year) # error: some squared distances are negative and changed to zero
+
+# plot of dispersion test
+plot(yrBetaDisperOuter17, sub = "") # lol
+boxplot(yrBetaDisperOuter17, main = "Outer 17", xlab = "") 
+```
+
+## Plot together
+
+How??
+
+```{r}
+```
+
+
+### Save dispersions
+
+```{r}
+# save(yrBetaDisperFring, file = here("data/fringingyrdispersion.Rdata"))
+# save(yrBetaDisperBack, file = here("data/backyrdispersion.Rdata"))
+# save(yrBetaDisperOuter10, file = here("data/outer10yrdispersion.Rdata"))
+# save(yrBetaDisperOuter17, file = here("data/outer17yrdispersion.Rdata"))
+```
+
+### Load dispersions
+
+```{r}
+load(here("data/fringingyrdispersion.Rdata"))
+load(here("data/backyrdispersion.Rdata"))
+load(here("data/outer10yrdispersion.Rdata"))
+load(here("data/outer17yrdispersion.Rdata"))
+```
+
 
 
 
