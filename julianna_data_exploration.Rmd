@@ -535,7 +535,8 @@ accum.HabISYrlong <- accumcomp.long(accum.HabISYr, ci=NA,
     TRUE ~ "Error"
     )) %>% 
   mutate(island_side = str_split(Grouping, pattern = "_")[[1]][[1]]) %>% 
-  mutate(Habitat = factor(Habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) 
+  mutate(Habitat = factor(Habitat, levels = c("fringing", "backreef", "outer_10", "outer_17")),
+         island_side = factor(island_side, levels = c("north", "east", "west"))) 
 ```
 
 Plot
@@ -551,7 +552,7 @@ accum.HabISYrlong %>%
   #geom_ribbon(aes(colour=Year), alpha=0.2, show.legend=FALSE) + 
   BioR.theme +
   scale_colour_viridis_d(direction = -1) +
-  facet_grid(island_side~Habitat) +
+  facet_grid(island_side ~ Habitat) +
   labs(x = "Quadrats", y = "Richness")
 ```
 
@@ -947,7 +948,8 @@ algae %>%
   filter(AlgSum != 0) %>%
   select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
   # make a year-habitat column for betadisper
-  mutate(hab_year = paste0(habitat, "_", year)) -> sppMeta0
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, hab_year)) -> sppMeta0
 
 ```
 
@@ -973,7 +975,9 @@ algae %>%
    filter(habitat == "fringing") %>% 
   select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
   # make a year-habitat column for betadisper
-  mutate(hab_year = paste0(habitat, "_", year)) -> sppMeta0fring
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, hab_year),
+         island_side_year = paste0(island_side, year)) -> sppMeta0fring
 ```
 
 
@@ -1017,7 +1021,9 @@ algae %>%
    filter(habitat == "backreef") %>% 
   select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
   # make a year-habitat column for betadisper
-  mutate(hab_year = paste0(habitat, "_", year)) -> sppMeta0back
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, hab_year),
+         island_side_year = paste0(island_side, year)) -> sppMeta0back
 ```
 
 
@@ -1057,7 +1063,9 @@ algae %>%
    filter(habitat == "outer_10") %>% 
   select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
   # make a year-habitat column for betadisper
-  mutate(hab_year = paste0(habitat, "_", year)) -> sppMeta0outer10
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, hab_year),
+         island_side_year = paste0(island_side, year)) -> sppMeta0outer10
 ```
 
 
@@ -1097,7 +1105,9 @@ algae %>%
    filter(habitat == "outer_17") %>% 
   select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
   # make a year-habitat column for betadisper
-  mutate(hab_year = paste0(habitat, "_", year)) -> sppMeta0outer17
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, hab_year),
+         island_side_year = paste0(island_side, year)) -> sppMeta0outer17
 ```
 
 
@@ -1117,11 +1127,89 @@ plot(yrBetaDisperOuter17, sub = "") # lol
 boxplot(yrBetaDisperOuter17, main = "Outer 17", xlab = "") 
 ```
 
-## Plot together
+## Join together
 
-How??
+Attach back to metadata
+
+```{r join distances with metadata}
+sppMeta0fring %>% 
+  mutate(distance_centriod = yrBetaDisperFring$distances) -> fringeDist
+
+sppMeta0back %>% 
+  mutate(distance_centriod = yrBetaDisperBack$distances) -> backDist
+
+sppMeta0outer10 %>% 
+  mutate(distance_centriod = yrBetaDisperOuter10$distances) -> outer10Dist
+
+sppMeta0outer17 %>% 
+  mutate(distance_centriod = yrBetaDisperOuter17$distances) -> outer17Dist
+```
+
+```{r join together}
+# make sure this looks good
+colnames(fringeDist) == colnames(backDist) 
+colnames(backDist) == colnames(outer10Dist) 
+colnames(outer10Dist) == colnames(outer17Dist)
+
+
+# join together
+betaDHabYr <- rbind(fringeDist, backDist, outer10Dist, outer17Dist)
+```
+
+Confirm these produce the same plots
+
+```{r sanity check}
+betaDHabYr %>% 
+  ggplot(aes(x = year, y = distance_centriod, group = year)) +
+  geom_boxplot() +
+  facet_wrap(~habitat)
+```
+
+Add coral data
 
 ```{r}
+allbenthos %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, coral) %>% 
+  # inner so that we don't add back in quadrats with 0% algae
+  inner_join(betaDHabYr) -> betaDHabYrCoral
+```
+
+## Plot with coral
+
+```{r scatter plot}
+betaDHabYrCoral %>% 
+  ggplot(aes(x = coral, y = distance_centriod)) +
+  geom_point() +
+  facet_grid(habitat ~ year)
+```
+
+```{r boxplot}
+# get mean coral cover
+betaDHabYrCoral %>% 
+  group_by(year, habitat) %>% 
+  summarize(Mean_coral = mean(coral)) %>% 
+  full_join(betaDHabYrCoral) %>% 
+  ggplot(aes(x = year, y = distance_centriod, group = year)) +
+  geom_boxplot() +
+  # Custom the Y scales:
+  scale_y_continuous(
+    # Features of the first axis
+    name = "Algal beta diversity",
+    # Add a second axis and specify its features
+    sec.axis = sec_axis( trans=~.*100, name="Avg coral cover")
+  ) +
+  geom_line(aes(group = 1, x = year, y = Mean_coral/100), size = 2, color = "red") +
+  facet_wrap(~habitat) 
+```
+
+```{r}
+betaDHabYrCoral %>% 
+  group_by(year, habitat) %>% 
+  summarize(Mean_coral = mean(coral)) %>% 
+  full_join(betaDHabYrCoral) %>% 
+  ggplot(aes(group = 1, x = year, y = Mean_coral, group = year)) +
+  geom_line()  +
+  facet_wrap(~habitat) 
 ```
 
 
@@ -1142,6 +1230,115 @@ load(here("data/backyrdispersion.Rdata"))
 load(here("data/outer10yrdispersion.Rdata"))
 load(here("data/outer17yrdispersion.Rdata"))
 ```
+
+
+## Dispersion by island side-year-habitat
+
+Calculate beta dispersion (do it in groups for the sake of the computer)
+
+```{r calculate beta dispersion by habitat}
+yrISBetaDisperFring <- vegan::betadisper(brayMatFring, sppMeta0fring$island_side_year) # error: some squared distances are negative and changed to zero
+# save(yrISBetaDisperFring, file = here("data/fringingyrISdispersion.Rdata"))
+
+yrISBetaDisperBack <- vegan::betadisper(brayMatBack, sppMeta0back$island_side_year)  # error: some squared distances are negative and changed to zero
+# save(yrISBetaDisperBack, file = here("data/backyrISdispersion.Rdata"))
+
+yrISBetaDisperOuter10 <- vegan::betadisper(brayMatOuter10, sppMeta0outer10$island_side_year) # error: some squared distances are negative and changed to zero
+# save(yrISBetaDisperOuter10, file = here("data/outer10yrISdispersion.Rdata"))
+
+yrISBetaDisperOuter17 <- vegan::betadisper(brayMatOuter17, sppMeta0outer17$island_side_year) # error: some squared distances are negative and changed to zero
+# save(yrISBetaDisperOuter17, file = here("data/outer17yrISdispersion.Rdata"))
+```
+
+### Load dispersions
+
+```{r}
+load(here("data/fringingyrISdispersion.Rdata"))
+load(here("data/backyrISdispersion.Rdata"))
+load(here("data/outer10yrISdispersion.Rdata"))
+load(here("data/outer17yrISdispersion.Rdata"))
+```
+
+### Join together
+
+```{r get all distances}
+# get distances
+sppMeta0fring %>% 
+  mutate(distance_centriod = yrISBetaDisperFring$distances) -> fringeDistIS
+
+sppMeta0back %>% 
+  mutate(distance_centriod = yrISBetaDisperBack$distances) -> backDistIS
+
+sppMeta0outer10 %>% 
+  mutate(distance_centriod = yrISBetaDisperOuter10$distances) -> outer10DistIS
+
+sppMeta0outer17 %>% 
+  mutate(distance_centriod = yrISBetaDisperOuter17$distances) -> outer17DistIS
+```
+
+
+```{r join together}
+# make sure this looks good
+colnames(fringeDistIS) == colnames(backDistIS) 
+colnames(backDistIS) == colnames(outer10DistIS) 
+colnames(outer10DistIS) == colnames(outer17DistIS)
+
+
+# join together
+betaDHabYrIS <- rbind(fringeDistIS, backDistIS, outer10DistIS, outer17DistIS)
+
+# add coral
+allbenthos %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, coral) %>% 
+  # inner so that we don't add back in quadrats with 0% algae
+  inner_join(betaDHabYrIS) -> betaDHabYrISCoral
+```
+
+
+
+### Plot
+
+```{r without coral}
+betaDHabYrISCoral %>% 
+  mutate(island_side = factor(island_side, levels = c("north", "east", "west")),
+        habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) %>% 
+  ggplot(aes(x = year, y = distance_centriod, group = year)) +
+  geom_boxplot() +
+  facet_grid(island_side~habitat)
+```
+
+With coral
+
+```{r scatter plot}
+betaDHabYrISCoral %>% 
+  mutate(island_side = factor(island_side, levels = c("north", "east", "west")),
+        habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) %>% 
+  ggplot(aes(x = coral, y = distance_centriod)) +
+  geom_point() +
+  facet_grid(habitat ~ year)
+```
+
+```{r boxplot}
+# get mean coral cover
+betaDHabYrISCoral %>% 
+  group_by(year, habitat, island_side) %>% 
+  summarize(Mean_coral = mean(coral)) %>% 
+  full_join(betaDHabYrCoral) %>% 
+  mutate(island_side = factor(island_side, levels = c("north", "east", "west")),
+        habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) %>% 
+  ggplot(aes(x = year, y = distance_centriod, group = year)) +
+  geom_boxplot() +
+  # Custom the Y scales:
+  scale_y_continuous(
+    # Features of the first axis
+    name = "Algal beta diversity",
+    # Add a second axis and specify its features
+    sec.axis = sec_axis( trans=~.*100, name="Avg coral cover")
+  ) +
+  geom_line(aes(group = 1, x = year, y = Mean_coral/100), size = 2, color = "red") +
+  facet_grid(island_side~habitat) 
+```
+
 
 
 
