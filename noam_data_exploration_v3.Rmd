@@ -4,12 +4,12 @@ author: "Noam Altman-Kurosaki"
 date: "2024-05-09"
 output: html_document
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
+rm(list = ls())
 library(here)
 library(dplyr)
 library(tidyverse)
@@ -22,15 +22,37 @@ library(effects)
 library(DHARMa)
 library(stringr)
 library(MuMIn)
+library(codyn)
+library(nlme)
+library(mgcv)
+library(emmeans)
 ```
 
-```{r }
-data <- read.csv(here::here("data", "algaeonly_cleaned.csv"), stringsAsFactors = F) # replacements don't work when strings are factors
+```{r import and format data}
+# starting with all data now because of 0 algae transects/quadrats
+data <- read.csv(here::here("data", "allbenthicdata_cleaned.csv"), stringsAsFactors = F) 
+
+not_algae <- c("Ascidian", "Bare.Space", "Coral", "Coral.Rubble", "Corallimorpharia", "Heteractis.sp.", "Millepora.platyphylla", "No.data", "Sand", "Sacrophyton.sp.", "Shell.Debris", "Soft.Coral", "Sponge", "Tridacna.sp.", "Zooxanthellae", "row_sums")
+
+data <- data[ , -which(names(data) %in% not_algae)]
+
+# adding island side - adapted from Julianna's code
+data <- data %>% mutate(Island_side = case_when(Site == "LTER 1" ~ "North",
+                                 Site == "LTER 2" ~ "North",
+                                 Site == "LTER 3" ~ "East",
+                                 Site == "LTER 4" ~ "East",
+                                 Site == "LTER 5" ~ "West",
+                                 Site == "LTER 6" ~ "West"))
+data$Island_side_habitat <- paste(data$Island_side, data$Habitat)
+
 
 str(data)
-# test
-#pivot long 
 
+
+meta_cols <- c(colnames(data[1:7] ), "Island_side", "Island_side_habitat")
+species_cols <- colnames(data[8:77])
+
+#pivot long 
 long_data <- pivot_longer(
   data = data,
   cols = 8:77,
@@ -38,39 +60,40 @@ long_data <- pivot_longer(
   values_to = "Percent_cover") 
 
 
-transect_level <- long_data %>%
-  dplyr::group_by(Year, Site, Habitat, Transect, Taxa) %>%
-  dplyr::summarise(Mean_cover = mean(Percent_cover), 
-            SE = sd(Percent_cover)/sqrt(n()))
-
-site_level <- transect_level %>%
-  dplyr::group_by(Year, Site, Habitat, Taxa) %>%
-  dplyr::summarise(Mean_site_cover = mean(Mean_cover), 
-            Site_se = sd(Mean_cover)/sqrt(n()))
+ transect_level <- long_data %>%
+   dplyr::group_by(Year, Site, Habitat, Transect, Taxa) %>%
+   dplyr::summarise(Mean_cover = mean(Percent_cover), 
+             SE = sd(Percent_cover)/sqrt(n()))
+ 
+# site_level <- transect_level %>%
+#   dplyr::group_by(Year, Site, Habitat, Taxa) %>%
+#   dplyr::summarise(Mean_site_cover = mean(Mean_cover), 
+#             Site_se = sd(Mean_cover)/sqrt(n()))
 ```
 
 ```{r diversity indicies, fig.height = 15, fig.width=20}
-meta_cols <- colnames(data[1:7]) 
-species_cols <- colnames(data[8:77])
+
 
 wide_transect_level <- data %>%
-  dplyr::group_by(Year, Site, Habitat, Site_habitat, Transect) %>%
+  dplyr::group_by(Year, Island_side, Island_side_habitat, Site, Habitat, Site_habitat, Transect) %>%
   dplyr::summarize(across(all_of(species_cols), mean, na.rm = TRUE))
 
 alpha_diversity <-
   data.frame(
     Year = as.factor(wide_transect_level$Year),
+    Island_side = as.factor(wide_transect_level$Island_side),
+    Island_side_habitat = as.factor(wide_transect_level$Island_side_habitat),
     Site = as.factor(wide_transect_level$Site),
     Habitat = as.factor(wide_transect_level$Habitat),
     Site_habitat = as.factor(wide_transect_level$Site_habitat),
     Transect = as.factor(wide_transect_level$Transect),
     Site_habitat_transect = as.factor(paste(wide_transect_level$Site_habitat, wide_transect_level$Transect)),
-    Shannon = diversity(wide_transect_level[5:74], "shannon"),
-    Richness = rowSums(wide_transect_level[5:74] > 0)
+    Shannon = diversity(wide_transect_level[ , -which(names(wide_transect_level) %in% meta_cols)], "shannon"),
+    Richness = rowSums(wide_transect_level[ , -which(names(wide_transect_level) %in% meta_cols)] > 0)
   )
 
 alpha_diversity_means <- alpha_diversity %>%
-  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  dplyr::group_by(Year, Island_side, Island_side_habitat, Site, Habitat, Site_habitat) %>%
   dplyr::summarise(Richness_mean = mean(Richness), 
             Richness_se = sd(Richness)/sqrt(n()),
             Shannon_mean = mean(Shannon), 
@@ -83,6 +106,9 @@ site_colours <- c("LTER 1" = "cornflowerblue",
                "LTER 4" = "forestgreen",
                "LTER 5" = "mediumorchid",
                "LTER 6" = "orange")
+island_side_colours <- c("North" = "darkblue",
+                         "East" = "mediumorchid",
+                         "West" = "orange")
 habitat_linetypes <- c("Fringing" = "solid",
                        "Backreef" = "longdash",
                        "Outer 10" = "twodash",
@@ -94,11 +120,11 @@ habitat_shapes <- c("Fringing" = 16,
 
 (richness_plot <-
   ggplot(data = alpha_diversity_means) +
-  geom_point(aes(x = Year, y = Richness_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8) +
-  geom_line(aes(x = Year, y = Richness_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Richness_mean - Richness_se , ymax = Richness_mean + Richness_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = site_colours) +
+  geom_point(aes(x = Year, y = Richness_mean, colour = Island_side, shape = Habitat, group = Island_side_habitat), size = 8) +
+  geom_line(aes(x = Year, y = Richness_mean, colour = Island_side, group = Island_side_habitat), size = 1.2) +
+  geom_errorbar(aes(x = Year, ymin = Richness_mean - Richness_se , ymax = Richness_mean + Richness_se, colour = Island_side,
+                    group = Island_side_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = island_side_colours) +
   scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~Habitat)+
   labs(title = "a. Richness\n", y = "Richness\n") +
@@ -125,11 +151,11 @@ habitat_shapes <- c("Fringing" = 16,
   
 (shannon_plot <-
   ggplot(data = alpha_diversity_means) +
-  geom_point(aes(x = Year, y = Shannon_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8) +
-  geom_line(aes(x = Year, y = Shannon_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Shannon_mean - Shannon_se , ymax = Shannon_mean + Shannon_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = site_colours) +
+  geom_point(aes(x = Year, y = Shannon_mean, colour = Island_side, shape = Habitat, group = Island_side_habitat), size = 8) +
+  geom_line(aes(x = Year, y = Shannon_mean, colour = Island_side, group = Island_side_habitat), size = 1.2) +
+  geom_errorbar(aes(x = Year, ymin = Shannon_mean - Shannon_se , ymax = Shannon_mean + Shannon_se, colour = Island_side,
+                    group = Island_side_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = island_side_colours) +
   scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~Habitat)+
   labs(title = "b. Shannon\n", y = "shannon\n") +
@@ -165,31 +191,735 @@ ggarrange(richness_plot + rremove("x.text"), shannon_plot, common.legend = T,
 # seems like patterns in alpha diversity different depending on if you look at richness or shannon diversity 
 ```
 
-```{r basic alpha diversity stats}
-# these violate all sorts of assumptions I'm just messing around
-richness_mod <- glmmTMB(Richness ~ Year*Site*Habitat + (1|Site_habitat_transect), data = alpha_diversity, family = poisson())
-Anova(richness_mod)
+```{r alpha diversity quadrat level, fig.height = 15, fig.width=20}
+alpha_diversity_quad <-
+  data.frame(
+    Year = as.numeric(data$Year),
+    Location = as.factor(data$Location),
+    Island_side = as.factor(data$Island_side),
+    Island_side_habitat = as.factor(data$Island_side_habitat),
+    Site = as.factor(data$Site),
+    Habitat = as.factor(data$Habitat),
+    Site_habitat = as.factor(data$Site_habitat),
+    Transect = as.factor(data$Transect),
+    Site_habitat_transect = as.factor(paste(data$Site_habitat, data$Transect)),
+    Shannon = diversity(data[ , -which(names(data) %in% meta_cols)], "shannon"),
+    Richness = rowSums(data[ , -which(names(data) %in% meta_cols)] > 0)
+  )
 
-# shannon_mod <- glmmTMB(Shannon ~ Year*Site*Habitat + (1|Site_habitat_transect), data = alpha_diversity, family = Gamma(link = "log")) # 0 values fuck this up. Return to this when not tired. 
+alpha_diversity_quad_means <- alpha_diversity_quad %>%
+  dplyr::group_by(Year, Island_side, Island_side_habitat, Site, Habitat, Site_habitat) %>%
+  dplyr::summarise(Richness_mean = mean(Richness), 
+            Richness_se = sd(Richness)/sqrt(n()),
+            Shannon_mean = mean(Shannon), 
+            Shannon_se = sd(Shannon)/sqrt(n()))
+
+(richness_quad_plot <-
+  ggplot(data = alpha_diversity_quad_means) +
+  geom_point(aes(x = Year, y = Richness_mean, colour = Island_side, shape = Habitat, group = Island_side_habitat), size = 8) +
+  geom_line(aes(x = Year, y = Richness_mean, colour = Island_side, group = Island_side_habitat), size = 1.2) +
+  geom_errorbar(aes(x = Year, ymin = Richness_mean - Richness_se , ymax = Richness_mean + Richness_se, colour = Island_side,
+                    group = Island_side_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = island_side_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Habitat)+
+  labs(title = "a. Richness quad level\n", y = "Richness\n") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        )
+    )
+  
+(shannon_quad_plot <-
+  ggplot(data = alpha_diversity_quad_means) +
+  geom_point(aes(x = Year, y = Shannon_mean, colour = Island_side, shape = Habitat, group = Island_side_habitat), size = 8) +
+  geom_line(aes(x = Year, y = Shannon_mean, colour = Island_side, group = Island_side_habitat), size = 1.2) +
+  geom_errorbar(aes(x = Year, ymin = Shannon_mean - Shannon_se , ymax = Shannon_mean + Shannon_se, colour = Island_side,
+                    group = Island_side_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = island_side_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Habitat)+
+  labs(title = "b. Shannon quad level\n", y = "shannon\n") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        )
+    )
+
+
+
+```
+```{r compare quad and transect level plots, fig.height = 30, fig.width= 40}
+ggarrange(richness_plot + rremove("x.text"), richness_quad_plot + rremove("x.text"),
+          shannon_plot,shannon_quad_plot,
+          common.legend = T,
+          nrow = 2, ncol = 2)
+
+```
+
+
+```{r gls approach}
+
+# FRAMING: What is the general trend in algal alpha diversity over the course of the time series? Increasing, decreasing, neutral?
+
+columns <- c("Location", "Intercept", "Slope") # names of columns for dataframe
+gls_coefficients <- # new dataframe name
+  data.frame(matrix(nrow = length(unique(alpha_diversity_quad$Location)), # 1200 quadrats = 1200 different time series
+                    ncol = length(columns)) # specified to make sure number of columns doesn't exceed what was specified
+             )
+colnames(gls_coefficients) <- columns # change column names to what was specified
+gls_coefficients$Location <- levels(alpha_diversity_quad$Location) # populate Location column with each quad/time series
+
+for(i in 1:length(unique(alpha_diversity_quad$Location)) ){ # for each  quadrat
+  # create a new dataframe for the quadrat of the current iteration
+  newData <- subset(alpha_diversity_quad, Location == levels(alpha_diversity_quad$Location)[i]) 
+  
+  # fit gls for current time series
+  loop_mod <- gls(Richness ~ Year, correlation =corAR1(form=~Year), data = newData)
+  
+  # populate appropriate row and column with the relevant coeffcients from gls
+  gls_coefficients[i, 2] <- unname(coef(loop_mod)[1])
+  gls_coefficients[i, 3] <- unname(coef(loop_mod)[2])
+  
+}
+
+hist(gls_coefficients$Slope) # looks basically normal, bounded -Inf, Inf
+
+hist(gls_coefficients$Intercept) # same with intercept - although it probably shouldn't be
+
+# Start adding back in relevant metadata - probably a more elegant way to do this!!!
+habitat_vector <- c(rep("Backreef", 50), rep("Fringing", 50), rep("Outer 10", 50), rep("Outer 17", 50))
+transect_sequence <- c(rep(1,10),
+                       rep(2,10),
+                       rep(3,10),
+                       rep(4,10),
+                       rep(5,10))
+extra_meta <- 
+  data.frame(Site = as.factor(c(rep("LTER 1", 200),
+                                rep("LTER 2", 200),
+                                rep("LTER 3", 200),
+                                rep("LTER 4", 200),
+                                rep("LTER 5", 200),
+                                rep("LTER 6", 200)) ),
+             Island_side = as.factor(c(rep("North", 400),
+                                     rep("East", 400),
+                                     rep("West", 400))
+                                     ),
+             Habitat = as.factor(rep(habitat_vector, 6 )),
+             Transect = as.factor(rep(transect_sequence, 240)),
+             Location = levels(alpha_diversity_quad$Location) )
+
+gls_coefficients_merged <- merge(gls_coefficients, extra_meta, by = "Location")             
+
+slope_mod <- glmmTMB(Slope ~ Habitat*Island_side + (1|Site/Transect), data = gls_coefficients_merged)
+summary(slope_mod) # pretty low variance in random effects
+plot(gls_res <- simulateResiduals(slope_mod)) # there are issues, but I can't figure out what they are...
+# I think this is due to 1200 obs in model
+hist(residuals(slope_mod))
+plot(predict(slope_mod) ~ residuals(slope_mod))
+Anova(slope_mod)
+#                        Chisq Df Pr(>Chisq)    
+# Island_side           16.075  2  0.0003232 ***
+# Habitat             1301.260  3  < 2.2e-16 ***
+# Island_side:Habitat  799.995  6  < 2.2e-16 ***
+r.squaredGLMM(slope_mod) # 0.16, 0.18
+plot(allEffects(slope_mod))
+# Backreef: richness increases on East and North shore, but relatively constant west side
+# Fringe: richness decreasing on east and west side, but relatvely constant on north shore
+# Outer 10: Richness neutral/decreasing on east side, but neutral/increasing on north and west side
+# Outer 17: Richness decreasing north/east side, but neutral west side
+# Worth noting trends are slight - arguable whether they are biologically meaningful
+
+
+
+
+slope_emm <- emmeans(slope_mod, ~ Habitat*Island_side) # create emmeans object
+emmeans::contrast(slope_emm, "consec", simple = "each", combine = TRUE, adjust = "bonferroni")
+# Note: not sure I want to include this
+```
+
+
+```{r gls plot, fig.height=20, fig.width=20}
+# not sure how to visualize here... thinking something like Dornelas et al. 2014 Fig 2a
+# I reached out to them about getting their code for this
+
+ggplot(data = gls_coefficients_merged) +
+  geom_histogram(aes(x = Slope), bins = 30) +
+  geom_vline(xintercept = 0, size = 2, linetype = 2) +
+  facet_grid(Habitat ~ Island_side) +
+#  theme_classic() +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+#        panel.background = element_blank(),
+        legend.text = element_text(size=20),
+        legend.title = element_text(size=20),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        axis.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain")
+  )
+
+```
+
+```{r gls intercept, fig.height=20, fig.width=20}
+intercept_mod <- glmmTMB(Intercept ~ Habitat*Island_side + (1|Site/Transect), data = gls_coefficients_merged)
+summary(intercept_mod) # a lot of variance w/i transect, less so w/i site
+plot(gls_int_res <- simulateResiduals(intercept_mod)) # same issues as above
+
+hist(residuals(intercept_mod))
+plot(predict(intercept_mod) ~ residuals(intercept_mod))
+Anova(intercept_mod)
+#                        Chisq Df Pr(>Chisq)    
+# Habitat             1307.838  3  < 2.2e-16 ***
+# Island_side           26.358  2  1.889e-06 ***
+# Habitat:Island_side  789.627  6  < 2.2e-16 ***
+r.squaredGLMM(intercept_mod) # 0.16, 0.18
+plot(allEffects(intercept_mod))
+
+ggplot(data = gls_coefficients_merged) +
+  geom_histogram(aes(x = Intercept), bins = 30) +
+  geom_vline(xintercept = 0, size = 2, linetype = 2) +
+  facet_grid(Habitat ~ Island_side) +
+#  theme_classic() +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+#        panel.background = element_blank(),
+        legend.text = element_text(size=20),
+        legend.title = element_text(size=20),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        axis.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain")
+  )
+
+```
+
+
+```{r gam approach}
+# NOTE: Not sure where I'm going with this yet
+# Idea is to look at smoother estimates for each time series to get an idea for the "shape" of the time series
+# Not sure if worthwhile, might skip
+
+# The below takes 17 years to run in and of itself
+# gam_model <- gam(Richness ~ s(Year) + s(Year, by = Habitat) + 
+#                  s(Island_side, bs = "re") + s(Transect, bs = "re") + s(Location, bs = "re"),
+#                  data = alpha_diversity_quad, family = poisson())
+
+
+
+gam_columns <- c("Location", "Intercept", "edf") # names of columns for dataframe
+gam_coefficients <- # new dataframe name - same workflow as above
+  data.frame(matrix(nrow = length(unique(alpha_diversity_quad$Location)),
+                    ncol = length(gam_columns))
+             )
+colnames(gam_coefficients) <- gam_columns # change column names to what was specified
+gam_coefficients$Location <- levels(alpha_diversity_quad$Location) # populate Location column with each quad/time series
+
+# same workflow as above
+for(i in 1:length(unique(alpha_diversity_quad$Location)) ){ # for each  quadrat
+  # create a new dataframe for the quadrat of the current iteration
+  newData <- subset(alpha_diversity_quad, Location == levels(alpha_diversity_quad$Location)[i]) 
+  
+  # fit gam for current time series
+  loop_mod <- gamm(Richness ~ s(Year), data = newData, correlation = corCAR1(form = ~ Year), method = "REML", family = poisson)
+  loop_sum <- summary(loop_mod$gam) # store summary data
+  # populate appropriate row and column with the relevant coeffcients from gls
+  gam_coefficients[i, 2] <- unname(loop_sum$p.coeff)
+  gam_coefficients[i, 3] <- unname(loop_sum$edf)
+  
+}
+
+hist(gam_coefficients$Intercept)
+hist(gam_coefficients$edf) # generally around 1 except for an outlier
+# LTER 5 Fringing Reef Algae Transect 3 Quad 6 - a quadrat that has almost no algae the entire time series
+# issues with quadrat - smaller sample = more 0s, makes modeling trickier
+hist(subset(gam_coefficients, Location != "LTER 5 Fringing Reef Algae Transect 3 Quad 6")$edf)
+sum(gam_coefficients$edf > 1.01) # all but 18/1200 quadrats can be fit by a smoother with edf < 1.01
+# trends more straightforward than I anticipated?
+# argument for just looking at mean richness and slope?
+```
+
+```{r glmm approach}
+alpha_diversity_quad$Year_factor <- as.factor(alpha_diversity_quad$Year) # for glmmTMB ar1 structure
+# Framing - is adiv generally higher in certain habitats/regions?
+
+richness_mod <- glmmTMB(
+  Richness ~ Island_side*Habitat + (1 | Island_side/Site/Transect/Location) + ar1(Year_factor + 0 | Location),
+  family = poisson,
+  data = alpha_diversity_quad,
+  control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000))
+) # overspecified but going with it for now
+summary(richness_mod) # looks like strong autocorrelation, which makes sense to me
+Anova(richness_mod)
+plot(allEffects(richness_mod))
+
+```
+```{r turnover troubleshooting, fig.height = 30, fig.width=25}
+
+transect_level$Site_habitat <-  paste(transect_level$Site, transect_level$Habitat)
+transect_level$Stratum <- paste(transect_level$Site, "-", transect_level$Habitat, "-", transect_level$Transect)
+
+# long_data$Site_habitat <-  paste(long_data$Site, long_data$Habitat)
+# long_data$Stratum <- paste(long_data$Site, "-", long_data$Habitat, "-", long_data$Transect)
+
+# turnover analyses break when I try to do it at the quadrat level
+# checking if it's because there are quadrats that have effecively 0% algae
+total_cover_per_quadrat_year <- long_data %>%
+  group_by(Location, Year) %>%
+  summarize(total_cover = sum(Percent_cover), .groups = 'drop')
+
+# Filter quadrats where the total percent cover is 0%
+zero_cover_quadrats <- total_cover_per_quadrat_year %>%
+  filter(total_cover == 0)
+
+# Count the number of years each quadrat had 0% cover
+zero_cover_count <- zero_cover_quadrats %>%
+  group_by(Location) %>%
+  summarize(years_with_zero_cover = n())
+
+# Filter quadrats that had 0% cover for multiple years
+quadrats_multiple_years_zero_cover <- zero_cover_count %>%
+  filter(years_with_zero_cover > 1)
+
+length(unique(quadrats_multiple_years_zero_cover$Location)) # 144/1200 quadrats have multiple years with no algal cover
+
+# compare this to the number of transects with 0 algae cover
+total_cover_per_transect_year <- transect_level %>%
+  group_by(Stratum, Year) %>%
+  summarize(total_cover = sum(Mean_cover), .groups = 'drop')
+
+# Filter quadrats where the total percent cover is 0%
+zero_cover_transects <- total_cover_per_transect_year %>%
+  filter(total_cover == 0)
+
+# Count the number of years each quadrat had 0% cover
+zero_cover_transect_count <- zero_cover_transects %>%
+  group_by(Stratum) %>%
+  summarize(years_with_zero_cover = n())
+
+# Filter quadrats that had 0% cover for multiple years
+transects_multiple_years_zero_cover <- zero_cover_transect_count %>%
+  filter(years_with_zero_cover > 1)
+
+# NO transects ever have more than one year with 0 algal cover, as opposed to 144 quadrats
+# Fairly certain this is why the turnover analyses are breaking
+
+# identify quadrats missing timepoints
+years <- unique(long_data$Year)
+quadrats <- unique(long_data$Location)
+
+# Create a dataframe with all combinations of quadrats and years
+all_combinations <- expand.grid(Location = quadrats, Year = years)
+
+# Identify the missing combinations by performing an anti-join with your actual data
+missing_timepoints <- anti_join(all_combinations, long_data, by = c("Location", "Year"))
+
+# Display the missing timepoints
+print(missing_timepoints)
+
+problem_children <- c("LTER 5 Fringing Reef Algae Transect 3 Quad 9", "LTER 5 Fringing Reef Algae Transect 3 Quad 8", "LTER 5 Fringing Reef Algae Transect 3 Quad 6", "LTER 5 Fringing Reef Algae Transect 3 Quad 3", "LTER 5 Fringing Reef Algae Transect 3 Quad 10")
+
+long_data_sub <- long_data[long_data$Location != problem_children, ] # remove problem children
+# still get the same error when I try to run at quadrat level
+# I think it's because of the 0s
+# Error in names(output) <- `*vtmp*` : 
+#  'names' attribute [1] must be the same length as the vector [0]
+```
+
+```{r turnover}
+# the turnover function calculates turnover as the proportion or species that either appear or disappear between timepoints
+total_turnover<-
+  turnover(
+  df = long_data_sub,
+  time.var = "Year",
+  species.var = "Taxa",
+  abundance.var = "Percent_cover",
+  replicate.var = "Location",
+  metric = "total"
+)
+
+
+total_turnover<- 
+  total_turnover %>%
+    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
+total_turnover$Site_habitat <- paste(total_turnover$Site, total_turnover$Habitat)
+# Add back in stratum column
+
+# A lot of extra spaces
+
+total_turnover <- total_turnover %>%
+  mutate(across(everything(), str_trim))
+
+str(total_turnover) # everything became characters
+
+total_turnover$total <- as.numeric(total_turnover$total)
+total_turnover$Year <- as.factor(total_turnover$Year)
+total_turnover$Site <- as.factor(total_turnover$Site)
+total_turnover$Habitat <- as.factor(total_turnover$Habitat)
+
+turnover_means <-
+  total_turnover %>%
+  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  dplyr::summarise(Turnover_mean = mean(total), 
+            Turnover_se = sd(total)/sqrt(n()))
+
+(turnover_plot <-
+  ggplot(data = turnover_means) +
+  geom_point(aes(x = Year, y = Turnover_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
+  geom_line(aes(x = Year, y = Turnover_mean, colour = Site, group = Site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = Year, ymin = Turnover_mean - Turnover_se , ymax = Turnover_mean + Turnover_se, colour = Site,
+                    group = Site_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Site_habitat, nrow = 6)+
+  labs(title = "a. Turnover\n", y = "Total turnover\n") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        )
+    )
+#
+
+# examine appearance and disappearances independently 
+# refers to the proportion of species that appeared or disappeared relative to total species pool between two time points
+
+appearance <-
+  turnover(
+  df = long_data,
+  time.var = "Year",
+  species.var = "Taxa",
+  abundance.var = "Percent_cover",
+  replicate.var = "Location",
+  metric = "appearance"
+)
+
+appearance<- 
+  appearance %>%
+    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
+appearance$Site_habitat <- paste(appearance$Site, appearance$Habitat)
+# Add back in stratum column
+
+# A lot of extra spaces
+
+appearance <- appearance %>%
+  mutate(across(everything(), str_trim))
+
+str(appearance) # everything became characters
+
+appearance$appearance <- as.numeric(appearance$appearance)
+appearance$Year <- as.factor(appearance$Year)
+appearance$Site <- as.factor(appearance$Site)
+appearance$Habitat <- as.factor(appearance$Habitat)
+
+appearance_means <-
+  appearance %>%
+  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  dplyr::summarise(Appearance_mean = mean(appearance), 
+            Appearance_se = sd(appearance)/sqrt(n()))
+
+(appearance_plot <-
+  ggplot(data = appearance_means) +
+  geom_point(aes(x = Year, y = Appearance_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
+  geom_line(aes(x = Year, y = Appearance_mean, colour = Site, group = Site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = Year, ymin = Appearance_mean - Appearance_se , ymax = Appearance_mean + Appearance_se, colour = Site,
+                    group = Site_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Site_habitat, nrow = 6)+
+  labs(title = "b. Appearances\n", y = "Total turnover\n") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        )
+    )
+#
+
+
+disappearance <-
+  turnover(
+  df = long_data,
+  time.var = "Year",
+  species.var = "Taxa",
+  abundance.var = "Mean_cover",
+  replicate.var = "Stratum",
+  metric = "disappearance"
+)
+
+disappearance<- 
+  disappearance %>%
+    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
+disappearance$Site_habitat <- paste(disappearance$Site, disappearance$Habitat)
+# Add back in stratum column
+
+# A lot of extra spaces
+
+disappearance <- disappearance %>%
+  mutate(across(everything(), str_trim))
+
+str(disappearance) # everything became characters
+
+disappearance$disappearance <- as.numeric(disappearance$disappearance)
+disappearance$Year <- as.factor(disappearance$Year)
+disappearance$Site <- as.factor(disappearance$Site)
+disappearance$Habitat <- as.factor(disappearance$Habitat)
+
+disappearance_means <-
+  disappearance %>%
+  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  dplyr::summarise(Disappearance_mean = mean(disappearance), 
+            Disappearance_se = sd(disappearance)/sqrt(n()))
+
+(disappearance_plot <-
+  ggplot(data = disappearance_means) +
+  geom_point(aes(x = Year, y = Disappearance_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
+  geom_line(aes(x = Year, y = Disappearance_mean, colour = Site, group = Site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = Year, ymin = Disappearance_mean - Disappearance_se , ymax = Disappearance_mean + Disappearance_se, colour = Site,
+                    group = Site_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Site_habitat, nrow = 6)+
+  labs(title = "c. Disappearance\n", y = "Total turnover\n") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        )
+    )
+
+# rank shift 
+
+rank_shift<-
+  rank_shift(
+  df = long_data,
+  time.var = "Year",
+  species.var = "Taxa",
+  abundance.var = "Mean_cover",
+  replicate.var = "Stratum"
+)
+
+rank_shift<- 
+  rank_shift %>%
+    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
+rank_shift$Site_habitat <- paste(rank_shift$Site, rank_shift$Habitat)
+# Add back in stratum column
+
+# A lot of extra spaces
+
+rank_shift <- rank_shift %>%
+  mutate(across(everything(), str_trim))
+
+str(rank_shift) # everything became characters
+
+rank_shift$MRS <- as.numeric(rank_shift$MRS)
+# Create a column with the final year from the returned time.var_pair
+rank_shift$Year <- as.numeric(substr(rank_shift$year_pair, 6, 9))
+rank_shift$Site <- as.factor(rank_shift$Site)
+rank_shift$Habitat <- as.factor(rank_shift$Habitat)
+
+rank_shift_means <-
+  rank_shift %>%
+  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  dplyr::summarise(Rank_shift_mean = mean(MRS), 
+            Rank_shift_se = sd(MRS)/sqrt(n()))
+
+(rank_shift_plot <-
+  ggplot(data = rank_shift_means) +
+  geom_point(aes(x = Year, y = Rank_shift_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
+  geom_line(aes(x = Year, y = Rank_shift_mean, colour = Site, group = Site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = Year, ymin = Rank_shift_mean - Rank_shift_se , ymax = Rank_shift_mean + Rank_shift_se, colour = Site,
+                    group = Site_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Site_habitat, nrow = 6)+
+  labs(title = "a. rank_shift\n", y = "Total rank_shift\n") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        )
+    )
+
+
+# rate change
+rate_change_table<-
+  rate_change(
+  df = long_data,
+  time.var = "Year",
+  species.var = "Taxa",
+  abundance.var = "Mean_cover",
+  replicate.var = "Stratum"
+)
+# kable(rate_change_table)
+
+rate_change<-
+  rate_change_interval(
+  df = long_data,
+  time.var = "Year",
+  species.var = "Taxa",
+  abundance.var = "Mean_cover",
+  replicate.var = "Stratum"
+)
+
+rate_change<- 
+  rate_change %>%
+    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
+rate_change$Site_habitat <- paste(rate_change$Site, rate_change$Habitat)
+
+
+# A lot of extra spaces
+
+rate_change <- rate_change %>%
+  mutate(across(everything(), str_trim))
+
+str(rate_change) # everything became characters
+
+rate_change$distance <- as.numeric(rate_change$distance)
+rate_change$interval <- as.numeric(rate_change$interval)
+rate_change$Site <- as.factor(rate_change$Site)
+rate_change$Habitat <- as.factor(rate_change$Habitat)
+
+ggplot(rate_change, aes(interval, distance, colour = Site, shape = Habitat, group = Site_habitat, linetype = Habitat)) +
+  facet_wrap(~Site) + 
+  geom_point() +
+  scale_colour_manual(values = site_colours) +
+  scale_linetype_manual(values = habitat_linetypes) +
+  stat_smooth(method = "lm", se = T, size = 2) +
+  scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Site)+
+#  labs(y = "Distance\n") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        ) # I don't think these are linear relationships so the smoother isn't terriibly helpful
 ```
 
 ```{r nmds, fig.height = 15, fig.width = 15}
-species_matrix <- as.matrix(wide_transect_level[6:74])
-rownames(species_matrix) <- paste(wide_transect_level$Year, wide_transect_level$Site_habitat, wide_transect_level$Transect)
+species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
+species_matrix <- species_matrix/100 # convert from percent to proportion
+rownames(species_matrix) <- paste(data$Year, data$Site_habitat, data$Transect)
 rows_to_remove <- rowSums(species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
 species_matrix <- species_matrix[!rows_to_remove,] 
-wide_transect_level_subset <- wide_transect_level[!rows_to_remove,] # make sure rows are also removed from dataframe
-wide_transect_level_subset$Stratum <- paste(wide_transect_level_subset$Year, "-", wide_transect_level_subset$Site, "-", wide_transect_level_subset$Habitat )
+data_subset <- data[!rows_to_remove,] # make sure rows are also removed from dataframe
+data_subset$Stratum <- paste(data_subset$Year, "-", data_subset$Site, "-", data_subset$Habitat )
 
 # identifying species w/ > 10% cover for plotting later
 # NOTE: Used ChatGPT to generate these next few lines of code but it looked good so I went with it
-columns_to_keep <- apply(species_matrix, 2, function(x) any(x >= 10))
+columns_to_keep <- apply(species_matrix, 2, function(x) any(x >= 0.1))
 abundant_species_matrix <- as.data.frame(species_matrix)[ , c(TRUE, columns_to_keep)]
 abundant_species_names <- colnames(abundant_species_matrix)
 
-# WARNING - Before you run this, know that it will take a long time
+# My computer can't run this at the quadrat level
 set.seed(1032) 
-# ord2 <- metaMDS(species_matrix, dist	= "bray",	trymax	= 100,	k	= 2) # looks like it automatically wisconsin transforms now?
+ ord2 <- metaMDS(species_matrix, dist	= "bray",	trymax	= 100,	k	= 2) 
 # ord2 # stress = 0.22
 # stressplot(ord2)
 
@@ -204,12 +934,12 @@ stressplot(ord3)
 
 site.scores <- as.data.frame(vegan::scores(ord3)$sites)  # extract the site scores and convert to a data.frame
 # add back in metadata
-site.scores$Year <- as.factor(wide_transect_level_subset$Year)
-site.scores$Site <- as.factor(wide_transect_level_subset$Site)
-site.scores$Habitat <- as.factor(wide_transect_level_subset$Habitat)
-site.scores$Site_habitat <- as.factor(wide_transect_level_subset$Site_habitat)
-site.scores$Transect <- as.factor(wide_transect_level_subset$Transect)
-site.scores$Stratum <- as.factor(wide_transect_level_subset$Stratum)
+site.scores$Year <- as.factor(data_subset$Year)
+site.scores$Site <- as.factor(data_subset$Site)
+site.scores$Habitat <- as.factor(data_subset$Habitat)
+site.scores$Site_habitat <- as.factor(data_subset$Site_habitat)
+site.scores$Transect <- as.factor(data_subset$Transect)
+site.scores$Stratum <- as.factor(data_subset$Stratum)
 
 cent <- aggregate(cbind(NMDS1, NMDS2) ~ Stratum, data = site.scores, FUN = mean) # compute centroids for NMDS1 and NMDS2 
 
@@ -282,37 +1012,37 @@ ggplot() +
 ```{r beta dispersion, fig.height = 15, fig.width=20}
 # Want to plot mean distance to centroid, but not sure how to do that with so many factors/interactions...
  bray_matrix <- vegdist(species_matrix, method = "bray")
-# year_beta_disper <- vegan::betadisper(bray_matrix, wide_transect_level_subset$Year)
+# year_beta_disper <- vegan::betadisper(bray_matrix, data_subset$Year)
 # year_beta_disper # 
 
 # plot of dispersion test
 # plot(year_beta_disper, sub = "") # lol
 # boxplot(year_beta_disper, main = "Year", xlab = "") 
 # 
-# site_beta_disper <- vegan::betadisper(bray_matrix, wide_transect_level_subset$Site)
+# site_beta_disper <- vegan::betadisper(bray_matrix, data_subset$Site)
 # plot(site_beta_disper, sub = "") # site five stands out
 # boxplot(site_beta_disper, main = "Site", xlab = "") 
 # 
 # 
-# habitat_beta_disper <- vegan::betadisper(bray_matrix, wide_transect_level_subset$Habitat)
+# habitat_beta_disper <- vegan::betadisper(bray_matrix, data_subset$Habitat)
 # plot(habitat_beta_disper, sub = "") 
 # boxplot(habitat_beta_disper, main = "Habitat", xlab = "") # greatest variance in fringing it seems (as expected)
 # 
-# site_habitat_beta_disper <- vegan::betadisper(bray_matrix, wide_transect_level_subset$Site_habitat)
+# site_habitat_beta_disper <- vegan::betadisper(bray_matrix, data_subset$Site_habitat)
 # plot(site_habitat_beta_disper, sub = "") 
 # boxplot(site_habitat_beta_disper, main = "Site_habitat", xlab = "") 
 # 
-stratum_beta_disper <- vegan::betadisper(bray_matrix, wide_transect_level_subset$Stratum)
+stratum_beta_disper <- vegan::betadisper(bray_matrix, data_subset$Stratum)
 # plot(site_habitat_beta_disper, sub = "") 
 boxplot(stratum_beta_disper, main = "Site_habitat", xlab = "")
 stratum_distances <- as.data.frame(stratum_beta_disper$distances)
 colnames(stratum_distances)[1] <- "Distance"
-stratum_distances$Stratum <- wide_transect_level_subset$Stratum
-stratum_distances$Transect <- wide_transect_level_subset$Transect
-stratum_distances$Year <- wide_transect_level_subset$Year
-stratum_distances$Site <- wide_transect_level_subset$Site
-stratum_distances$Habitat <- wide_transect_level_subset$Habitat
-stratum_distances$Site_habitat <- wide_transect_level_subset$Site_habitat
+stratum_distances$Stratum <- data_subset$Stratum
+stratum_distances$Transect <- data_subset$Transect
+stratum_distances$Year <- data_subset$Year
+stratum_distances$Site <- data_subset$Site
+stratum_distances$Habitat <- data_subset$Habitat
+stratum_distances$Site_habitat <- data_subset$Site_habitat
 
 beta_disper_means <- stratum_distances %>%
   dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
@@ -533,346 +1263,3 @@ r.squaredGLMM(diversity_best) # 0.77, 0.77
          ) # ABORT ABORT ABORT
 ```
 
-```{r turnover, fig.height = 30, fig.width=25}
-library(codyn)
-transect_level$Site_habitat <-  paste(transect_level$Site, transect_level$Habitat)
-transect_level$Stratum <- paste(transect_level$Site, "-", transect_level$Habitat, "-", transect_level$Transect)
-
-# the turnover function calculates turnover as the proportion or species that either appear or disappear between timepoints
-total_turnover<-
-  turnover(
-  df = transect_level,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Mean_cover",
-  replicate.var = "Stratum",
-  metric = "total"
-)
-
-
-total_turnover<- 
-  total_turnover %>%
-    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
-total_turnover$Site_habitat <- paste(total_turnover$Site, total_turnover$Habitat)
-# Add back in stratum column
-
-# A lot of extra spaces
-
-total_turnover <- total_turnover %>%
-  mutate(across(everything(), str_trim))
-
-str(total_turnover) # everything became characters
-
-total_turnover$total <- as.numeric(total_turnover$total)
-total_turnover$Year <- as.factor(total_turnover$Year)
-total_turnover$Site <- as.factor(total_turnover$Site)
-total_turnover$Habitat <- as.factor(total_turnover$Habitat)
-
-turnover_means <-
-  total_turnover %>%
-  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
-  dplyr::summarise(Turnover_mean = mean(total), 
-            Turnover_se = sd(total)/sqrt(n()))
-
-(turnover_plot <-
-  ggplot(data = turnover_means) +
-  geom_point(aes(x = Year, y = Turnover_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = Year, y = Turnover_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Turnover_mean - Turnover_se , ymax = Turnover_mean + Turnover_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = site_colours) +
-  scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site_habitat, nrow = 6)+
-  labs(title = "a. Turnover\n", y = "Total turnover\n") +
-  theme_bw() + 
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
-        axis.line.y = element_line(colour = "black"),
-        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
-        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        axis.line.x = element_line(colour = "black"),
-        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
-        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        strip.text.x = element_text(size = 32),
-        legend.key.size = unit(2, "cm"), # increase legend size
-        legend.text = element_text(size = rel(2)), # increase legend text
-        legend.title = element_text(size = rel(2.25)),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal',
-        legend.box.background = element_rect(colour = "black") # make legend horizontal
-        )
-    )
-#
-
-# examine appearance and disappearances independently 
-# refers to the proportion of species that appeared or disappeared relative to total species pool between two time points
-
-appearance <-
-  turnover(
-  df = transect_level,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Mean_cover",
-  replicate.var = "Stratum",
-  metric = "appearance"
-)
-
-appearance<- 
-  appearance %>%
-    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
-appearance$Site_habitat <- paste(appearance$Site, appearance$Habitat)
-# Add back in stratum column
-
-# A lot of extra spaces
-
-appearance <- appearance %>%
-  mutate(across(everything(), str_trim))
-
-str(appearance) # everything became characters
-
-appearance$appearance <- as.numeric(appearance$appearance)
-appearance$Year <- as.factor(appearance$Year)
-appearance$Site <- as.factor(appearance$Site)
-appearance$Habitat <- as.factor(appearance$Habitat)
-
-appearance_means <-
-  appearance %>%
-  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
-  dplyr::summarise(Appearance_mean = mean(appearance), 
-            Appearance_se = sd(appearance)/sqrt(n()))
-
-(appearance_plot <-
-  ggplot(data = appearance_means) +
-  geom_point(aes(x = Year, y = Appearance_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = Year, y = Appearance_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Appearance_mean - Appearance_se , ymax = Appearance_mean + Appearance_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = site_colours) +
-  scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site_habitat, nrow = 6)+
-  labs(title = "b. Appearances\n", y = "Total turnover\n") +
-  theme_bw() + 
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
-        axis.line.y = element_line(colour = "black"),
-        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
-        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        axis.line.x = element_line(colour = "black"),
-        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
-        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        strip.text.x = element_text(size = 32),
-        legend.key.size = unit(2, "cm"), # increase legend size
-        legend.text = element_text(size = rel(2)), # increase legend text
-        legend.title = element_text(size = rel(2.25)),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal',
-        legend.box.background = element_rect(colour = "black") # make legend horizontal
-        )
-    )
-#
-
-
-disappearance <-
-  turnover(
-  df = transect_level,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Mean_cover",
-  replicate.var = "Stratum",
-  metric = "disappearance"
-)
-
-disappearance<- 
-  disappearance %>%
-    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
-disappearance$Site_habitat <- paste(disappearance$Site, disappearance$Habitat)
-# Add back in stratum column
-
-# A lot of extra spaces
-
-disappearance <- disappearance %>%
-  mutate(across(everything(), str_trim))
-
-str(disappearance) # everything became characters
-
-disappearance$disappearance <- as.numeric(disappearance$disappearance)
-disappearance$Year <- as.factor(disappearance$Year)
-disappearance$Site <- as.factor(disappearance$Site)
-disappearance$Habitat <- as.factor(disappearance$Habitat)
-
-disappearance_means <-
-  disappearance %>%
-  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
-  dplyr::summarise(Disappearance_mean = mean(disappearance), 
-            Disappearance_se = sd(disappearance)/sqrt(n()))
-
-(disappearance_plot <-
-  ggplot(data = disappearance_means) +
-  geom_point(aes(x = Year, y = Disappearance_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = Year, y = Disappearance_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Disappearance_mean - Disappearance_se , ymax = Disappearance_mean + Disappearance_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = site_colours) +
-  scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site_habitat, nrow = 6)+
-  labs(title = "c. Disappearance\n", y = "Total turnover\n") +
-  theme_bw() + 
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
-        axis.line.y = element_line(colour = "black"),
-        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
-        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        axis.line.x = element_line(colour = "black"),
-        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
-        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        strip.text.x = element_text(size = 32),
-        legend.key.size = unit(2, "cm"), # increase legend size
-        legend.text = element_text(size = rel(2)), # increase legend text
-        legend.title = element_text(size = rel(2.25)),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal',
-        legend.box.background = element_rect(colour = "black") # make legend horizontal
-        )
-    )
-
-# rank shift 
-
-rank_shift<-
-  rank_shift(
-  df = transect_level,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Mean_cover",
-  replicate.var = "Stratum"
-)
-
-rank_shift<- 
-  rank_shift %>%
-    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
-rank_shift$Site_habitat <- paste(rank_shift$Site, rank_shift$Habitat)
-# Add back in stratum column
-
-# A lot of extra spaces
-
-rank_shift <- rank_shift %>%
-  mutate(across(everything(), str_trim))
-
-str(rank_shift) # everything became characters
-
-rank_shift$MRS <- as.numeric(rank_shift$MRS)
-# Create a column with the final year from the returned time.var_pair
-rank_shift$Year <- as.numeric(substr(rank_shift$year_pair, 6, 9))
-rank_shift$Site <- as.factor(rank_shift$Site)
-rank_shift$Habitat <- as.factor(rank_shift$Habitat)
-
-rank_shift_means <-
-  rank_shift %>%
-  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
-  dplyr::summarise(Rank_shift_mean = mean(MRS), 
-            Rank_shift_se = sd(MRS)/sqrt(n()))
-
-(rank_shift_plot <-
-  ggplot(data = rank_shift_means) +
-  geom_point(aes(x = Year, y = Rank_shift_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = Year, y = Rank_shift_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Rank_shift_mean - Rank_shift_se , ymax = Rank_shift_mean + Rank_shift_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = site_colours) +
-  scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site_habitat, nrow = 6)+
-  labs(title = "a. rank_shift\n", y = "Total rank_shift\n") +
-  theme_bw() + 
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
-        axis.line.y = element_line(colour = "black"),
-        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
-        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        axis.line.x = element_line(colour = "black"),
-        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
-        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        strip.text.x = element_text(size = 32),
-        legend.key.size = unit(2, "cm"), # increase legend size
-        legend.text = element_text(size = rel(2)), # increase legend text
-        legend.title = element_text(size = rel(2.25)),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal',
-        legend.box.background = element_rect(colour = "black") # make legend horizontal
-        )
-    )
-
-
-# rate change
-rate_change_table<-
-  rate_change(
-  df = transect_level,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Mean_cover",
-  replicate.var = "Stratum"
-)
-# kable(rate_change_table)
-
-rate_change<-
-  rate_change_interval(
-  df = transect_level,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Mean_cover",
-  replicate.var = "Stratum"
-)
-
-rate_change<- 
-  rate_change %>%
-    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
-rate_change$Site_habitat <- paste(rate_change$Site, rate_change$Habitat)
-
-
-# A lot of extra spaces
-
-rate_change <- rate_change %>%
-  mutate(across(everything(), str_trim))
-
-str(rate_change) # everything became characters
-
-rate_change$distance <- as.numeric(rate_change$distance)
-rate_change$interval <- as.numeric(rate_change$interval)
-rate_change$Site <- as.factor(rate_change$Site)
-rate_change$Habitat <- as.factor(rate_change$Habitat)
-
-ggplot(rate_change, aes(interval, distance, colour = Site, shape = Habitat, group = Site_habitat, linetype = Habitat)) +
-  facet_wrap(~Site) + 
-  geom_point() +
-  scale_colour_manual(values = site_colours) +
-  scale_linetype_manual(values = habitat_linetypes) +
-  stat_smooth(method = "lm", se = T, size = 2) +
-  scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site)+
-#  labs(y = "Distance\n") +
-  theme_bw() + 
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
-        axis.line.y = element_line(colour = "black"),
-        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
-        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        axis.line.x = element_line(colour = "black"),
-        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
-        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        strip.text.x = element_text(size = 32),
-        legend.key.size = unit(2, "cm"), # increase legend size
-        legend.text = element_text(size = rel(2)), # increase legend text
-        legend.title = element_text(size = rel(2.25)),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal',
-        legend.box.background = element_rect(colour = "black") # make legend horizontal
-        ) # I don't think these are linear relationships so the smoother isn't terriibly helpful
-```
