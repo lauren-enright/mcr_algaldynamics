@@ -567,7 +567,7 @@ missing_timepoints <- anti_join(all_combinations, long_data, by = c("Location", 
 # Display the missing timepoints
 print(missing_timepoints)
 
-problem_children <- c("LTER 5 Fringing Reef Algae Transect 3 Quad 9", "LTER 5 Fringing Reef Algae Transect 3 Quad 8", "LTER 5 Fringing Reef Algae Transect 3 Quad 6", "LTER 5 Fringing Reef Algae Transect 3 Quad 3", "LTER 5 Fringing Reef Algae Transect 3 Quad 10")
+problem_children <- c("LTER 5 Fringing Reef Algae Transect 2 Quad 9", "LTER 5 Fringing Reef Algae Transect 3 Quad 9", "LTER 5 Fringing Reef Algae Transect 3 Quad 8", "LTER 5 Fringing Reef Algae Transect 3 Quad 6", "LTER 5 Fringing Reef Algae Transect 3 Quad 3", "LTER 5 Fringing Reef Algae Transect 3 Quad 10")
 
 long_data_sub <- long_data[long_data$Location != problem_children, ] # remove problem children
 # still get the same error when I try to run at quadrat level
@@ -1279,7 +1279,9 @@ for(i in 1:length(unique(unique(data$Location))) ){ # for each  quadrat
   # create a new dataframe for current quadrat
   newData <- subset(data, Location == levels(data$Location)[i])
   current_matrix <- newData[ , -which(names(newData) %in% meta_cols)] # remove metadata columns
-  if(sum(current_matrix) == 0){ # if this was a 0 algae quadrat
+  if(sum(current_matrix) == 0 | # if this was a 0 algae quadrat
+     # or if there was only 1 column after removing all irrelevant algae
+     is.null(ncol(current_matrix[, which(colSums(current_matrix) != 0)]))){ 
     quadrat_level_portfolio[i, 2] <- NA # set portfolio effects to 0
   }else{ # otherwise
     current_matrix <- current_matrix[, which(colSums(current_matrix) != 0)] # remove irrelevant algae
@@ -1289,6 +1291,9 @@ for(i in 1:length(unique(unique(data$Location))) ){ # for each  quadrat
   
 }
 
+sum(is.na(quadrat_level_portfolio$Portfolio_effect)) # 4 quadrats causing trouble
+problem_children <- droplevels(quadrat_level_portfolio[is.na(quadrat_level_portfolio$Portfolio_effect),]$Location)
+hist(quadrat_level_portfolio$Portfolio_effect) # some crazy outliers due to low richness
 
 ```
 
