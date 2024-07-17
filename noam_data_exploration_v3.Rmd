@@ -287,7 +287,49 @@ ggarrange(richness_plot + rremove("x.text"), richness_quad_plot + rremove("x.tex
           nrow = 2, ncol = 2)
 
 ```
+```{r gam approach}
+# NOTE: Not sure where I'm going with this yet
+# Idea is to look at smoother estimates for each time series to get an idea for the "shape" of the time series
+# Not sure if worthwhile, might skip
 
+# The below takes 17 years to run in and of itself
+# gam_model <- gam(Richness ~ s(Year) + s(Year, by = Habitat) + 
+#                  s(Island_side, bs = "re") + s(Transect, bs = "re") + s(Location, bs = "re"),
+#                  data = alpha_diversity_quad, family = poisson())
+
+
+
+gam_columns <- c("Location", "Intercept", "edf") # names of columns for dataframe
+gam_coefficients <- # new dataframe name - same workflow as above
+  data.frame(matrix(nrow = length(unique(alpha_diversity_quad$Location)),
+                    ncol = length(gam_columns))
+             )
+colnames(gam_coefficients) <- gam_columns # change column names to what was specified
+gam_coefficients$Location <- levels(alpha_diversity_quad$Location) # populate Location column with each quad/time series
+
+# same workflow as *below (I did gls first originally)
+for(i in 1:length(unique(alpha_diversity_quad$Location)) ){ # for each  quadrat
+  # create a new dataframe for the quadrat of the current iteration
+  newData <- subset(alpha_diversity_quad, Location == levels(alpha_diversity_quad$Location)[i]) 
+  
+  # fit gam for current time series
+  loop_mod <- gamm(Richness ~ s(Year), data = newData, correlation = corCAR1(form = ~ Year), method = "REML", family = poisson)
+  loop_sum <- summary(loop_mod$gam) # store summary data
+  # populate appropriate row and column with the relevant coeffcients from gls
+  gam_coefficients[i, 2] <- unname(loop_sum$p.coeff)
+  gam_coefficients[i, 3] <- unname(loop_sum$edf)
+  
+}
+
+hist(gam_coefficients$Intercept)
+hist(gam_coefficients$edf) # generally around 1 except for an outlier
+# LTER 5 Fringing Reef Algae Transect 3 Quad 6 - a quadrat that has almost no algae the entire time series
+# issues with quadrat - smaller sample = more 0s, makes modeling trickier
+hist(subset(gam_coefficients, Location != "LTER 5 Fringing Reef Algae Transect 3 Quad 6")$edf)
+sum(gam_coefficients$edf > 1.01) # all but 18/1200 quadrats can be fit by a smoother with edf < 1.01
+# trends more straightforward than I anticipated?
+# argument for just looking at mean richness and slope?
+```
 
 ```{r gls approach}
 
@@ -432,49 +474,7 @@ ggplot(data = gls_coefficients_merged) +
 ```
 
 
-```{r gam approach}
-# NOTE: Not sure where I'm going with this yet
-# Idea is to look at smoother estimates for each time series to get an idea for the "shape" of the time series
-# Not sure if worthwhile, might skip
 
-# The below takes 17 years to run in and of itself
-# gam_model <- gam(Richness ~ s(Year) + s(Year, by = Habitat) + 
-#                  s(Island_side, bs = "re") + s(Transect, bs = "re") + s(Location, bs = "re"),
-#                  data = alpha_diversity_quad, family = poisson())
-
-
-
-gam_columns <- c("Location", "Intercept", "edf") # names of columns for dataframe
-gam_coefficients <- # new dataframe name - same workflow as above
-  data.frame(matrix(nrow = length(unique(alpha_diversity_quad$Location)),
-                    ncol = length(gam_columns))
-             )
-colnames(gam_coefficients) <- gam_columns # change column names to what was specified
-gam_coefficients$Location <- levels(alpha_diversity_quad$Location) # populate Location column with each quad/time series
-
-# same workflow as above
-for(i in 1:length(unique(alpha_diversity_quad$Location)) ){ # for each  quadrat
-  # create a new dataframe for the quadrat of the current iteration
-  newData <- subset(alpha_diversity_quad, Location == levels(alpha_diversity_quad$Location)[i]) 
-  
-  # fit gam for current time series
-  loop_mod <- gamm(Richness ~ s(Year), data = newData, correlation = corCAR1(form = ~ Year), method = "REML", family = poisson)
-  loop_sum <- summary(loop_mod$gam) # store summary data
-  # populate appropriate row and column with the relevant coeffcients from gls
-  gam_coefficients[i, 2] <- unname(loop_sum$p.coeff)
-  gam_coefficients[i, 3] <- unname(loop_sum$edf)
-  
-}
-
-hist(gam_coefficients$Intercept)
-hist(gam_coefficients$edf) # generally around 1 except for an outlier
-# LTER 5 Fringing Reef Algae Transect 3 Quad 6 - a quadrat that has almost no algae the entire time series
-# issues with quadrat - smaller sample = more 0s, makes modeling trickier
-hist(subset(gam_coefficients, Location != "LTER 5 Fringing Reef Algae Transect 3 Quad 6")$edf)
-sum(gam_coefficients$edf > 1.01) # all but 18/1200 quadrats can be fit by a smoother with edf < 1.01
-# trends more straightforward than I anticipated?
-# argument for just looking at mean richness and slope?
-```
 
 ```{r glmm approach}
 alpha_diversity_quad$Year_factor <- as.factor(alpha_diversity_quad$Year) # for glmmTMB ar1 structure
