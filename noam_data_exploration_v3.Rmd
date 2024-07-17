@@ -489,6 +489,19 @@ summary(richness_mod) # looks like strong autocorrelation, which makes sense to 
 Anova(richness_mod)
 plot(allEffects(richness_mod))
 
+# probably the closest to what others have done:
+richness_mod_2 <- glmmTMB(
+  Richness ~ Year_factor*Habitat + (1 | Site/Transect/Location) + ar1(Year_factor + 0 | Location),
+  family = poisson,
+  data = alpha_diversity_quad,
+  control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000))
+) # overspecified but going with it for now
+summary(richness_mod_2) # looks like strong autocorrelation, which makes sense to me
+Anova(richness_mod_2)
+plot(allEffects(richness_mod_2))
+emmeans(richness_mod_2, pairwise ~ Habitat | Year_factor) # if we want to compare habitats year to year
+
+
 ```
 ```{r turnover troubleshooting, fig.height = 30, fig.width=25}
 
@@ -1091,7 +1104,11 @@ CV<-function(x){
 
 alpha_diversity$Cover <- rowSums(wide_transect_level[ , -which(names(wide_transect_level) %in% meta_cols)])/100
 alpha_diversity$Stratum <- paste(alpha_diversity$Site, "-", alpha_diversity$Habitat, "-", alpha_diversity$Transect)
-
+# stability_transect <- community_stability(df = transect_level,
+#                                           time.var = "Year",
+#                                           abundance.var = "Mean_cover",
+#                                           replicate.var = "Stratum") # using codyn measure of stability
+# NOTE: codyn community_stability() is just the inverse of CV
 diversity_stability <- alpha_diversity %>%
   dplyr::group_by(Site, Habitat, Site_habitat, Transect, Stratum) %>%
   dplyr::summarise(Richness_mean = mean(Richness), 
@@ -1100,15 +1117,14 @@ diversity_stability <- alpha_diversity %>%
             Shannon_mean = mean(Shannon), 
             Shannon_se = sd(Shannon)/sqrt(n()),
             Shannon_cv = CV(Shannon),
+            Shannon_stability = 1/CV(Shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
             Cover_mean = mean(Cover),
             Cover_se = sd(Cover)/sqrt(n()),
-            Cover_cv = CV(Cover))
-stability_transect <- community_stability(df = transect_level,
-                                          time.var = "Year",
-                                          abundance.var = "Mean_cover",
-                                          replicate.var = "Stratum") # using codyn measure of stability
-# NOTE: codyn community_stability() is just the inverse of CV
-diversity_stability <- merge(diversity_stability, stability_transect, by = "Stratum")
+            Cover_cv = CV(Cover),
+            Cover_stability = 1/CV(Cover)) # as above
+
+
+
 library(ecofolio) # possible other method for examining portfolio effects 
 
 diversity_mod_1 <- glmmTMB(Cover_cv ~ Richness_mean, family = Gamma(link = "log"), data = diversity_stability)
@@ -1270,3 +1286,7 @@ r.squaredGLMM(diversity_best) # 0.77, 0.77
          ) # ABORT ABORT ABORT
 ```
 
+```{r diversity stability quadrat level}
+
+
+```
