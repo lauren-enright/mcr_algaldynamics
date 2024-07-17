@@ -921,11 +921,7 @@ ggplot(rate_change, aes(interval, distance, colour = Site, shape = Habitat, grou
 ```{r transect level portfolio effect}
 # using Anderson et al. 2013 definitions of portfolio effects - relevant fxns in ecofolio packages
 wide_transect_level$Stratum <- as.factor(paste(wide_transect_level$Site, "-", wide_transect_level$Habitat, "-", wide_transect_level$Transect))
-x <- subset(wide_transect_level, Stratum == "LTER 1 - Backreef - 1")
 
-y <- x[ , -which(names(x) %in% meta_cols)]
-y <- y[, which(colSums(y) != 0)]
-z <- pe_avg_cv(y, ci = TRUE, detrending = "loess_detrended")
 
 transect_portfolio_columns <- c("Stratum", "Portfolio_effect") # names of columns for dataframe
 transect_level_portfolio <- 
@@ -1001,55 +997,17 @@ diversity_stability <- merge(diversity_stability, transect_level_portfolio, by =
 pairs(~ Cover_mean + Cover_cv + Cover_stability + 
         Shannon_mean + Shannon_cv + Shannon_stability + 
         Loreau_synchrony + Gross_synchrony + Portfolio_effect, data = diversity_stability)
+```
 
 
 
-
-diversity_mod_1 <- glmmTMB(Cover_cv ~ Richness_mean, family = Gamma(link = "log"), data = diversity_stability)
-summary(diversity_mod_1)
-plot(allEffects(diversity_mod_1)) # richness reduces cv (i.e. enhances stability!)
-
-diversity_mod_2 <- glmmTMB(Cover_cv ~ Shannon_mean, family = Gamma(link = "log"), data = diversity_stability)
-summary(diversity_mod_2) # similar results
-
-diversity_mod_3 <- glmmTMB(Cover_cv ~ Habitat*Site, family = Gamma(link = "log"), data = diversity_stability)
-summary(diversity_mod_3) # christ 
-Anova(diversity_mod_3) # all highly sig but what the fuck am I doing here
-
-diversity_mod_4 <- glmmTMB(Cover_cv ~ Habitat, family = Gamma(link = "log"), data = diversity_stability)
-summary(diversity_mod_4)
-Anova(diversity_mod_4)
-plot(allEffects(diversity_mod_4)) # greatest variance in the lagoon (makes sense given beta diversity trends above)
-
-diversity_mod_5 <- glmmTMB(Cover_cv ~ Site, family = Gamma(link = "log"), data = diversity_stability)
-summary(diversity_mod_5)
-Anova(diversity_mod_5) 
-
-diversity_mod_6 <- glmmTMB(Cover_cv ~ Shannon_mean*Habitat + (1|Site), family = Gamma(link = "log"), data = diversity_stability)
-summary(diversity_mod_6) # negligible variance in random effects
-Anova(diversity_mod_6) # Diversity the strongest predictor of "stability" by far!
-
-diversity_mod_7 <- glmmTMB(Cover_cv ~ Shannon_mean*Site + (1|Site_habitat), family = Gamma(link = "log"), data = diversity_stability)
-summary(diversity_mod_7)
-Anova(diversity_mod_7)
-
-diversity_mod_universal <- glmmTMB(Cover_cv ~ Shannon_mean*Site*Habitat + (1|Site_habitat), family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
-diversity_dredge <- dredge(diversity_mod_universal)
-model.sel(diversity_dredge)
-
-# best model based on dredge:
-diversity_best <-  glmmTMB(Cover_cv ~ Shannon_mean*Site + Site*Habitat + (1|Site_habitat), family = Gamma(link = "log"), data = diversity_stability)
-summary(diversity_best) # very low variance in random effect, which is great
-Anova(diversity_best) # Interactions all significant
-plot(dp <- simulateResiduals(diversity_best)) # some outliers, but otherwise good model fit. I am fine with this. 
-r.squaredGLMM(diversity_best) # 0.77, 0.77
-
+```{r basic diversity stability plots transect level, fig.height=8, fig.width=10}
 (shannon_cv_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Shannon_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 8) + 
+  geom_point(aes(x = Shannon_mean, y = Cover_stability, colour = Site, shape = Habitat), size = 8) + 
    scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-    stat_smooth(aes(x = Shannon_mean, y = Shannon_cv),method = "lm", se = T, size = 2) + 
+#    stat_smooth(aes(x = Shannon_mean, y = Shannon_cv),method = "lm", se = T, size = 2) + 
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
@@ -1066,7 +1024,7 @@ r.squaredGLMM(diversity_best) # 0.77, 0.77
 
 (shannon_cv_plot_2 = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Shannon_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = Shannon_mean, y = Cover_stability, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~Site) +
@@ -1091,9 +1049,7 @@ r.squaredGLMM(diversity_best) # 0.77, 0.77
 # LTER2 the trend is reversed
 # LTER 1 is mostly driven by habitat
 # LTER 6 potentially a wash
-  
 
-# GOALS: test portfolio effects, look at turnover and temporal beta diversity stats, ways to test beta dispersion
 
 ```
 
@@ -1142,6 +1098,148 @@ r.squaredGLMM(diversity_best) # 0.77, 0.77
          ) # awesome relationship
 ```
 
+```{r portfolio effects and synchrony transect level,  fig.height = 8, fig.width = 10}
+(loreau_stability_plot = 
+  ggplot(data = diversity_stability) +
+  geom_point(aes(x = Loreau_synchrony, y = Cover_stability, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+   scale_colour_manual(values = site_colours) +
+   scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Site) +
+   
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+(gross_stability_plot = 
+  ggplot(data = diversity_stability) +
+  geom_point(aes(x = Gross_synchrony, y = Cover_stability, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+   scale_colour_manual(values = site_colours) +
+   scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Site) +
+   
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+(portfolio_stability_plot = 
+  ggplot(data = diversity_stability) +
+  geom_point(aes(x = Portfolio_effect, y = Cover_stability, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+   scale_colour_manual(values = site_colours) +
+   scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Site) +
+   
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         ) # almost a perfect line, which makes sense given that CV is a component of portfolio effects
+```
+
+
+```{r diversity, portfolio effects and synchrony transect level,  fig.height = 8, fig.width = 10}
+(loreau_diversity_plot = 
+  ggplot(data = diversity_stability) +
+  geom_point(aes(x = Shannon_mean, y = Loreau_synchrony, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+   scale_colour_manual(values = site_colours) +
+   scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Site) +
+   
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+(gross_diversity_plot = 
+  ggplot(data = diversity_stability) +
+  geom_point(aes(x = Shannon_mean, y = Gross_synchrony, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+   scale_colour_manual(values = site_colours) +
+   scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Site) +
+   
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+(portfolio_diversity_plot = 
+  ggplot(data = diversity_stability) +
+  geom_point(aes(x = Shannon_mean, y = Portfolio_effect, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+   scale_colour_manual(values = site_colours) +
+   scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~Site) +
+   
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+```
+
+```{r model selection}
+diversity_mod_universal <- glmmTMB(Cover_stability ~ Loreau_synchrony + Shannon_mean*Site*Habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
+diversity_dredge <- dredge(diversity_mod_universal)
+model.sel(diversity_dredge)
+
+# top model is as follows (by a decent margin):
+diversity_top <- glmmTMB(Cover_stability ~ Loreau_synchrony + Shannon_mean*Site + Site*Habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
+summary(diversity_top)
+Anova(diversity_top)
+```
+
 ```{r general cover diversity, fig.height = 30, fig.width = 30}
 (diversity_cover_plot = 
   ggplot(data = alpha_diversity) +
@@ -1164,7 +1262,32 @@ r.squaredGLMM(diversity_best) # 0.77, 0.77
          ) # ABORT ABORT ABORT
 ```
 
-```{r diversity stability quadrat level}
+```{r diversity stability quadrat level setup}
+data$Stratum <- as.factor(paste(data$Site, "-", data$Habitat, "-", data$Transect))
+data$Location <- as.factor(data$Location)
+
+
+quadrat_portfolio_columns <- c("Location", "Portfolio_effect") # names of columns for dataframe
+quadrat_level_portfolio <- 
+  data.frame(matrix(nrow = length(unique(data$Location)), 
+                    ncol = length(quadrat_portfolio_columns))
+             )
+colnames(quadrat_level_portfolio) <- quadrat_portfolio_columns # change column 
+quadrat_level_portfolio$Location <- unique(data$Location) # populate
+
+for(i in 1:length(unique(unique(data$Location))) ){ # for each  quadrat
+  # create a new dataframe for current quadrat
+  newData <- subset(data, Location == levels(data$Location)[i])
+  current_matrix <- newData[ , -which(names(newData) %in% meta_cols)] # remove metadata columns
+  if(sum(current_matrix) == 0){ # if this was a 0 algae quadrat
+    quadrat_level_portfolio[i, 2] <- NA # set portfolio effects to 0
+  }else{ # otherwise
+    current_matrix <- current_matrix[, which(colSums(current_matrix) != 0)] # remove irrelevant algae
+    
+    quadrat_level_portfolio[i, 2] <- pe_avg_cv(current_matrix) # calculate portfolio effects for current time series
+  }
+  
+}
 
 
 ```
