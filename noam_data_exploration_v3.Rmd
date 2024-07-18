@@ -567,16 +567,20 @@ missing_timepoints <- anti_join(all_combinations, long_data, by = c("Location", 
 # Display the missing timepoints
 print(missing_timepoints)
 
-problem_children <- c("LTER 5 Fringing Reef Algae Transect 2 Quad 9", "LTER 5 Fringing Reef Algae Transect 3 Quad 9", "LTER 5 Fringing Reef Algae Transect 3 Quad 8", "LTER 5 Fringing Reef Algae Transect 3 Quad 6", "LTER 5 Fringing Reef Algae Transect 3 Quad 3", "LTER 5 Fringing Reef Algae Transect 3 Quad 10")
+problem_children <- c(
+                      "LTER 5 Fringing Reef Algae Transect 3 Quad 9",
+                      "LTER 5 Fringing Reef Algae Transect 3 Quad 8",
+                      "LTER 5 Fringing Reef Algae Transect 3 Quad 6",
+                      "LTER 5 Fringing Reef Algae Transect 3 Quad 3",
+                      "LTER 5 Fringing Reef Algae Transect 3 Quad 10")
 
-long_data_sub <- long_data[long_data$Location != problem_children, ] # remove problem children
-# still get the same error when I try to run at quadrat level
-# I think it's because of the 0s
-# Error in names(output) <- `*vtmp*` : 
-#  'names' attribute [1] must be the same length as the vector [0]
+long_data_sub <- long_data[!long_data$Location %in% problem_children, ] # remove problem children
+
+data_sub <- data[!data$Location %in% problem_children, ]
+
 ```
 
-```{r turnover, eval = FALSE}
+```{r total turnover, fig.height = 24, fig.width=16}
 # the turnover function calculates turnover as the proportion or species that either appear or disappear between timepoints
 total_turnover<-
   turnover(
@@ -588,33 +592,60 @@ total_turnover<-
   metric = "total"
 )
 
+# get relevant metadata for turnover metrics
+data_sub <- data[paste(data$Year, data$Location) %in% paste(total_turnover$Year, total_turnover$Location), ]
 
-total_turnover<- 
+# check to make sure everything is the same length
+# nrow(data_sub) # 17829
+# nrow(total_turnover) # 17829
+
+# extract metadata
+turnover_meta <- data_sub[ ,which(names(data_sub) %in% meta_cols)]
+
+# merge with turnover df
+total_turnover <- merge(total_turnover, turnover_meta, by = c("Year", "Location"))
+total_turnover$Year_factor <- as.factor(total_turnover$Year)
+
+# turnover bounded between 0 and 1 --> beta regression
+# need to transform due to presence of 0s and 1s
+# Smithson verkuilen transformation for beta-regression
+sv_trans = function(prop, N, s = 0.000005){
+  (prop*(nrow(N) - 1) + s)/nrow(N)
+  # where prop is the proportional value you're transforming, 
+  # N is the sample size, which is specified by taking the number of rows/observations from a given dataframe,
+  # and s is a small offset 
+}
+total_turnover$Turnover_trans <- sv_trans(total_turnover$total, total_turnover)
+
+# model
+total_turnover_mod1 <- glmmTMB(Turnover_trans ~ Year_factor*Habitat*Site +
+                                 (1 | Site/Transect/Location) + ar1(Year_factor + 0 | Location),
+                               family = beta_family(), data = total_turnover)
+summary(total_turnover_mod1) # low temporal autocorrelation... maybe don't need ar1 term?
+plot(total_turnover_res <- simulateResiduals(total_turnover_mod1)) # residuals look very weird
+Anova(total_turnover_mod1) # obviously everything sig
+
+total_turnover_mod2 <- glmmTMB(Turnover_trans ~ Year_factor*Habitat*Site + (1 | Site/Transect/Location),
+                               family = beta_family(), data = total_turnover)
+summary(total_turnover_mod2) # 
+plot(total_turnover_res2 <- simulateResiduals(total_turnover_mod2)) # residuals still look like shit
+Anova(total_turnover_mod2) 
+anova(total_turnover_mod2, total_turnover_mod1) # models are sig different from each other
+AICc(total_turnover_mod2, total_turnover_mod1) # first model is better
+# need to figure out residuals problem
+plot(allEffects(total_turnover_mod1))
+
+
+
+# plot
+total_turnover_means <-
   total_turnover %>%
-    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
-total_turnover$Site_habitat <- paste(total_turnover$Site, total_turnover$Habitat)
-# Add back in stratum column
-
-# A lot of extra spaces
-
-total_turnover <- total_turnover %>%
-  mutate(across(everything(), str_trim))
-
-str(total_turnover) # everything became characters
-
-total_turnover$total <- as.numeric(total_turnover$total)
-total_turnover$Year <- as.factor(total_turnover$Year)
-total_turnover$Site <- as.factor(total_turnover$Site)
-total_turnover$Habitat <- as.factor(total_turnover$Habitat)
-
-turnover_means <-
-  total_turnover %>%
-  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  dplyr::group_by(Year, Island_side, Site, Habitat, Site_habitat) %>%
   dplyr::summarise(Turnover_mean = mean(total), 
             Turnover_se = sd(total)/sqrt(n()))
 
 (turnover_plot <-
-  ggplot(data = turnover_means) +
+  ggplot(data = total_turnover_means) +
   geom_point(aes(x = Year, y = Turnover_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
   geom_line(aes(x = Year, y = Turnover_mean, colour = Site, group = Site_habitat), size = 1.2) +
   geom_errorbar(aes(x = Year, ymin = Turnover_mean - Turnover_se , ymax = Turnover_mean + Turnover_se, colour = Site,
@@ -644,7 +675,9 @@ turnover_means <-
         )
     )
 #
+```
 
+```{r appearances}
 # examine appearance and disappearances independently 
 # refers to the proportion of species that appeared or disappeared relative to total species pool between two time points
 
