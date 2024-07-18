@@ -677,13 +677,13 @@ total_turnover_means <-
 #
 ```
 
-```{r appearances}
+```{r appearances, fig.height = 24, fig.width=16}
 # examine appearance and disappearances independently 
 # refers to the proportion of species that appeared or disappeared relative to total species pool between two time points
 
 appearance <-
   turnover(
-  df = long_data,
+  df = long_data_sub,
   time.var = "Year",
   species.var = "Taxa",
   abundance.var = "Percent_cover",
@@ -691,23 +691,27 @@ appearance <-
   metric = "appearance"
 )
 
-appearance<- 
-  appearance %>%
-    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
-appearance$Site_habitat <- paste(appearance$Site, appearance$Habitat)
-# Add back in stratum column
+appearance <- merge(turnover_meta, appearance, by = c("Year", "Location"))
+appearance$Appearance_trans <- sv_trans(appearance$appearance, appearance)
+appearance$Year_factor <- as.factor(appearance$Year)
 
-# A lot of extra spaces
+# model
+appearance_turnover_mod1 <- glmmTMB(Appearance_trans ~ Year_factor*Habitat*Site +
+                                 (1 | Site/Transect/Location) + ar1(Year_factor + 0 | Location),
+                               family = beta_family(), data = appearance)
+summary(appearance_turnover_mod1) # low temporal autocorrelation and it's negative
+plot(appearance_turnover_res <- simulateResiduals(appearance_turnover_mod1)) # similar residuals problem
+Anova(appearance_turnover_mod1) # obviously everything sig
 
-appearance <- appearance %>%
-  mutate(across(everything(), str_trim))
+appearance_turnover_mod2 <- glmmTMB(Appearance_trans ~ Year_factor*Habitat*Site + (1 | Site/Transect/Location),
+                               family = beta_family(), data = appearance)
+summary(appearance_turnover_mod2) # 
+plot(appearance_turnover_res2 <- simulateResiduals(appearance_turnover_mod2)) #
+Anova(appearance_turnover_mod2) 
+anova(appearance_turnover_mod2, appearance_turnover_mod1) # models are sig different from each other
+AICc(appearance_turnover_mod2, appearance_turnover_mod1) # first model is better but not as drastic as total
 
-str(appearance) # everything became characters
-
-appearance$appearance <- as.numeric(appearance$appearance)
-appearance$Year <- as.factor(appearance$Year)
-appearance$Site <- as.factor(appearance$Site)
-appearance$Habitat <- as.factor(appearance$Habitat)
+plot(allEffects(appearance_turnover_mod1))
 
 appearance_means <-
   appearance %>%
@@ -746,35 +750,40 @@ appearance_means <-
         )
     )
 #
+```
 
-
+```{r disappearances, fig.height = 24, fig.width=16}
 disappearance <-
   turnover(
-  df = long_data,
+  df = long_data_sub,
   time.var = "Year",
   species.var = "Taxa",
-  abundance.var = "Mean_cover",
-  replicate.var = "Stratum",
+  abundance.var = "Percent_cover",
+  replicate.var = "Location",
   metric = "disappearance"
 )
 
-disappearance<- 
-  disappearance %>%
-    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
-disappearance$Site_habitat <- paste(disappearance$Site, disappearance$Habitat)
-# Add back in stratum column
+disappearance <- merge(turnover_meta, disappearance, by = c("Year", "Location"))
+disappearance$Disappearance_trans <- sv_trans(disappearance$disappearance, disappearance)
+disappearance$Year_factor <- as.factor(disappearance$Year)
 
-# A lot of extra spaces
+# model
+disappearance_turnover_mod1 <- glmmTMB(Disappearance_trans ~ Year_factor*Habitat*Site +
+                                 (1 | Site/Transect/Location) + ar1(Year_factor + 0 | Location),
+                               family = beta_family(), data = disappearance)
+summary(disappearance_turnover_mod1) # strong autocorrelation here
+plot(disappearance_turnover_res <- simulateResiduals(disappearance_turnover_mod1)) # 
+Anova(disappearance_turnover_mod1) # 
 
-disappearance <- disappearance %>%
-  mutate(across(everything(), str_trim))
+disappearance_turnover_mod2 <- glmmTMB(Disappearance_trans ~ Year_factor*Habitat*Site + (1 | Site/Transect/Location),
+                               family = beta_family(), data = disappearance)
+summary(disappearance_turnover_mod2) # 
+plot(disappearance_turnover_res2 <- simulateResiduals(disappearance_turnover_mod2)) #
+Anova(disappearance_turnover_mod2) 
+anova(disappearance_turnover_mod2, disappearance_turnover_mod1) # only case where models are not sig different from each other
+AICc(disappearance_turnover_mod2, disappearance_turnover_mod1) # models almost equivalent
 
-str(disappearance) # everything became characters
-
-disappearance$disappearance <- as.numeric(disappearance$disappearance)
-disappearance$Year <- as.factor(disappearance$Year)
-disappearance$Site <- as.factor(disappearance$Site)
-disappearance$Habitat <- as.factor(disappearance$Habitat)
+plot(allEffects(disappearance_turnover_mod1))
 
 disappearance_means <-
   disappearance %>%
@@ -812,43 +821,32 @@ disappearance_means <-
         legend.box.background = element_rect(colour = "black") # make legend horizontal
         )
     )
+```
 
+```{r mean rank shift, fig.height = 24, fig.width=16}
 # rank shift 
 
 rank_shift<-
   rank_shift(
-  df = long_data,
+  df = long_data_sub,
   time.var = "Year",
   species.var = "Taxa",
-  abundance.var = "Mean_cover",
-  replicate.var = "Stratum"
+  abundance.var = "Percent_cover",
+  replicate.var = "Location"
 )
 
-rank_shift<- 
-  rank_shift %>%
-    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
-rank_shift$Site_habitat <- paste(rank_shift$Site, rank_shift$Habitat)
-# Add back in stratum column
 
-# A lot of extra spaces
+rank_shift <- merge(turnover_meta, rank_shift, by = c("Location"))
 
-rank_shift <- rank_shift %>%
-  mutate(across(everything(), str_trim))
 
-str(rank_shift) # everything became characters
 
-rank_shift$MRS <- as.numeric(rank_shift$MRS)
-# Create a column with the final year from the returned time.var_pair
-rank_shift$Year <- as.numeric(substr(rank_shift$year_pair, 6, 9))
-rank_shift$Site <- as.factor(rank_shift$Site)
-rank_shift$Habitat <- as.factor(rank_shift$Habitat)
 
 rank_shift_means <-
   rank_shift %>%
   dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
   dplyr::summarise(Rank_shift_mean = mean(MRS), 
             Rank_shift_se = sd(MRS)/sqrt(n()))
-
+# Looks very weird - not sure what to do with this
 (rank_shift_plot <-
   ggplot(data = rank_shift_means) +
   geom_point(aes(x = Year, y = Rank_shift_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
@@ -879,55 +877,85 @@ rank_shift_means <-
         legend.box.background = element_rect(colour = "black") # make legend horizontal
         )
     )
+```
 
 
+```{r rate of change, fig.height=15, fig.width=15}
 # rate change
-rate_change_table<-
+long_data_sub$Percent_cover_transformed <- wisconsin(long_data_sub$Percent_cover) # wisconsin transform abundance data
+
+# NOTE: the results here vary considerably if you used transformed vs untransformed data
+# Looking into way to change distance matrix from Euclidiean to something else
+rate_change_table_transformed<-
   rate_change(
-  df = long_data,
+  df = long_data_sub,
   time.var = "Year",
   species.var = "Taxa",
-  abundance.var = "Mean_cover",
-  replicate.var = "Stratum"
-)
-# kable(rate_change_table)
+  abundance.var = "Percent_cover_transformed",
+  replicate.var = "Location"
+) # summarizes rate of change for each quadrat over the course of the time series
 
-rate_change<-
-  rate_change_interval(
-  df = long_data,
+
+
+rate_change_table_transformed <- merge(turnover_meta, rate_change_table_transformed, by = "Location")
+hist(rate_change_table_transformed$rate_change)
+
+rate_change_mod1 <- glmmTMB(rate_change ~ Habitat*Site + (1|Habitat/Site/Transect), data = rate_change_table_transformed)
+summary(rate_change_mod1)
+plot(rc_res <- simulateResiduals(rate_change_mod1)) # some deviations, but sig likely due to large n
+Anova(rate_change_mod1)
+#                Chisq Df Pr(>Chisq)    
+# Habitat      187.988  3  < 2.2e-16 ***
+# Site          81.209  5  4.686e-16 ***
+# Habitat:Site 143.638 15  < 2.2e-16 ***
+plot(allEffects(rate_change_mod1))
+# Outer 17 has fewest differences
+# LTER 1 2 3 changing more than 4 5 6 at outer10
+# Backreef change highest at LTER 1 2
+# Fringing highest at LTER 1 2 6
+emmeans(rate_change_mod1, pairwise ~ Site | Habitat)
+
+
+
+
+
+# Untransformed
+rate_change_table_untransformed<-
+  rate_change(
+  df = long_data_sub,
   time.var = "Year",
   species.var = "Taxa",
-  abundance.var = "Mean_cover",
-  replicate.var = "Stratum"
-)
-
-rate_change<- 
-  rate_change %>%
-    separate(Stratum, into = c("Site", "Habitat", "Transect"), sep = "-")
-rate_change$Site_habitat <- paste(rate_change$Site, rate_change$Habitat)
+  abundance.var = "Percent_cover",
+  replicate.var = "Location"
+) # summarizes rate of change for each quadrat over the course of the time series
 
 
-# A lot of extra spaces
 
-rate_change <- rate_change %>%
-  mutate(across(everything(), str_trim))
+rate_change_table_untransformed <- merge(turnover_meta, rate_change_table_untransformed, by = "Location")
+hist(rate_change_table_untransformed$rate_change)
 
-str(rate_change) # everything became characters
+rate_change_mod2 <- glmmTMB(rate_change ~ Habitat*Site + (1|Habitat/Site/Transect), data = rate_change_table_untransformed)
+summary(rate_change_mod2)
+plot(rc_res <- simulateResiduals(rate_change_mod2)) # as above
+Anova(rate_change_mod2)
+#                Chisq Df Pr(>Chisq)    
+# Habitat       39.224  3  1.556e-08 ***
+# Site          17.882  5   0.003098 ** 
+# Habitat:Site 123.014 15  < 2.2e-16 ***
+plot(allEffects(rate_change_mod1))
+# eyeballing it
+# Outer 17 scarcely changing regardless of site
+# Rate of change similar in backreef between sites
+# big variance between sites in outer10 and fringing
+# Outer 10: As you go around the island, sites become increasing more "stable" over time (i.e. less shift toward dissimilarity)
+# Effectively the opposite trend in Fringing - more dissimilar over time as you go around the island
+emmeans(rate_change_mod1, pairwise ~ Site | Habitat)
 
-rate_change$distance <- as.numeric(rate_change$distance)
-rate_change$interval <- as.numeric(rate_change$interval)
-rate_change$Site <- as.factor(rate_change$Site)
-rate_change$Habitat <- as.factor(rate_change$Habitat)
-
-ggplot(rate_change, aes(interval, distance, colour = Site, shape = Habitat, group = Site_habitat, linetype = Habitat)) +
-  facet_wrap(~Site) + 
-  geom_point() +
+ggplot(data = rate_change_table_transformed) +
+  geom_boxplot(aes(x = Site, y = rate_change, colour = Site) ) +
+  geom_jitter(aes(x = Site, y = rate_change, colour = Site), width = 0.2) +
+  facet_wrap(~Habitat) +
   scale_colour_manual(values = site_colours) +
-  scale_linetype_manual(values = habitat_linetypes) +
-  stat_smooth(method = "lm", se = T, size = 2) +
-  scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site)+
-#  labs(y = "Distance\n") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
@@ -946,7 +974,117 @@ ggplot(rate_change, aes(interval, distance, colour = Site, shape = Habitat, grou
         legend.position = 'bottom', # move legend to bottom
         legend.box = 'horizontal',
         legend.box.background = element_rect(colour = "black") # make legend horizontal
-        ) # I don't think these are linear relationships so the smoother isn't terriibly helpful
+        )
+
+ggplot(data = rate_change_table_untransformed) +
+  geom_boxplot(aes(x = Site, y = rate_change, colour = Site) ) +
+  geom_jitter(aes(x = Site, y = rate_change, colour = Site), width = 0.2) +
+  facet_wrap(~Habitat) +
+  scale_colour_manual(values = site_colours) +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        )
+
+
+```
+
+```{r rate change vis method 2, fig.height=15, fig.width=15}
+rate_change_untransformed<-
+  rate_change_interval(
+  df = long_data_sub,
+  time.var = "Year",
+  species.var = "Taxa",
+  abundance.var = "Percent_cover",
+  replicate.var = "Location"
+)
+
+rate_change_untransformed_distances <- merge(rate_change_untransformed, rate_change_meta, by = "Location")
+
+rate_change_transformed<-
+  rate_change_interval(
+  df = long_data_sub,
+  time.var = "Year",
+  species.var = "Taxa",
+  abundance.var = "Percent_cover_transformed",
+  replicate.var = "Location"
+)
+
+rate_change_transformed_distances <- merge(rate_change_transformed, rate_change_meta, by = "Location")
+
+
+ ggplot(rate_change_untransformed_distances,
+        aes(x = interval, y = distance, colour = Site, shape = Habitat) )+
+   facet_wrap(~Habitat) + 
+   geom_point() +
+   scale_colour_manual(values = site_colours) +
+   scale_linetype_manual(values = habitat_linetypes) +
+   stat_smooth(method = "lm", se = T, size = 2) +
+   scale_shape_manual(values = habitat_shapes) +
+   labs(y = "Untransformed distance\n") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") # make legend horizontal
+         ) 
+ 
+ ggplot(rate_change_transformed_distances,
+        aes(x = interval, y = distance, colour = Site, shape = Habitat) )+
+   facet_wrap(~Habitat) + 
+   geom_point() +
+   scale_colour_manual(values = site_colours) +
+   scale_linetype_manual(values = habitat_linetypes) +
+   stat_smooth(method = "lm", se = T, size = 2) +
+   scale_shape_manual(values = habitat_shapes) +
+   labs(y = "Transformed distance\n") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") # make legend horizontal
+         ) 
 ```
 
 
