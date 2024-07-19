@@ -1549,7 +1549,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (shannon_cv_plot_2 = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Shannon_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 2) + 
+  geom_point(aes(x = Shannon_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~Site) +
@@ -1575,7 +1575,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r portfolio effects and synchrony transect level,  fig.height = 8, fig.width = 10}
 (loreau_stability_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Loreau_synchrony, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 2) + 
+  geom_point(aes(x = Loreau_synchrony, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~Site) +
@@ -1640,7 +1640,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r diversity portfolio effects and synchrony quadrat level,  fig.height = 8, fig.width = 10}
 (loreau_diversity_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Shannon_mean, y = Loreau_synchrony, colour = Site, shape = Habitat), size = 4, stroke = 2) + 
+  geom_point(aes(x = Shannon_mean, y = Loreau_synchrony, colour = Site, shape = Habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~Site) +
@@ -1682,6 +1682,18 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
         legend.box.background = element_rect(colour = "black"))  # add box around legend
          )
 ```
+
+```{r diversity models quad level}
+diversity_mod_universal <- glmmTMB(Cover_cv ~Shannon_mean + Site*Habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
+diversity_dredge <- dredge(diversity_mod_universal)
+model.sel(diversity_dredge)
+
+synchrony_mod_universal <- glmmTMB(Cover_cv ~Loreau_synchrony*Site*Habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
+synchrony_dredge <- dredge(synchrony_mod_universal)
+model.sel(synchrony_dredge)
+
+```
+
 
 ```{r nmds, fig.height = 15, fig.width = 15}
 species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
