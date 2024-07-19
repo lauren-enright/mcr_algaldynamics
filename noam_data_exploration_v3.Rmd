@@ -1087,7 +1087,20 @@ rate_change_transformed_distances <- merge(rate_change_transformed, rate_change_
          ) 
 ```
 
+```{r multivariate change}
+## Ran this for 13 hours and it didn't finish (obviously)
+## Need to subset or specify questions or try remote access on more powerful computer
+# multi_change_untransformed <-
+#   multivariate_change(
+#    df = long_data_sub,
+#    time.var = "Year",
+#    species.var = "Taxa",
+#    abundance.var = "Percent_cover",
+#    replicate.var = "Location"
+#   )
+#  
 
+```
 
 ```{r transect level portfolio effect}
 # using Anderson et al. 2013 definitions of portfolio effects - relevant fxns in ecofolio packages
