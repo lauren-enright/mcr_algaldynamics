@@ -217,11 +217,11 @@ alpha_diversity_quad_means <- alpha_diversity_quad %>%
 
 (richness_quad_plot <-
   ggplot(data = alpha_diversity_quad_means) +
-  geom_point(aes(x = Year, y = Richness_mean, colour = Island_side, shape = Habitat, group = Island_side_habitat), size = 8) +
-  geom_line(aes(x = Year, y = Richness_mean, colour = Island_side, group = Island_side_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Richness_mean - Richness_se , ymax = Richness_mean + Richness_se, colour = Island_side,
-                    group = Island_side_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = island_side_colours) +
+  geom_point(aes(x = Year, y = Richness_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8) +
+  geom_line(aes(x = Year, y = Richness_mean, colour = Site, group = Site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = Year, ymin = Richness_mean - Richness_se , ymax = Richness_mean + Richness_se, colour = Site,
+                    group = Site_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~Habitat)+
   labs(title = "a. Richness quad level\n", y = "Richness\n") +
@@ -384,18 +384,20 @@ extra_meta <-
 
 gls_coefficients_merged <- merge(gls_coefficients, extra_meta, by = "Location")             
 
-slope_mod <- glmmTMB(Slope ~ Habitat*Island_side + (1|Site/Transect), data = gls_coefficients_merged)
+slope_mod <- glmmTMB(Slope ~ Habitat*Site + (1|Site/Transect), data = gls_coefficients_merged)
+# model convergence problem
 summary(slope_mod) # pretty low variance in random effects
 plot(gls_res <- simulateResiduals(slope_mod)) # there are issues, but I can't figure out what they are...
 # I think this is due to 1200 obs in model
 hist(residuals(slope_mod))
 plot(predict(slope_mod) ~ residuals(slope_mod))
 Anova(slope_mod)
-#                        Chisq Df Pr(>Chisq)    
-# Island_side           16.075  2  0.0003232 ***
-# Habitat             1301.260  3  < 2.2e-16 ***
-# Island_side:Habitat  799.995  6  < 2.2e-16 ***
-r.squaredGLMM(slope_mod) # 0.16, 0.18
+# Response: Slope
+#                 Chisq Df Pr(>Chisq)    
+# Habitat      1397.999  3  < 2.2e-16 ***
+# Site           39.095  5  2.273e-07 ***
+# Habitat:Site 1738.155 15  < 2.2e-16 ***
+r.squaredGLMM(slope_mod) # 0.22, 0.24
 plot(allEffects(slope_mod))
 # Backreef: richness increases on East and North shore, but relatively constant west side
 # Fringe: richness decreasing on east and west side, but relatvely constant on north shore
@@ -406,9 +408,10 @@ plot(allEffects(slope_mod))
 
 
 
-slope_emm <- emmeans(slope_mod, ~ Habitat*Island_side) # create emmeans object
+slope_emm <- emmeans(slope_mod, ~ Habitat*Site) # create emmeans object
 emmeans::contrast(slope_emm, "consec", simple = "each", combine = TRUE, adjust = "bonferroni")
 # Note: not sure I want to include this
+emmeans(slope_mod, pairwise ~ Site | Habitat)
 ```
 
 
@@ -419,7 +422,7 @@ emmeans::contrast(slope_emm, "consec", simple = "each", combine = TRUE, adjust =
 ggplot(data = gls_coefficients_merged) +
   geom_histogram(aes(x = Slope), bins = 30) +
   geom_vline(xintercept = 0, size = 2, linetype = 2) +
-  facet_grid(Habitat ~ Island_side) +
+  facet_grid(Habitat ~ Site) +
 #  theme_classic() +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
@@ -495,15 +498,18 @@ richness_mod_2 <- glmmTMB(
   Richness ~ Year_factor*Habitat*Site + (1 | Site/Transect/Location) + ar1(Year_factor + 0 | Location),
   family = poisson,
   data = alpha_diversity_quad,
-  control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000))
+  control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000)), na.action = na.pass
 ) # overspecified but going with it for now
 
 summary(richness_mod_2) # looks like strong autocorrelation, which makes sense to me
 Anova(richness_mod_2)
 plot(allEffects(richness_mod_2))
 # emmeans(richness_mod_2, pairwise ~ Habitat | Year_factor) # if we want to compare habitats year to year
+# model.sel(dredge(richness_mod_2))
 
-
+top_rich_mod <- glmmTMB(Richness ~ Year_factor*Habitat + Year_factor*Site + (1 | Site/Transect/Location) + ar1(Year_factor + 0 | Location),   family = poisson, data = alpha_diversity_quad, control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000)))
+summary(top_rich_mod)
+Anova(top_rich_mod)
 ```
 ```{r turnover troubleshooting, fig.height = 30, fig.width=25}
 
@@ -1480,9 +1486,10 @@ for(i in 1:length(unique(unique(data_sub$Location))) ){ # for each  quadrat
 
 hist(quadrat_level_portfolio$Portfolio_effect) # some crazy outliers due to low richness
 
+alpha_diversity_quad$Cover <- rowSums(data[ , -which(names(data) %in% meta_cols)])/100
 alpha_diversity_quad_sub <- alpha_diversity_quad[!alpha_diversity_quad$Location %in% problem_children, ]
 
-alpha_diversity_quad_sub$Cover <- rowSums(data_sub[ , -which(names(data_sub) %in% meta_cols)])/100
+# alpha_diversity_quad_sub$Cover <- rowSums(data_sub[ , -which(names(data_sub) %in% meta_cols)])/100
 alpha_diversity_quad_sub$Stratum <- 
   paste(alpha_diversity_quad_sub$Site, "-", alpha_diversity_quad_sub$Habitat, "-", alpha_diversity_quad_sub$Transect)
 lm_synchrony_quadrat <- codyn::synchrony(df = long_data_sub,
@@ -1552,7 +1559,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
   geom_point(aes(x = Shannon_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~Habitat) +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
@@ -1578,7 +1585,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
   geom_point(aes(x = Loreau_synchrony, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~Habitat) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1617,7 +1624,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (portfolio_stability_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Portfolio_effect, y = Cover_cv, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = Portfolio_effect, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~Site) +
@@ -1643,7 +1650,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
   geom_point(aes(x = Shannon_mean, y = Loreau_synchrony, colour = Site, shape = Habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~Habitat) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1684,13 +1691,25 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```
 
 ```{r diversity models quad level}
-diversity_mod_universal <- glmmTMB(Cover_cv ~Shannon_mean + Site*Habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
+diversity_mod_universal <- glmmTMB(Cover_cv ~Shannon_mean*Site + Shannon_mean*Habitat + Site*Habitat + (1|Transect/Location), family = Gamma(link = "log"), data = diversity_stability_quadrat, na.action = na.pass)
 diversity_dredge <- dredge(diversity_mod_universal)
-model.sel(diversity_dredge)
+model.sel(diversity_dredge) # best model is as specified
+summary(diversity_mod_universal) # low variance in random effects
+Anova(diversity_mod_universal) # LR Tests are kinda useless
+r.squaredGLMM(diversity_mod_universal) # 0.653, 0.655
 
-synchrony_mod_universal <- glmmTMB(Cover_cv ~Loreau_synchrony*Site*Habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
+synchrony_mod_universal <- glmmTMB(Cover_cv ~Loreau_synchrony*Site + Loreau_synchrony*Habitat + Site*Habitat + (1|Transect/Location), family = Gamma(link = "log"), data = diversity_stability_quadrat, na.action = na.pass)
 synchrony_dredge <- dredge(synchrony_mod_universal)
-model.sel(synchrony_dredge)
+model.sel(synchrony_dredge) # best model is as specified
+summary(synchrony_mod_universal)
+r.squaredGLMM(synchrony_mod_universal) # 0.800, 0.802
+
+diversity_stability_quadrat$Loreau_synchrony_trans <- sv_trans(diversity_stability_quadrat$Loreau_synchrony, diversity_stability_quadrat) # for modelling on beta
+synchrony_diversity_universal <- glmmTMB(Loreau_synchrony_trans ~Shannon_mean*Site + Shannon_mean*Habitat + Site*Habitat + (1|Transect/Location), family = beta_family(), data = diversity_stability_quadrat, na.action = na.pass)
+model.sel(dredge(synchrony_diversity_universal)) # best model as specified
+summary(synchrony_diversity_universal)
+Anova(synchrony_diversity_universal)
+r.squaredGLMM(synchrony_diversity_universal) # Model's distribution-specific variance is negative. Results are not reliable.
 
 ```
 
