@@ -1508,6 +1508,13 @@ gross_synchrony_quadrat <- codyn::synchrony(df = long_data_sub,
                                    replicate.var = "Location") # lots of warnings in this one - examine further later
 colnames(gross_synchrony_transect) = c("Location", "Gross_synchrony") # rename cols for merge later
 
+variance_ratio_quadrat <- variance_ratio(df = long_data_sub,
+                                   time.var = "Year",
+                                   species.var = "Taxa",
+                                   abundance.var = "Percent_cover",
+                                   average.replicates = F,
+                                   bootnumber = 1,
+                                   replicate.var = "Location")
 
 diversity_stability_quadrat <- alpha_diversity_quad_sub %>%
   dplyr::group_by(Location, Site, Habitat, Site_habitat, Transect, Stratum) %>%
@@ -1527,19 +1534,21 @@ diversity_stability_quadrat <-
   merge(diversity_stability_quadrat, lm_synchrony_quadrat, by = "Location") # add in loreau and de Mazancourt synchrony
 diversity_stability_quadrat <- merge(diversity_stability_quadrat, gross_synchrony_quadrat, by = "Location")
 diversity_stability_quadrat <- merge(diversity_stability_quadrat, quadrat_level_portfolio, by = "Location") # add in portfolio effects
+diversity_stability_quadrat <- merge(diversity_stability_quadrat, variance_ratio_quadrat, by = "Location")
 pairs(~ Cover_mean + Cover_cv + Cover_stability + 
         Shannon_mean + Shannon_cv + Shannon_stability + 
-        Loreau_synchrony + Gross_synchrony + Portfolio_effect, data = diversity_stability)
+        Loreau_synchrony +  Portfolio_effect + VR, data = diversity_stability_quadrat)
 
 ```
 
 ```{r basic diversity stability plots quadrat level, fig.height=8, fig.width=10}
 (shannon_cv_plot = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Shannon_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 8) + 
+  geom_point(aes(x = Shannon_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 4) + 
    scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-#    stat_smooth(aes(x = Shannon_mean, y = Shannon_cv),method = "lm", se = T, size = 2) + 
+   facet_wrap(~Site) +
+
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
@@ -1585,7 +1594,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
   geom_point(aes(x = Loreau_synchrony, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Habitat) +
+  facet_wrap(~Site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1627,7 +1636,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
   geom_point(aes(x = Portfolio_effect, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+ # facet_wrap(~Site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1642,6 +1651,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black"))  # add box around legend
          ) # almost a perfect line, which makes sense given that CV is a component of portfolio effects
+
 ```
 
 ```{r diversity portfolio effects and synchrony quadrat level,  fig.height = 8, fig.width = 10}
@@ -1650,7 +1660,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
   geom_point(aes(x = Shannon_mean, y = Loreau_synchrony, colour = Site, shape = Habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Habitat) +
+  facet_wrap(~Site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
