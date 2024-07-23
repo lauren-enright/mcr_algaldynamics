@@ -1431,6 +1431,7 @@ summary(diversity_top)
 Anova(diversity_top)
 ```
 
+
 ```{r general cover diversity, fig.height = 30, fig.width = 30}
 (diversity_cover_plot = 
   ggplot(data = alpha_diversity) +
@@ -1477,7 +1478,7 @@ for(i in 1:length(unique(unique(data_sub$Location))) ){ # for each  quadrat
   }else{ # otherwise
     current_matrix <- current_matrix[, which(colSums(current_matrix) != 0)] # remove irrelevant algae
     
-    quadrat_level_portfolio[i, 2] <- pe_avg_cv(current_matrix) # calculate portfolio effects for current time series
+    quadrat_level_portfolio[i, 2] <- pe_mv(current_matrix, "loess_detrended") # calculate portfolio effects for current time series
   }
   
 }
@@ -1500,13 +1501,13 @@ lm_synchrony_quadrat <- codyn::synchrony(df = long_data_sub,
                                    replicate.var = "Location") # Loreau and Mazancourt synchrony
 colnames(lm_synchrony_quadrat) = c("Location", "Loreau_synchrony") # rename cols for merge later
 
-gross_synchrony_quadrat <- codyn::synchrony(df = long_data_sub,
-                                   time.var = "Year",
-                                   species.var = "Taxa",
-                                   abundance.var = "Percent_cover",
-                                   metric = "Gross",
-                                   replicate.var = "Location") # lots of warnings in this one - examine further later
-colnames(gross_synchrony_transect) = c("Location", "Gross_synchrony") # rename cols for merge later
+## gross_synchrony_quadrat <- codyn::synchrony(df = long_data_sub,
+##                                    time.var = "Year",
+##                                    species.var = "Taxa",
+##                                    abundance.var = "Percent_cover",
+##                                    metric = "Gross",
+##                                    replicate.var = "Location") # lots of warnings in this one - examine further later
+## colnames(gross_synchrony_transect) = c("Location", "Gross_synchrony") # rename cols for merge later
 
 variance_ratio_quadrat <- variance_ratio(df = long_data_sub,
                                    time.var = "Year",
@@ -1538,6 +1539,51 @@ diversity_stability_quadrat <- merge(diversity_stability_quadrat, variance_ratio
 pairs(~ Cover_mean + Cover_cv + Cover_stability + 
         Shannon_mean + Shannon_cv + Shannon_stability + 
         Loreau_synchrony +  Portfolio_effect + VR, data = diversity_stability_quadrat)
+
+```
+
+```{r cover and cv, fig.height = 8, fig.width = 10}
+(cover_cv_plot = 
+  ggplot(data = diversity_stability_quadrat) +
+  geom_point(aes(x = Cover_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 4) + 
+   scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+   facet_wrap(~Site) +
+
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+(cover_cv_plot = 
+  ggplot(data = diversity_stability_quadrat) +
+  geom_point(aes(x = Cover_mean, y = Shannon_mean, colour = Site, shape = Habitat), size = 4) + 
+   scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+   facet_wrap(~Site) +
+
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
 
 ```
 
