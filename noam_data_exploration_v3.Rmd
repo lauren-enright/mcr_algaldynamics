@@ -1517,6 +1517,12 @@ variance_ratio_quadrat <- variance_ratio(df = long_data_sub,
                                    bootnumber = 1,
                                    replicate.var = "Location")
 
+community_stability_quadrat <- community_stability(df = long_data_sub,
+                                   time.var = "Year",
+                                   abundance.var = "Percent_cover",
+                                   replicate.var = "Location")
+colnames(community_stability_quadrat) = c("Location", "Cover_stability")
+
 diversity_stability_quadrat <- alpha_diversity_quad_sub %>%
   dplyr::group_by(Location, Site, Habitat, Site_habitat, Transect, Stratum) %>%
   dplyr::summarise(Richness_mean = mean(Richness), 
@@ -1528,14 +1534,14 @@ diversity_stability_quadrat <- alpha_diversity_quad_sub %>%
             Shannon_stability = 1/CV(Shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
             Cover_mean = mean(Cover),
             Cover_se = sd(Cover)/sqrt(n()),
-            Cover_cv = CV(Cover),
-            Cover_stability = 1/CV(Cover)) # as above
+            Cover_cv = CV(Cover)) 
 
 diversity_stability_quadrat <- 
   merge(diversity_stability_quadrat, lm_synchrony_quadrat, by = "Location") # add in loreau and de Mazancourt synchrony
 diversity_stability_quadrat <- merge(diversity_stability_quadrat, gross_synchrony_quadrat, by = "Location")
 diversity_stability_quadrat <- merge(diversity_stability_quadrat, quadrat_level_portfolio, by = "Location") # add in portfolio effects
 diversity_stability_quadrat <- merge(diversity_stability_quadrat, variance_ratio_quadrat, by = "Location")
+diversity_stability_quadrat <- merge(diversity_stability_quadrat, community_stability_quadrat, by = "Location")
 pairs(~ Cover_mean + Cover_cv + Cover_stability + 
         Shannon_mean + Shannon_cv + Shannon_stability + 
         Loreau_synchrony +  Portfolio_effect + VR, data = diversity_stability_quadrat)
