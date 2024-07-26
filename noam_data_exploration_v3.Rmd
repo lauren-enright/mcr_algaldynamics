@@ -100,6 +100,10 @@ alpha_diversity_means <- alpha_diversity %>%
             Shannon_mean = mean(Shannon), 
             Shannon_se = sd(Shannon)/sqrt(n()))
 
+#CALLIE ADDED
+#if you need to export this:
+#alpha_export <- left_join(alpha_diversity, alpha_diversity_means)
+#write_csv(alpha_export, here("data", "algae_alpha_diversity.csv"))
 
 site_colours <- c("LTER 1" = "cornflowerblue",
                "LTER 2" = "darkblue",
