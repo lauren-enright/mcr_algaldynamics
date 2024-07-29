@@ -1503,6 +1503,119 @@ diversity_stability %>%
 
 Is change in algal cover in a given quadrat from one year to the next influenced by diversity? Need to set up a lag/change to calculate this
 
+- Would need to start in 2008 because no change to 2007
+
+## Wrangle
+
+Might just brute force this...
+
+```{r get the change in algal cover each year}
+megaQuadDF %>% 
+  select(year, site, habitat, site_habitat, transect, quadrat, island_side, AlgSum) %>% 
+  pivot_wider(names_from = year,
+              values_from = AlgSum) %>% 
+  # calculate changes FROM the previous year 
+  # this means that a change FROM 2007 to 2008 will be joined with diversity in 2007 
+  # that means that a positive correlation between richness in 2007 and "ChFrom2007" (etc) == more diverse communities are more likely to INCREASE in cover/less likely to decrease in cover (not necessarily stability)
+  mutate(AlgChFrom2007 = `2008` - `2007`,
+         AlgChFrom2008 = `2009` - `2008`,
+         AlgChFrom2009 = `2010` - `2009`,
+         AlgChFrom2010 = `2011` - `2010`,
+         AlgChFrom2011 = `2012` - `2011`,
+         AlgChFrom2012 = `2013` - `2012`,
+         AlgChFrom2013 = `2014` - `2013`,
+         AlgChFrom2014 = `2015` - `2014`,
+         AlgChFrom2015 = `2016` - `2015`,
+         AlgChFrom2016 = `2017` - `2016`,
+         AlgChFrom2017 = `2018` - `2017`,
+         AlgChFrom2018 = `2019` - `2018`,
+         #AlgChFrom2007 = `2021` - `2019`, # maybe skip because this isn't comparable?
+         AlgChFrom2021 = `2022` - `2021`, 
+         AlgChFrom2022 = `2023` - `2022`
+         ) -> algalCh
+```
+
+There are **NA's in 2021**--confirm those are just missing quadrats.
+
+Now get it back into long/joinable format (probably a more elegant way to do this):
+
+```{r get into long format and join}
+startChA <- grep("AlgChFrom2007", colnames(algalCh))
+endtChA <- grep("AlgChFrom2022", colnames(algalCh))
+
+algalCh %>% 
+  # get the columns we need
+  select(c(site, habitat, site_habitat, transect, quadrat, island_side, colnames(algalCh)[startChA:endtChA])) %>% 
+  pivot_longer(cols = colnames(algalCh)[startChA:endtChA],
+               names_to = "Change_year",
+               values_to = "Change_in_percent"
+               ) %>% 
+  # match with correct year
+  mutate(year = case_when(
+    Change_year == "AlgChFrom2007" ~ 2007,
+    Change_year == "AlgChFrom2008" ~ 2008,
+    Change_year == "AlgChFrom2009" ~ 2009,
+    Change_year == "AlgChFrom2010" ~ 2010,
+    Change_year == "AlgChFrom2011" ~ 2011,
+    Change_year == "AlgChFrom2012" ~ 2012,
+    Change_year == "AlgChFrom2013" ~ 2013,
+    Change_year == "AlgChFrom2014" ~ 2014,
+    Change_year == "AlgChFrom2015" ~ 2015,
+    Change_year == "AlgChFrom2016" ~ 2016,
+    Change_year == "AlgChFrom2017" ~ 2017,
+    Change_year == "AlgChFrom2018" ~ 2018,
+    Change_year == "AlgChFrom2019" ~ 2019,
+    Change_year == "AlgChFrom2021" ~ 2021,
+    Change_year == "AlgChFrom2022" ~ 2022,
+    TRUE ~ -9999
+  )) %>%
+  full_join(megaQuadDF) %>% 
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17")),
+         island_side = factor(island_side, levels = c("north", "east", "west"))) -> algChYr
+  
+```
+
+## Plot
+
+```{r plot richness}
+algChYr %>% 
+  ggplot(aes(x = Richness, y = Change_in_percent, group = Richness)) +
+  geom_boxplot() +
+  theme_classic() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  facet_grid(island_side~habitat)
+```
+
+```{r plot abs(change) ~ richness}
+algChYr %>% 
+  ggplot(aes(x = Richness, y = abs(Change_in_percent), group = Richness)) +
+  geom_boxplot() +
+  theme_classic() +
+  facet_grid(island_side~habitat)
+```
+
+```{r plot Shannon}
+algChYr %>% 
+  ggplot(aes(x = Shannon, y = Change_in_percent)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  geom_smooth() +
+  theme_classic() +
+  facet_grid(island_side~habitat)
+```
+
+```{r plot Shannon ~ abs(change)}
+# pdf("change_in_cov_Shann.pdf", height = 7, width = 10)
+
+algChYr %>% 
+  ggplot(aes(x = Shannon, y = abs(Change_in_percent), color = year)) +
+  geom_point() +
+  geom_smooth(color = "coral") +
+  theme_classic() + # kind of negative
+  facet_grid(island_side~habitat)
+
+# dev.off()
+```
 
 
 
@@ -1517,6 +1630,15 @@ Maybe try this way: https://cran.r-project.org/web/packages/codyn/vignettes/Comm
 ```
 
 
+# Nic's plot of change through time
+
+Want to plot how each spp changes in abundance through time just to get an idea
+
+## Wrangling
+
+```{r}
+megaQuadDF
+```
 
 
 
