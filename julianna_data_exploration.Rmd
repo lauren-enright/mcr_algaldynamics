@@ -1340,6 +1340,115 @@ betaDHabYrISCoral %>%
 ```
 
 
+# CV: Noam's way
+
+First try looking at CV Noam's way. I think this is more looking at if diverse areas (all time) are more stable, rather than if stability from one year to the next is dictated by current diversity (I think we can do this also since quadrats are fixed--will try that next)
+
+## Calculate
+
+Make a coefficient of variation function:
+
+```{r cv function}
+# coefficient of variation
+CV <- function(x){
+  return(sd(x,na.rm=T)/mean(x,na.rm=T))
+}
+```
+
+Apply it when we summarize
+
+```{r mega quadrat df}
+# get mega df with just about anything we need
+coralAlgDiv %>% 
+  full_join(algSum) -> megaQuadDF
+```
+
+```{r calculate CVs}
+diversity_stability <- megaQuadDF %>%
+  dplyr::group_by(site, habitat, site_habitat, island_side) %>%
+  dplyr::summarise(
+    Coral_mean = mean(coral),
+    Richness_mean = mean(Richness), 
+    Richness_se = sd(Richness)/sqrt(n()),
+    Richness_cv = CV(Richness),
+    Shannon_mean = mean(Shannon), 
+    Shannon_se = sd(Shannon)/sqrt(n()),
+    Shannon_cv = CV(Shannon),
+    Cover_mean = mean(AlgSum),
+    Cover_se = sd(AlgSum)/sqrt(n()),
+    Cover_cv = CV(AlgSum))
+```
+
+
+## Plot
+
+Algae diversity vs. cover CV:
+
+```{r Shannon}
+# divided by habitat
+diversity_stability %>% 
+  ggplot(aes(x = Shannon_mean, y = Cover_cv, color = site)) +
+  geom_point() +
+  facet_wrap(~habitat) +
+  theme_bw()
+
+# or all together
+diversity_stability %>% 
+  ggplot(aes(x = Shannon_mean, y = Cover_cv, color = site, shape = habitat)) +
+  geom_point(size = 2) +
+  theme_bw()
+```
+
+```{r richness}
+# divided by habitat
+diversity_stability %>% 
+  ggplot(aes(x = Richness_mean, y = Cover_cv, color = site)) +
+  geom_point() +
+  facet_wrap(~habitat) +
+  theme_bw()
+
+# or all together
+diversity_stability %>% 
+  ggplot(aes(x = Richness_mean, y = Cover_cv, color = site, shape = habitat)) +
+  geom_point(size = 2) +
+  theme_bw()
+```
+
+Versus coral cover
+
+```{r vs coral cover}
+diversity_stability %>% 
+  ggplot(aes(x = Coral_mean, y = Cover_cv, color = site, shape = habitat)) +
+  geom_point(size = 2) +
+  theme_bw()
+```
+
+
+
+
+
+
+
+# Stability
+
+Is change in algal cover in a given quadrat from one year to the next influenced by diversity? Need to set up a lag/change to calculate this
+
+
+
+
+
+
+# Synchrony
+
+Maybe try this way: https://cran.r-project.org/web/packages/codyn/vignettes/Community_Stability_Metrics.html using the `codyn` package?
+
+```{r}
+
+```
+
+
+
+
 
 
 
