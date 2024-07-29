@@ -56,6 +56,10 @@ Make a spp matrix to use with vegan
 algae %>% 
   select(-year, -location, -site, -island_side, -habitat, -site_habitat, -transect, -quadrat) -> sppMat
 
+# get ranges to calculate over
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
 # metadata matrix
 algae %>% 
   mutate(AlgSum = rowSums(algae[startAlg:endAlg])) %>% 
@@ -558,6 +562,7 @@ accum.HabISYrlong %>%
 
 # Plot changes of algae, coral, etc. through time
 
+
 ```{r make a big joined tibble}
 startMAlg <- grep("acanthophora_spicifera", colnames(macroalgae))
 endMAlg <- grep("valonia_ventricosa", colnames(macroalgae))
@@ -608,8 +613,12 @@ quad4sum %>%
             n = n(),
             CI95 = 1.96*(sd_cov)/sqrt(n)) %>% 
   # relevel for graphing
-  mutate(island_side = factor(island_side, levels = c("north", "east", "west")),
-         habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) -> quadHabIS
+  mutate(island_side = str_to_sentence(island_side),
+         island_side = factor(island_side, levels = c("North", "East", "West")),
+         habitat = case_when(
+           str_detect(habitat, pattern = "_") ~ str_to_sentence(paste0(str_split(habitat, "_")[[1]][1], " ", str_split(habitat, "_")[[1]][2])),
+           TRUE ~ str_to_sentence(habitat)),
+         habitat = factor(habitat, levels = c("Fringing", "Backreef", "Outer 10", "Outer 17"))) -> quadHabIS
   
             
 ```
@@ -627,11 +636,72 @@ quadHabIS %>%
     moma.colors("Klein", type = "discrete")[1], # coral
     moma.colors("Klein", type = "discrete")[5], # macro
     moma.colors("Klein", type = "discrete")[4] # turf
-  )) +
+  ),
+  labels = c("CCA", "Coral", "Macroalgae", "Turf algae")) +
   facet_grid(island_side ~ habitat) +
   ylab("Mean cover (%)") +
   xlab("Year")
 ```
+
+## Quarat-level habitat-site
+
+```{r get summary}
+
+quad4sum %>% 
+  # summarize and group quadrats by island/habitat
+  group_by(year, habitat, site, island_side, substrate) %>% 
+  summarise(mean_cov = mean(sum_cover),
+            sd_cov = sd(sum_cover, na.rm = TRUE),
+            n = n(),
+            CI95 = 1.96*(sd_cov)/sqrt(n)) %>% 
+  # relevel for graphing
+  mutate(island_side = str_to_sentence(island_side),
+         island_side = factor(island_side, levels = c("North", "East", "West")),
+         habitat = case_when(
+           str_detect(habitat, pattern = "_") ~ str_to_sentence(paste0(str_split(habitat, "_")[[1]][1], " ", str_split(habitat, "_")[[1]][2])),
+           TRUE ~ str_to_sentence(habitat)),
+         habitat = factor(habitat, levels = c("Fringing", "Backreef", "Outer 10", "Outer 17"))) %>% 
+  mutate(site = case_when(
+    site == "lter_1" ~ "LTER 1 (N)",
+    site == "lter_2" ~ "LTER 2 (N)",
+    site == "lter_3" ~ "LTER 3 (E)",
+    site == "lter_4" ~ "LTER 4 (E)",
+    site == "lter_5" ~ "LTER 5 (W)",
+    site == "lter_6" ~ "LTER 6 (W)"
+  )) -> quadHabSite
+  
+            
+```
+
+```{r plot cover through time}
+# pdf("Fig1_quadHabSiteNo20.pdf", height = 6.5, width = 12)
+
+quadHabSite %>% 
+  filter(year != 2020) %>% 
+  ggplot(aes(x = year, y = mean_cov, group = substrate, fill = substrate)) +
+  geom_ribbon(aes(ymin = mean_cov -CI95, 
+                    ymax = mean_cov + CI95),
+              alpha  = 0.7) +
+  geom_line() +
+  theme_bw() +
+  scale_fill_manual(values = c(
+    moma.colors("Klein", type = "discrete")[2], # CCA
+    moma.colors("Klein", type = "discrete")[1], # coral
+    moma.colors("Klein", type = "discrete")[5], # macro
+    moma.colors("Klein", type = "discrete")[4] # turf
+  ),
+  labels = c("CCA", "Coral", "Macroalgae", "Turf algae")) +
+  facet_grid(habitat ~ site) + # not sure which direction is best here
+  ylab("Mean cover (%)") +
+  xlab("Year") +
+  # add lines for disturbances
+  geom_vline(xintercept = 2006, linetype = "dotdash") + # start of COTS
+  geom_vline(xintercept = 2010,  color = "darkgray") + # cyclone Oli
+  geom_vline(xintercept = 2019, linetype = "dashed", color = "red")  # bleaching
+
+# dev.off()
+```
+
 
 ## Quadrat-level habitat
 
