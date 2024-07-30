@@ -333,7 +333,7 @@ algDiv %>%
 ```
 
 ```{r save}
-# write_csv(quadData, here("algal_metrics_quadrat.csv"))
+# write_csv(quadData, here("data/algal_metrics_quadrat.csv"))
 ```
 
 # Site/habitat/year-level mean
@@ -353,7 +353,7 @@ quadData %>%
 ```
 
 ```{r save dataframe}
-# write_csv(siteData, here("algal_metrics_site.csv"))
+# write_csv(siteData, here("data/algal_metrics_site.csv"))
 ```
 
 # All time metrics
@@ -395,7 +395,7 @@ quadData %>%
 ```
 
 ```{r save}
-# write_csv(alltimeCV, here(here("algal_metrics_all_time.csv")))
+# write_csv(alltimeCV, here(here("data/algal_metrics_all_time.csv")))
 ```
 
 - Noam: Add **synchrony** to this dataset + any other relevant metrics

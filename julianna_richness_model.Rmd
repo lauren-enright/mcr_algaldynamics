@@ -1,0 +1,36 @@
+---
+title: "Richness model"
+output: html_document
+date: "2024-07-30"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# clean up
+rm(list=ls()) 
+
+# load packages
+require(here) # relative file paths
+require(tidyverse) # data wrangling
+require(lme4) # mixed models
+```
+
+Make a model for algal richness through time
+
+# Bring in the data
+
+```{r load data}
+cleaned_rich <- read_csv(here("data/algal_metrics_quadrat.csv")) # generated using my (Julianna's) algal metric code
+```
+
+# Make a model
+
+```{r}
+mRich <- glmer(,
+               family = Poisson,
+               data = cleaned_rich)
+```
+
