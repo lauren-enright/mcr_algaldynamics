@@ -23,14 +23,45 @@ Make a model for algal richness through time
 # Bring in the data
 
 ```{r load data}
-cleaned_rich <- read_csv(here("data/algal_metrics_quadrat.csv")) # generated using my (Julianna's) algal metric code
+cleaned_rich <- read_csv(here("data/algal_metrics_quadrat.csv")) %>% 
+  filter(year != 2020) # fake data
+  # generated using my (Julianna's) algal metric code
 ```
 
 # Make a model
 
-```{r}
-mRich <- glmer(,
-               family = Poisson,
+```{r make Poisson model}
+mRich <- glmer(algal_richness ~ as.factor(year) + habitat + (1|site/transect),
+               family = poisson,
                data = cleaned_rich)
 ```
+
+
+# Examine output
+
+```{r make prediction grid}
+# create a grid to predict over
+newdata <- expand_grid(year = unique(cleaned_rich$year),
+                       habitat = unique(cleaned_rich$habitat),
+                       site = unique(cleaned_rich$site),
+                       transect = unique(cleaned_rich$transect))
+```
+
+```{r generate predictions}
+newdata$Preds <- predict(mRich, newdata = newdata)
+```
+
+```{r plot predictions}
+newdata %>% 
+  # get transect means
+  group_by(year, habitat, site) %>% 
+  summarize(Pred_mean_richness = mean(Preds),
+            SD_richness = sd(Preds)) %>% 
+  ggplot(aes(x = year, y = Pred_mean_richness, group = habitat, color = habitat)) +
+  geom_line() +
+  theme_bw() +
+  facet_wrap(~site)
+```
+
+- Should year be a factor?
 
