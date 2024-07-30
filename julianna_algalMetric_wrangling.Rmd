@@ -23,7 +23,7 @@ This script generates the CSV of algal metrics to regress other variables agains
 # Bring in the data
 
 ```{r}
-# algal data
+# algal cover 
 algae <- read_csv(here("data", "algaeonly_cleaned_colnames.csv")) %>% 
   mutate(island_side = case_when(site == "lter_1" ~ "north",
                                  site == "lter_2" ~ "north",
@@ -32,5 +32,374 @@ algae <- read_csv(here("data", "algaeonly_cleaned_colnames.csv")) %>%
                                  site == "lter_5" ~ "west",
                                  site == "lter_6" ~ "west",
                                  TRUE ~ "UdINGLEbUTT"))
+
+# sand cover
+sand <- read_csv(here("data", "allbenthicdata_cleaned_colnames.csv")) %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, sand, coral)
 ```
+
+# Calculate algal alpha diversity 
+
+## Make matrices 
+
+Make a spp matrix to use with `vegan`
+
+```{r make species matrix}
+# matrix of just species and their relative percent covers in the same order as the algae tibble
+algae %>% 
+  select(-year, -location, -site, -island_side, -habitat, -site_habitat, -transect, -quadrat) -> sppMat
+```
+
+```{r make a metadata matrix in the same order}
+# get ranges to calculate over (this is just for indexing purposes in the next bit of code)
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+# metadata matrix
+algae %>% 
+  # bring in sand data
+  full_join(sand) %>% 
+  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg]), # percent cover of algae
+         AlgCov_percHard = case_when(
+           sand == 0 ~ AlgCov_perc, # since we can't divide by a zero
+           TRUE ~ AlgCov_perc/sand 
+           )) %>% # percent cover of hard substrate
+   # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, "_", hab_year)) %>% 
+  select(year, location, site, habitat, island_side, site_habitat, 
+         hab_year, island_side_hab_year, transect, quadrat, AlgCov_perc, 
+         AlgCov_percHard, sand, coral)  -> sppMeta
+```
+
+## Calculate diversity metrics
+
+```{r get richness and Shannon diversity}
+sppMeta %>% 
+  # these functions use the vegan package
+  mutate(Richness = specnumber(sppMat),
+         Shannon = diversity(sppMat, "shannon")) -> algDiv
+```
+
+# Calculate algal beta diversity 
+
+## Distance matrix: habitat-year
+
+We get an error if we run `vegdist()` with quadrats that have no algae. We can see there are 672 of these that we need to filter out:
+
+```{r look for zeros}
+sppMat %>% 
+  mutate(AlgCov_perc = rowSums(across(where(is.numeric)))) %>% 
+  filter(AlgCov_perc == 0) %>% dim() # 672 with no algae at all
+```
+
+Now we can exclude quadrats with no algae and make a species matrix again
+
+```{r get spp mat df}
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+# spp matrix where 0 observations are filtered out
+algae %>% 
+  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgCov_perc != 0) %>% 
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgCov_perc) -> sppMat0
+```
+
+```{r metadata matix}
+# matching metadata matrix
+algae %>% 
+  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgCov_perc != 0) %>%
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
+  # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, hab_year)) -> sppMeta0
+```
+
+Now we'll calculate this by habitat because we're compute limited
+
+### Calculate fringing
+
+```{r get fringe mat}
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+# spp matrix
+algae %>% 
+  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgCov_perc != 0) %>% 
+  filter(habitat == "fringing") %>% 
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgCov_perc) -> sppMat0fring
+
+# metadata matrix
+algae %>% 
+  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgCov_perc != 0) %>%
+   filter(habitat == "fringing") %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
+  # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, hab_year),
+         island_side_year = paste0(island_side, year)) -> sppMeta0fring
+```
+
+Calculate Bray Curtis distances
+
+```{r calculate distances}
+brayMatFring <- vegdist(sppMat0fring, "bray") # 1 is maximum dissimilarity
+```
+
+Calculate dispersion (this is using Noam's code)
+
+```{r calculate beta dispersion}
+yrBetaDisperFring <- vegan::betadisper(brayMatFring, sppMeta0fring$year) # warning: some squared distances are negative and changed to zero (ask Jamie about this??)
+```
+
+### Backreef
+
+```{r get backreef df}
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+# spp matrix
+algae %>% 
+  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgCov_perc != 0) %>% 
+  filter(habitat == "backreef") %>% 
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgCov_perc) -> sppMat0back
+
+# metadata matrix
+algae %>% 
+  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgCov_perc != 0) %>%
+   filter(habitat == "backreef") %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
+  # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, hab_year),
+         island_side_year = paste0(island_side, year)) -> sppMeta0back
+```
+
+
+Calculate Bray Curtis distances
+
+```{r calculate distance}
+brayMatBack <- vegdist(sppMat0back, "bray") # 1 is maximum dissimilarity
+```
+
+Calculate beta disperion
+
+```{r calculate beta dispersion}
+yrBetaDisperBack <- vegan::betadisper(brayMatBack, sppMeta0back$year) 
+```
+
+### Outer 10
+
+```{r get outer 10 df}
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+# spp matrix
+algae %>% 
+  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgCov_perc != 0) %>% 
+  filter(habitat == "outer_10") %>% 
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgCov_perc) -> sppMat0outer10
+
+# metadata matrix
+algae %>% 
+  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgCov_perc != 0) %>%
+   filter(habitat == "outer_10") %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
+  # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, hab_year),
+         island_side_year = paste0(island_side, year)) -> sppMeta0outer10
+```
+
+
+Calculate Bray Curtis distances
+
+```{r calculate distance}
+brayMatOuter10 <- vegdist(sppMat0outer10, "bray") # 1 is maximum dissimilarity
+```
+
+Calculate beta disperion
+
+```{r calculate beta dispersion}
+yrBetaDisperOuter10 <- vegan::betadisper(brayMatOuter10, sppMeta0outer10$year) # error: some squared distances are negative and changed to zero
+```
+
+### Outer 17
+
+```{r get outer 17 df}
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+# spp matrix
+algae %>% 
+  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgCov_perc != 0) %>% 
+  filter(habitat == "outer_17") %>% 
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgCov_perc) -> sppMat0outer17
+
+# metadata matrix
+algae %>% 
+  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(AlgCov_perc != 0) %>%
+   filter(habitat == "outer_17") %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
+  # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year),
+         island_side_hab_year = paste0(island_side, hab_year),
+         island_side_year = paste0(island_side, year)) -> sppMeta0outer17
+```
+
+Calculate Bray Curtis distances
+
+```{r calculate distance}
+brayMatOuter17 <- vegdist(sppMat0outer17, "bray") # 1 is maximum dissimilarity
+```
+
+Calculate beta disperion
+
+```{r calculate beta dispersion}
+yrBetaDisperOuter17 <- vegan::betadisper(brayMatOuter17, sppMeta0outer17$year) # error: some squared distances are negative and changed to zero
+```
+
+## Join together
+
+Attach back to metadata
+
+```{r join distances with metadata}
+sppMeta0fring %>% 
+  mutate(distance_centriod = yrBetaDisperFring$distances) -> fringeDist
+
+sppMeta0back %>% 
+  mutate(distance_centriod = yrBetaDisperBack$distances) -> backDist
+
+sppMeta0outer10 %>% 
+  mutate(distance_centriod = yrBetaDisperOuter10$distances) -> outer10Dist
+
+sppMeta0outer17 %>% 
+  mutate(distance_centriod = yrBetaDisperOuter17$distances) -> outer17Dist
+```
+
+```{r join together}
+# make sure this looks good
+colnames(fringeDist) == colnames(backDist) 
+colnames(backDist) == colnames(outer10Dist) 
+colnames(outer10Dist) == colnames(outer17Dist)
+
+
+# join together and tidy up
+betaDHabYr <- rbind(fringeDist, backDist, outer10Dist, outer17Dist) %>% 
+  mutate(hab_yr_distcentroid = distance_centriod) %>% 
+  select(year, location, site, habitat, transect, quadrat, hab_yr_distcentroid)
+```
+
+### Save dispersions
+
+```{r}
+# save(yrBetaDisperFring, file = here("data/fringingyrdispersion.Rdata"))
+# save(yrBetaDisperBack, file = here("data/backyrdispersion.Rdata"))
+# save(yrBetaDisperOuter10, file = here("data/outer10yrdispersion.Rdata"))
+# save(yrBetaDisperOuter17, file = here("data/outer17yrdispersion.Rdata"))
+```
+
+### Load dispersions
+
+```{r}
+load(here("data/fringingyrdispersion.Rdata"))
+load(here("data/backyrdispersion.Rdata"))
+load(here("data/outer10yrdispersion.Rdata"))
+load(here("data/outer17yrdispersion.Rdata"))
+```
+
+# Join all quadrat-level datasets together
+
+```{r join}
+algDiv %>% 
+  full_join(betaDHabYr) %>% 
+  # follow a cleaner naming convention
+  rename(algal_perc_cov = AlgCov_perc,
+         algal_perc_cov_hard = AlgCov_percHard,
+         algal_richness = Richness,
+         algal_Shann = Shannon) %>% 
+  # get just the columns we need
+  select(-site_habitat, -hab_year, -island_side_hab_year) -> quadData
+```
+
+```{r save}
+# write_csv(quadData, here("algal_metrics_quadrat.csv"))
+```
+
+# Site/habitat/year-level mean
+
+We'll also average these data at the site/habitat/year-level to be more compatible with other data types. This will be done at the *quadrat-level*, meaning we won't take the transect-level summary first, since they aren't meant to be factors in a statistical design
+
+```{r get averages}
+quadData %>% 
+  group_by(year, site, habitat, island_side) %>% 
+  summarize(mean_coral_perc_cov = mean(coral),
+            mean_alg_perc_cov = mean(algal_perc_cov),
+            mean_alg_perc_cov_hard = mean(algal_perc_cov_hard),
+            mean_alg_richness = mean(algal_richness),
+            mean_alg_Shann = mean(algal_Shann),
+            mean_dist_centroid_habyear = mean(hab_yr_distcentroid, na.rm = TRUE)
+            ) -> siteData
+```
+
+```{r save dataframe}
+# write_csv(siteData, here("algal_metrics_site.csv"))
+```
+
+# All time metrics
+
+## Calculate the coefficient of variation
+
+This is basically just copying/pasting Noam's code
+
+```{r cv function}
+# coefficient of variation
+CV <- function(x){
+  return(sd(x,na.rm=T)/mean(x,na.rm=T))
+}
+```
+
+Apply it when we summarize
+
+```{r calculate CV and summarize}
+quadData %>% 
+  # don't include year this time
+  group_by(site, habitat, island_side) %>%
+  summarize(
+    mean_coral_perc = mean(coral),
+    mean_alg_richness = mean(algal_richness), 
+    richness_se = sd(algal_richness)/sqrt(n()),
+    richness_cv = CV(algal_richness),
+    mean_Shann = mean(algal_Shann), 
+    Shann_se = sd(algal_Shann)/sqrt(n()),
+    Shann_cv = CV(algal_Shann),
+    # for total algal cover
+    mean_alg_cov = mean(algal_perc_cov),
+    alg_cov_se = sd(algal_perc_cov)/sqrt(n()),
+    cv_alg_cov = CV(algal_perc_cov),
+    # and for % of hard substrate
+    mean_alg_cov_hard = mean(algal_perc_cov_hard),
+    alg_cov_hard_se = sd(algal_perc_cov_hard)/sqrt(n()),
+    cv_alg_cov_hard = CV(algal_perc_cov_hard),
+    ) -> alltimeCV
+```
+
+```{r save}
+# write_csv(alltimeCV, here(here("algal_metrics_all_time.csv")))
+```
+
+- Noam: Add **synchrony** to this dataset + any other relevant metrics
+
+s
+
 
