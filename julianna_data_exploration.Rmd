@@ -1632,15 +1632,186 @@ Maybe try this way: https://cran.r-project.org/web/packages/codyn/vignettes/Comm
 
 # Nic's plot of change through time
 
+## Total cover (not change)
+
 Want to plot how each spp changes in abundance through time just to get an idea
 
-## Wrangling
+### Wrangling
 
-```{r}
-megaQuadDF
+Need to pivot so species are a column
+
+```{r summarize and pivot}
+startAlg <- grep("acanthophora_spicifera", colnames(algae))
+endAlg <- grep("valonia_ventricosa", colnames(algae))
+
+algae %>% 
+  pivot_longer(cols = colnames(algae)[startAlg:endAlg],
+               names_to = "Taxa",
+               values_to = "Perc_cov") %>% 
+  group_by(year, site, island_side, habitat, Taxa) %>% 
+  summarize(Mean_cov = mean(Perc_cov),
+            Sd_cov = sd(Perc_cov)) -> taxa_long
+  
 ```
 
+### Plot
+
+Check for most abundant things
+
+```{r calculate most abundant throughout time}
+taxa_long %>% 
+  group_by(habitat, Taxa) %>% 
+  summarize(Mean_cov = mean(Mean_cov)) %>% view()
+```
+
+Plot all
+
+```{r plot}
+# pdf("abundance_time_noTurf.pdf", height = 10, width = 15)
+
+taxa_long %>% 
+  filter(Taxa != "algal_turf") %>% 
+  ggplot(aes(x = year, y = Mean_cov, group = Taxa, color = Taxa)) +
+  geom_line() +
+  facet_grid(habitat ~ site) +
+  theme_bw() +
+  theme(legend.position = "top")
+
+# dev.off()
+```
+
+Plot some interesting ones (skipping CCA/peysonnellia/turf; focusing on most abundant things)
+
+```{r plot most abundant}
+taxa_long %>% 
+  filter(Taxa == "damselfish_turf" |
+           Taxa == "lobophora_variegata" |
+           Taxa == "turbinaria_ornata" |
+           Taxa == "dictyota_bartayresiana" |
+           Taxa == "halimeda_minima" |
+           Taxa == "asparagopsis_taxiformis" |
+           Taxa == "amansia_rhodantha" |
+           Taxa == "cyanophyta" |
+           Taxa == "halimeda_discoidea" |
+           Taxa == "halimeda_opuntia" |
+           Taxa == "sargassum_pacificum" |
+           Taxa == "halimeda_taenicola" |
+           Taxa == "halimeda_sp" |
+           Taxa == "halimeda_distorta" 
+           ) %>% 
+  ggplot(aes(x = year, y = Mean_cov, group = Taxa, color = Taxa)) +
+  geom_line() +
+  facet_grid(site ~ habitat)
+
+```
+
+## Change each time (synchrony vibes)
+
+### Wrangle
+
+```{r calculate change per taxa per year}
+algae %>% 
+  pivot_longer(cols = colnames(algae)[startAlg:endAlg],
+               names_to = "Taxa",
+               values_to = "Perc_cov") %>% 
+  pivot_wider(names_from = year,
+              values_from = Perc_cov) %>% 
+  mutate(AlgChFrom2007 = `2008` - `2007`,
+       AlgChFrom2008 = `2009` - `2008`,
+       AlgChFrom2009 = `2010` - `2009`,
+       AlgChFrom2010 = `2011` - `2010`,
+       AlgChFrom2011 = `2012` - `2011`,
+       AlgChFrom2012 = `2013` - `2012`,
+       AlgChFrom2013 = `2014` - `2013`,
+       AlgChFrom2014 = `2015` - `2014`,
+       AlgChFrom2015 = `2016` - `2015`,
+       AlgChFrom2016 = `2017` - `2016`,
+       AlgChFrom2017 = `2018` - `2017`,
+       AlgChFrom2018 = `2019` - `2018`, 
+       # skip 2020
+       AlgChFrom2021 = `2022` - `2021`, 
+       AlgChFrom2022 = `2023` - `2022`) -> algChTaxa
+```
+
+```{r get longer with values per taxa}
+startChAT <- grep("AlgChFrom2007", colnames(algChTaxa))
+endtChAT <- grep("AlgChFrom2022", colnames(algChTaxa))
+
+algChTaxa %>% 
+  select(c(site, habitat, site_habitat, transect, quadrat, island_side, Taxa, colnames(algChTaxa)[startChAT:endtChAT])) %>% 
+  pivot_longer(cols = colnames(algChTaxa)[startChAT:endtChAT],
+               names_to = "Change_year",
+               values_to = "Change_in_percent"
+               ) %>% 
+  # join with the correct year
+  mutate(year = case_when(
+    Change_year == "AlgChFrom2007" ~ 2007,
+    Change_year == "AlgChFrom2008" ~ 2008,
+    Change_year == "AlgChFrom2009" ~ 2009,
+    Change_year == "AlgChFrom2010" ~ 2010,
+    Change_year == "AlgChFrom2011" ~ 2011,
+    Change_year == "AlgChFrom2012" ~ 2012,
+    Change_year == "AlgChFrom2013" ~ 2013,
+    Change_year == "AlgChFrom2014" ~ 2014,
+    Change_year == "AlgChFrom2015" ~ 2015,
+    Change_year == "AlgChFrom2016" ~ 2016,
+    Change_year == "AlgChFrom2017" ~ 2017,
+    Change_year == "AlgChFrom2018" ~ 2018,
+    Change_year == "AlgChFrom2019" ~ 2019,
+    Change_year == "AlgChFrom2021" ~ 2021,
+    Change_year == "AlgChFrom2022" ~ 2022,
+    TRUE ~ -9999)) -> longChTaxa
+```
+
+```{r get averages per site/hab}
+longChTaxa %>% 
+  group_by(site, habitat, year, island_side, Taxa) %>% 
+  summarize(Mean_ch_cov = mean(Change_in_percent, na.rm=TRUE),
+            Sd_ch_cov = sd(Change_in_percent, na.rm=TRUE)) %>% 
+  # if you take the mean of NAs ONLY, get NaNs--change those to NA's:
+  mutate(Mean_ch_cov = case_when(is.nan(Mean_ch_cov) ~ NA,
+                                 TRUE ~ Mean_ch_cov)) %>% 
+  mutate(habitat = factor(habitat, levels = c("fringing", "backreef", "outer_10", "outer_17"))) -> meanChTaxSiteHab
+```
+
+Not sure how to calculate N because **THERE ARE NA'S**!!! I think these are quadrats that are missed
+
+### Plot
+
+```{r}
+# pdf("NicsPlot.pdf", height = 13, width = 10)
+
+meanChTaxSiteHab %>%
+  ggplot(aes(x = year, y = Mean_ch_cov, group = Taxa, color = Taxa)) +
+  geom_line() +
+  theme_bw() +
+  facet_grid(site~habitat) +
+  theme(legend.position = "top") +
+  ylab("Mean change in cover (%)")
+
+# dev.off()
+```
+
+Can we super-impose total change in cover on that?
+
+```{r}
+algChYr %>% 
+  group_by(site, habitat, year, island_side) %>% 
+  summarize(Mean_alg_ChAll = mean(Change_in_percent, na.rm = TRUE)) %>% 
+  mutate(Mean_alg_ChAll = case_when(is.nan(Mean_alg_ChAll) ~ NA,
+                                    TRUE ~ Mean_alg_ChAll)) %>%
+  full_join(meanChTaxSiteHab) -> synchDat
 
 
+synchDat %>% 
+  ggplot(aes(x = year)) +
+  geom_line(aes(x = year, y = Mean_ch_cov, group = Taxa, color = Taxa)) +
+  theme_bw() +
+  geom_line(aes(x = year, y = Mean_alg_ChAll+50), color = "black") +
+  facet_grid(site~habitat) +
+  theme(legend.position = "top") +
+  ylab("Mean change in cover (%)") +
+  ylim(-50, 150) # maybe this really needs to be done wrt change in stuff without turf?
+```
 
 
