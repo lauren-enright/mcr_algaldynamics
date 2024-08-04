@@ -31,108 +31,108 @@ library(ecofolio) # possible other method for examining portfolio effects
 
 ```{r import and format data}
 # starting with all data now because of 0 algae transects/quadrats
-data <- read.csv(here::here("data", "allbenthicdata_cleaned.csv"), stringsAsFactors = F) 
+data <- read.csv(here::here("data", "allbenthicdata_cleaned_colnames.csv"), stringsAsFactors = F) 
 
-not_algae <- c("Ascidian", "Bare.Space", "Coral", "Coral.Rubble", "Corallimorpharia", "Heteractis.sp.", "Millepora.platyphylla", "No.data", "Sand", "Sacrophyton.sp.", "Shell.Debris", "Soft.Coral", "Sponge", "Tridacna.sp.", "Zooxanthellae", "row_sums")
+not_algae <- c("ascidian", "bare_space", "coral", "coral_rubble", "corallimorpharia", "heteractis_sp", "millepora_platyphylla", "no_data", "sand", "sacrophyton_sp", "shell_debris", "soft_coral", "sponge", "tridacna_sp", "zooxanthellae", "row_sums")
 
 data <- data[ , -which(names(data) %in% not_algae)]
 
 # adding island side - adapted from Julianna's code
-data <- data %>% mutate(Island_side = case_when(Site == "LTER 1" ~ "North",
-                                 Site == "LTER 2" ~ "North",
-                                 Site == "LTER 3" ~ "East",
-                                 Site == "LTER 4" ~ "East",
-                                 Site == "LTER 5" ~ "West",
-                                 Site == "LTER 6" ~ "West"))
-data$Island_side_habitat <- paste(data$Island_side, data$Habitat)
+data <- data %>% mutate(island_side = case_when(site == "lter_1" ~ "north",
+                                 site == "lter_2" ~ "north",
+                                 site == "lter_3" ~ "east",
+                                 site == "lter_4" ~ "east",
+                                 site == "lter_5" ~ "west",
+                                 site == "lter_6" ~ "west"))
+data$island_side_habitat <- paste(data$island_side, data$habitat)
 
 
 str(data)
 
 
-meta_cols <- c(colnames(data[1:7] ), "Island_side", "Island_side_habitat", "Stratum")
-species_cols <- colnames(data[8:77])
+meta_cols <- c(colnames(data[1:7] ), "island_side", "island_side_habitat", "stratum")
+species_cols <- colnames(data)[!colnames(data) %in% meta_cols]
 
 #pivot long 
 long_data <- pivot_longer(
   data = data,
   cols = 8:77,
-  names_to = "Taxa",
-  values_to = "Percent_cover") 
+  names_to = "taxa",
+  values_to = "percent_cover") 
 
 
  transect_level <- long_data %>%
-   dplyr::group_by(Year, Site, Habitat, Transect, Taxa) %>%
-   dplyr::summarise(Mean_cover = mean(Percent_cover), 
-             SE = sd(Percent_cover)/sqrt(n()))
+   dplyr::group_by(year, island_side, site, habitat, transect, taxa) %>%
+   dplyr::summarise(mean_cover = mean(percent_cover), 
+             SE = sd(percent_cover)/sqrt(n()))
  
-# site_level <- transect_level %>%
-#   dplyr::group_by(Year, Site, Habitat, Taxa) %>%
-#   dplyr::summarise(Mean_site_cover = mean(Mean_cover), 
-#             Site_se = sd(Mean_cover)/sqrt(n()))
+site_level <- transect_level %>%
+  dplyr::group_by(year, island_side, site, habitat, taxa) %>%
+  dplyr::summarise(mean_site_cover = mean(mean_cover), 
+            site_se = sd(mean_cover)/sqrt(n()))
 ```
 
 ```{r diversity indicies, fig.height = 15, fig.width=20}
 
 
 wide_transect_level <- data %>%
-  dplyr::group_by(Year, Island_side, Island_side_habitat, Site, Habitat, Site_habitat, Transect) %>%
+  dplyr::group_by(year, island_side, island_side_habitat, site, habitat, site_habitat, transect) %>%
   dplyr::summarize(across(all_of(species_cols), mean, na.rm = TRUE))
 
 alpha_diversity <-
   data.frame(
-    Year = as.factor(wide_transect_level$Year),
-    Island_side = as.factor(wide_transect_level$Island_side),
-    Island_side_habitat = as.factor(wide_transect_level$Island_side_habitat),
-    Site = as.factor(wide_transect_level$Site),
-    Habitat = as.factor(wide_transect_level$Habitat),
-    Site_habitat = as.factor(wide_transect_level$Site_habitat),
-    Transect = as.factor(wide_transect_level$Transect),
-    Site_habitat_transect = as.factor(paste(wide_transect_level$Site_habitat, wide_transect_level$Transect)),
-    Shannon = diversity(wide_transect_level[ , -which(names(wide_transect_level) %in% meta_cols)], "shannon"),
-    Richness = rowSums(wide_transect_level[ , -which(names(wide_transect_level) %in% meta_cols)] > 0)
+    year = as.factor(wide_transect_level$year),
+    island_side = as.factor(wide_transect_level$island_side),
+    island_side_habitat = as.factor(wide_transect_level$island_side_habitat),
+    site = as.factor(wide_transect_level$site),
+    habitat = as.factor(wide_transect_level$habitat),
+    site_habitat = as.factor(wide_transect_level$site_habitat),
+    transect = as.factor(wide_transect_level$transect),
+    site_habitat_transect = as.factor(paste(wide_transect_level$site_habitat, wide_transect_level$transect)),
+    shannon = diversity(wide_transect_level[ , -which(names(wide_transect_level) %in% meta_cols)], "shannon"),
+    richness = rowSums(wide_transect_level[ , -which(names(wide_transect_level) %in% meta_cols)] > 0)
   )
 
 alpha_diversity_means <- alpha_diversity %>%
-  dplyr::group_by(Year, Island_side, Island_side_habitat, Site, Habitat, Site_habitat) %>%
-  dplyr::summarise(Richness_mean = mean(Richness), 
-            Richness_se = sd(Richness)/sqrt(n()),
-            Shannon_mean = mean(Shannon), 
-            Shannon_se = sd(Shannon)/sqrt(n()))
+  dplyr::group_by(year, island_side, island_side_habitat, site, habitat, site_habitat) %>%
+  dplyr::summarise(richness_mean = mean(richness), 
+            richness_se = sd(richness)/sqrt(n()),
+            shannon_mean = mean(shannon), 
+            shannon_se = sd(shannon)/sqrt(n()))
 
 #CALLIE ADDED
 #if you need to export this:
 #alpha_export <- left_join(alpha_diversity, alpha_diversity_means)
 #write_csv(alpha_export, here("data", "algae_alpha_diversity.csv"))
 
-site_colours <- c("LTER 1" = "cornflowerblue",
-               "LTER 2" = "darkblue",
-               "LTER 3" = "yellowgreen",
-               "LTER 4" = "forestgreen",
-               "LTER 5" = "mediumorchid",
-               "LTER 6" = "orange")
-island_side_colours <- c("North" = "darkblue",
-                         "East" = "mediumorchid",
-                         "West" = "orange")
-habitat_linetypes <- c("Fringing" = "solid",
-                       "Backreef" = "longdash",
-                       "Outer 10" = "twodash",
-                       "Outer 17" = "dotted")
-habitat_shapes <- c("Fringing" = 16,
-                     "Backreef" = 17,
-                     "Outer 10" = 1,
-                     "Outer 17" = 2)
+site_colours <- c("lter_1" = "cornflowerblue",
+                  "lter_2" = "darkblue",
+                  "lter_3" = "yellowgreen",
+                  "lter_4" = "forestgreen",
+                  "lter_5" = "mediumorchid",
+                  "lter_6" = "orange")
+island_side_colours <- c("north" = "darkblue",
+                         "east" = "mediumorchid",
+                         "west" = "orange")
+habitat_linetypes <- c("fringing" = "solid",
+                       "backreef" = "longdash",
+                       "outer_10" = "twodash",
+                       "outer_17" = "dotted")
+habitat_shapes <- c("fringing" = 16,
+                     "backreef" = 17,
+                     "outer_10" = 1,
+                     "outer_17" = 2)
 
 (richness_plot <-
   ggplot(data = alpha_diversity_means) +
-  geom_point(aes(x = Year, y = Richness_mean, colour = Island_side, shape = Habitat, group = Island_side_habitat), size = 8) +
-  geom_line(aes(x = Year, y = Richness_mean, colour = Island_side, group = Island_side_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Richness_mean - Richness_se , ymax = Richness_mean + Richness_se, colour = Island_side,
-                    group = Island_side_habitat), width = 0.5, size = 1.2) +
+  geom_point(aes(x = year, y = richness_mean, colour = island_side, shape = habitat, group = island_side_habitat), size = 8) +
+  geom_line(aes(x = year, y = richness_mean, colour = island_side, group = island_side_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = richness_mean - richness_se , ymax = richness_mean + richness_se, colour = island_side,
+                    group = island_side_habitat), width = 0.5, size = 1.2) +
   scale_colour_manual(values = island_side_colours) +
   scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Habitat)+
-  labs(title = "a. Richness\n", y = "Richness\n") +
+  facet_wrap(~habitat)+
+  labs(title = "a. richness\n", y = "richness\n") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
@@ -156,14 +156,14 @@ habitat_shapes <- c("Fringing" = 16,
   
 (shannon_plot <-
   ggplot(data = alpha_diversity_means) +
-  geom_point(aes(x = Year, y = Shannon_mean, colour = Island_side, shape = Habitat, group = Island_side_habitat), size = 8) +
-  geom_line(aes(x = Year, y = Shannon_mean, colour = Island_side, group = Island_side_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Shannon_mean - Shannon_se , ymax = Shannon_mean + Shannon_se, colour = Island_side,
-                    group = Island_side_habitat), width = 0.5, size = 1.2) +
+  geom_point(aes(x = year, y = shannon_mean, colour = island_side, shape = habitat, group = island_side_habitat), size = 8) +
+  geom_line(aes(x = year, y = shannon_mean, colour = island_side, group = island_side_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = shannon_mean - shannon_se , ymax = shannon_mean + shannon_se, colour = island_side,
+                    group = island_side_habitat), width = 0.5, size = 1.2) +
   scale_colour_manual(values = island_side_colours) +
   scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Habitat)+
-  labs(title = "b. Shannon\n", y = "shannon\n") +
+  facet_wrap(~habitat)+
+  labs(title = "b. shannon\n", y = "shannon\n") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
@@ -199,36 +199,36 @@ ggarrange(richness_plot + rremove("x.text"), shannon_plot, common.legend = T,
 ```{r alpha diversity quadrat level, fig.height = 15, fig.width=20}
 alpha_diversity_quad <-
   data.frame(
-    Year = as.numeric(data$Year),
-    Location = as.factor(data$Location),
-    Island_side = as.factor(data$Island_side),
-    Island_side_habitat = as.factor(data$Island_side_habitat),
-    Site = as.factor(data$Site),
-    Habitat = as.factor(data$Habitat),
-    Site_habitat = as.factor(data$Site_habitat),
-    Transect = as.factor(data$Transect),
-    Site_habitat_transect = as.factor(paste(data$Site_habitat, data$Transect)),
-    Shannon = diversity(data[ , -which(names(data) %in% meta_cols)], "shannon"),
-    Richness = rowSums(data[ , -which(names(data) %in% meta_cols)] > 0)
+    year = as.numeric(data$year),
+    location = as.factor(data$location),
+    island_side = as.factor(data$island_side),
+    island_side_habitat = as.factor(data$island_side_habitat),
+    site = as.factor(data$site),
+    habitat = as.factor(data$habitat),
+    site_habitat = as.factor(data$site_habitat),
+    transect = as.factor(data$transect),
+    site_habitat_transect = as.factor(paste(data$site_habitat, data$transect)),
+    shannon = diversity(data[ , -which(names(data) %in% meta_cols)], "shannon"),
+    richness = rowSums(data[ , -which(names(data) %in% meta_cols)] > 0)
   )
 
 alpha_diversity_quad_means <- alpha_diversity_quad %>%
-  dplyr::group_by(Year, Island_side, Island_side_habitat, Site, Habitat, Site_habitat) %>%
-  dplyr::summarise(Richness_mean = mean(Richness), 
-            Richness_se = sd(Richness)/sqrt(n()),
-            Shannon_mean = mean(Shannon), 
-            Shannon_se = sd(Shannon)/sqrt(n()))
+  dplyr::group_by(year, island_side, island_side_habitat, site, habitat, site_habitat) %>%
+  dplyr::summarise(richness_mean = mean(richness), 
+            richness_se = sd(richness)/sqrt(n()),
+            shannon_mean = mean(shannon), 
+            shannon_se = sd(shannon)/sqrt(n()))
 
 (richness_quad_plot <-
   ggplot(data = alpha_diversity_quad_means) +
-  geom_point(aes(x = Year, y = Richness_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8) +
-  geom_line(aes(x = Year, y = Richness_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Richness_mean - Richness_se , ymax = Richness_mean + Richness_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
+  geom_point(aes(x = year, y = richness_mean, colour = site, shape = habitat, group = site_habitat), size = 8) +
+  geom_line(aes(x = year, y = richness_mean, colour = site, group = site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = richness_mean - richness_se , ymax = richness_mean + richness_se, colour = site,
+                    group = site_habitat), width = 0.5, size = 1.2) +
   scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Habitat)+
-  labs(title = "a. Richness quad level\n", y = "Richness\n") +
+  facet_wrap(~habitat)+
+  labs(title = "a. richness quad level\n", y = "richness\n") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
@@ -252,14 +252,14 @@ alpha_diversity_quad_means <- alpha_diversity_quad %>%
   
 (shannon_quad_plot <-
   ggplot(data = alpha_diversity_quad_means) +
-  geom_point(aes(x = Year, y = Shannon_mean, colour = Island_side, shape = Habitat, group = Island_side_habitat), size = 8) +
-  geom_line(aes(x = Year, y = Shannon_mean, colour = Island_side, group = Island_side_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Shannon_mean - Shannon_se , ymax = Shannon_mean + Shannon_se, colour = Island_side,
-                    group = Island_side_habitat), width = 0.5, size = 1.2) +
+  geom_point(aes(x = year, y = shannon_mean, colour = island_side, shape = habitat, group = island_side_habitat), size = 8) +
+  geom_line(aes(x = year, y = shannon_mean, colour = island_side, group = island_side_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = shannon_mean - shannon_se , ymax = shannon_mean + shannon_se, colour = island_side,
+                    group = island_side_habitat), width = 0.5, size = 1.2) +
   scale_colour_manual(values = island_side_colours) +
   scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Habitat)+
-  labs(title = "b. Shannon quad level\n", y = "shannon\n") +
+  facet_wrap(~habitat)+
+  labs(title = "b. shannon quad level\n", y = "shannon\n") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
@@ -284,6 +284,7 @@ alpha_diversity_quad_means <- alpha_diversity_quad %>%
 
 
 ```
+
 ```{r compare quad and transect level plots, fig.height = 30, fig.width= 40}
 ggarrange(richness_plot + rremove("x.text"), richness_quad_plot + rremove("x.text"),
           shannon_plot,shannon_quad_plot,
@@ -291,33 +292,34 @@ ggarrange(richness_plot + rremove("x.text"), richness_quad_plot + rremove("x.tex
           nrow = 2, ncol = 2)
 
 ```
+
 ```{r gam approach}
 # NOTE: Not sure where I'm going with this yet
 # Idea is to look at smoother estimates for each time series to get an idea for the "shape" of the time series
 # Not sure if worthwhile, might skip
 
 # The below takes 17 years to run in and of itself
-# gam_model <- gam(Richness ~ s(Year) + s(Year, by = Habitat) + 
-#                  s(Island_side, bs = "re") + s(Transect, bs = "re") + s(Location, bs = "re"),
+# gam_model <- gam(richness ~ s(year) + s(year, by = habitat) + 
+#                  s(island_side, bs = "re") + s(transect, bs = "re") + s(location, bs = "re"),
 #                  data = alpha_diversity_quad, family = poisson())
 
 
 
-gam_columns <- c("Location", "Intercept", "edf") # names of columns for dataframe
+gam_columns <- c("location", "Intercept", "edf") # names of columns for dataframe
 gam_coefficients <- # new dataframe name - same workflow as above
-  data.frame(matrix(nrow = length(unique(alpha_diversity_quad$Location)),
+  data.frame(matrix(nrow = length(unique(alpha_diversity_quad$location)),
                     ncol = length(gam_columns))
              )
 colnames(gam_coefficients) <- gam_columns # change column names to what was specified
-gam_coefficients$Location <- levels(alpha_diversity_quad$Location) # populate Location column with each quad/time series
+gam_coefficients$location <- levels(alpha_diversity_quad$location) # populate location column with each quad/time series
 
 # same workflow as *below (I did gls first originally)
-for(i in 1:length(unique(alpha_diversity_quad$Location)) ){ # for each  quadrat
+for(i in 1:length(unique(alpha_diversity_quad$location)) ){ # for each  quadrat
   # create a new dataframe for the quadrat of the current iteration
-  newData <- subset(alpha_diversity_quad, Location == levels(alpha_diversity_quad$Location)[i]) 
+  newData <- subset(alpha_diversity_quad, location == levels(alpha_diversity_quad$location)[i]) 
   
   # fit gam for current time series
-  loop_mod <- gamm(Richness ~ s(Year), data = newData, correlation = corCAR1(form = ~ Year), method = "REML", family = poisson)
+  loop_mod <- gamm(richness ~ s(year), data = newData, correlation = corCAR1(form = ~ year), method = "REML", family = poisson)
   loop_sum <- summary(loop_mod$gam) # store summary data
   # populate appropriate row and column with the relevant coeffcients from gls
   gam_coefficients[i, 2] <- unname(loop_sum$p.coeff)
@@ -327,9 +329,9 @@ for(i in 1:length(unique(alpha_diversity_quad$Location)) ){ # for each  quadrat
 
 hist(gam_coefficients$Intercept)
 hist(gam_coefficients$edf) # generally around 1 except for an outlier
-# LTER 5 Fringing Reef Algae Transect 3 Quad 6 - a quadrat that has almost no algae the entire time series
+# lter_5 fringing Reef Algae transect 3 Quad 6 - a quadrat that has almost no algae the entire time series
 # issues with quadrat - smaller sample = more 0s, makes modeling trickier
-hist(subset(gam_coefficients, Location != "LTER 5 Fringing Reef Algae Transect 3 Quad 6")$edf)
+hist(subset(gam_coefficients, location != "lter_5 fringing Reef Algae transect 3 Quad 6")$edf)
 sum(gam_coefficients$edf > 1.01) # all but 18/1200 quadrats can be fit by a smoother with edf < 1.01
 # trends more straightforward than I anticipated?
 # argument for just looking at mean richness and slope?
@@ -339,20 +341,20 @@ sum(gam_coefficients$edf > 1.01) # all but 18/1200 quadrats can be fit by a smoo
 
 # FRAMING: What is the general trend in algal alpha diversity over the course of the time series? Increasing, decreasing, neutral?
 
-columns <- c("Location", "Intercept", "Slope") # names of columns for dataframe
+columns <- c("location", "Intercept", "Slope") # names of columns for dataframe
 gls_coefficients <- # new dataframe name
-  data.frame(matrix(nrow = length(unique(alpha_diversity_quad$Location)), # 1200 quadrats = 1200 different time series
+  data.frame(matrix(nrow = length(unique(alpha_diversity_quad$location)), # 1200 quadrats = 1200 different time series
                     ncol = length(columns)) # specified to make sure number of columns doesn't exceed what was specified
              )
 colnames(gls_coefficients) <- columns # change column names to what was specified
-gls_coefficients$Location <- levels(alpha_diversity_quad$Location) # populate Location column with each quad/time series
+gls_coefficients$location <- levels(alpha_diversity_quad$location) # populate location column with each quad/time series
 
-for(i in 1:length(unique(alpha_diversity_quad$Location)) ){ # for each  quadrat
+for(i in 1:length(unique(alpha_diversity_quad$location)) ){ # for each  quadrat
   # create a new dataframe for the quadrat of the current iteration
-  newData <- subset(alpha_diversity_quad, Location == levels(alpha_diversity_quad$Location)[i]) 
+  newData <- subset(alpha_diversity_quad, location == levels(alpha_diversity_quad$location)[i]) 
   
   # fit gls for current time series
-  loop_mod <- gls(Richness ~ Year, correlation =corAR1(form=~Year), data = newData)
+  loop_mod <- gls(richness ~ year, correlation =corAR1(form=~year), data = newData)
   
   # populate appropriate row and column with the relevant coeffcients from gls
   gls_coefficients[i, 2] <- unname(coef(loop_mod)[1])
@@ -365,30 +367,30 @@ hist(gls_coefficients$Slope) # looks basically normal, bounded -Inf, Inf
 hist(gls_coefficients$Intercept) # same with intercept - although it probably shouldn't be
 
 # Start adding back in relevant metadata - probably a more elegant way to do this!!!
-habitat_vector <- c(rep("Backreef", 50), rep("Fringing", 50), rep("Outer 10", 50), rep("Outer 17", 50))
+habitat_vector <- c(rep("backreef", 50), rep("fringing", 50), rep("outer_10", 50), rep("outer_17", 50))
 transect_sequence <- c(rep(1,10),
                        rep(2,10),
                        rep(3,10),
                        rep(4,10),
                        rep(5,10))
 extra_meta <- 
-  data.frame(Site = as.factor(c(rep("LTER 1", 200),
-                                rep("LTER 2", 200),
-                                rep("LTER 3", 200),
-                                rep("LTER 4", 200),
-                                rep("LTER 5", 200),
-                                rep("LTER 6", 200)) ),
-             Island_side = as.factor(c(rep("North", 400),
-                                     rep("East", 400),
-                                     rep("West", 400))
+  data.frame(site = as.factor(c(rep("lter_1", 200),
+                                rep("lter_2", 200),
+                                rep("lter_3", 200),
+                                rep("lter_4", 200),
+                                rep("lter_5", 200),
+                                rep("lter_6", 200)) ),
+             island_side = as.factor(c(rep("north", 400),
+                                     rep("east", 400),
+                                     rep("west", 400))
                                      ),
-             Habitat = as.factor(rep(habitat_vector, 6 )),
-             Transect = as.factor(rep(transect_sequence, 240)),
-             Location = levels(alpha_diversity_quad$Location) )
+             habitat = as.factor(rep(habitat_vector, 6 )),
+             transect = as.factor(rep(transect_sequence, 240)),
+             location = levels(alpha_diversity_quad$location) )
 
-gls_coefficients_merged <- merge(gls_coefficients, extra_meta, by = "Location")             
+gls_coefficients_merged <- merge(gls_coefficients, extra_meta, by = "location")             
 
-slope_mod <- glmmTMB(Slope ~ Habitat*Site + (1|Site/Transect), data = gls_coefficients_merged)
+slope_mod <- glmmTMB(Slope ~ habitat*site + (1|site/transect), data = gls_coefficients_merged)
 # model convergence problem
 summary(slope_mod) # pretty low variance in random effects
 plot(gls_res <- simulateResiduals(slope_mod)) # there are issues, but I can't figure out what they are...
@@ -398,24 +400,24 @@ plot(predict(slope_mod) ~ residuals(slope_mod))
 Anova(slope_mod)
 # Response: Slope
 #                 Chisq Df Pr(>Chisq)    
-# Habitat      1397.999  3  < 2.2e-16 ***
-# Site           39.095  5  2.273e-07 ***
-# Habitat:Site 1738.155 15  < 2.2e-16 ***
+# habitat      1397.999  3  < 2.2e-16 ***
+# site           39.095  5  2.273e-07 ***
+# habitat:site 1738.155 15  < 2.2e-16 ***
 r.squaredGLMM(slope_mod) # 0.22, 0.24
 plot(allEffects(slope_mod))
-# Backreef: richness increases on East and North shore, but relatively constant west side
+# backreef: richness increases on east and north shore, but relatively constant west side
 # Fringe: richness decreasing on east and west side, but relatvely constant on north shore
-# Outer 10: Richness neutral/decreasing on east side, but neutral/increasing on north and west side
-# Outer 17: Richness decreasing north/east side, but neutral west side
+# outer_10: richness neutral/decreasing on east side, but neutral/increasing on north and west side
+# outer_17: richness decreasing north/east side, but neutral west side
 # Worth noting trends are slight - arguable whether they are biologically meaningful
 
 
 
 
-slope_emm <- emmeans(slope_mod, ~ Habitat*Site) # create emmeans object
+slope_emm <- emmeans(slope_mod, ~ habitat*site) # create emmeans object
 emmeans::contrast(slope_emm, "consec", simple = "each", combine = TRUE, adjust = "bonferroni")
 # Note: not sure I want to include this
-emmeans(slope_mod, pairwise ~ Site | Habitat)
+emmeans(slope_mod, pairwise ~ site | habitat)
 ```
 
 
@@ -426,7 +428,7 @@ emmeans(slope_mod, pairwise ~ Site | Habitat)
 ggplot(data = gls_coefficients_merged) +
   geom_histogram(aes(x = Slope), bins = 30) +
   geom_vline(xintercept = 0, size = 2, linetype = 2) +
-  facet_grid(Habitat ~ Site) +
+  facet_grid(habitat ~ site) +
 #  theme_classic() +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
@@ -445,7 +447,7 @@ ggplot(data = gls_coefficients_merged) +
 ```
 
 ```{r gls intercept, fig.height=20, fig.width=20}
-intercept_mod <- glmmTMB(Intercept ~ Habitat*Island_side + (1|Site/Transect), data = gls_coefficients_merged)
+intercept_mod <- glmmTMB(Intercept ~ habitat*island_side + (1|site/transect), data = gls_coefficients_merged)
 summary(intercept_mod) # a lot of variance w/i transect, less so w/i site
 plot(gls_int_res <- simulateResiduals(intercept_mod)) # same issues as above
 
@@ -453,16 +455,16 @@ hist(residuals(intercept_mod))
 plot(predict(intercept_mod) ~ residuals(intercept_mod))
 Anova(intercept_mod)
 #                        Chisq Df Pr(>Chisq)    
-# Habitat             1307.838  3  < 2.2e-16 ***
-# Island_side           26.358  2  1.889e-06 ***
-# Habitat:Island_side  789.627  6  < 2.2e-16 ***
+# habitat             1307.838  3  < 2.2e-16 ***
+# island_side           26.358  2  1.889e-06 ***
+# habitat:island_side  789.627  6  < 2.2e-16 ***
 r.squaredGLMM(intercept_mod) # 0.16, 0.18
 plot(allEffects(intercept_mod))
 
 ggplot(data = gls_coefficients_merged) +
   geom_histogram(aes(x = Intercept), bins = 30) +
   geom_vline(xintercept = 0, size = 2, linetype = 2) +
-  facet_grid(Habitat ~ Island_side) +
+  facet_grid(habitat ~ island_side) +
 #  theme_classic() +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
@@ -484,11 +486,11 @@ ggplot(data = gls_coefficients_merged) +
 
 
 ```{r glmm approach}
-alpha_diversity_quad$Year_factor <- as.factor(alpha_diversity_quad$Year) # for glmmTMB ar1 structure
+alpha_diversity_quad$year_factor <- as.factor(alpha_diversity_quad$year) # for glmmTMB ar1 structure
 # Framing - is adiv generally higher in certain habitats/regions?
 
 # richness_mod <- glmmTMB(
-#   Richness ~ Island_side*Habitat + (1 | Island_side/Site/Transect/Location) + ar1(Year_factor + 0 | Location),
+#   richness ~ island_side*habitat + (1 | island_side/site/transect/location) + ar1(year_factor + 0 | location),
 #   family = poisson,
 #   data = alpha_diversity_quad,
 #   control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000))
@@ -499,7 +501,7 @@ alpha_diversity_quad$Year_factor <- as.factor(alpha_diversity_quad$Year) # for g
 
 # probably the closest to what others have done:
 richness_mod_2 <- glmmTMB(
-  Richness ~ Year_factor*Habitat*Site + (1 | Site/Transect/Location) + ar1(Year_factor + 0 | Location),
+  richness ~ year_factor*habitat*site + (1 | site/transect/location) + ar1(year_factor + 0 | location),
   family = poisson,
   data = alpha_diversity_quad,
   control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000)), na.action = na.pass
@@ -508,26 +510,26 @@ richness_mod_2 <- glmmTMB(
 summary(richness_mod_2) # looks like strong autocorrelation, which makes sense to me
 Anova(richness_mod_2)
 plot(allEffects(richness_mod_2))
-# emmeans(richness_mod_2, pairwise ~ Habitat | Year_factor) # if we want to compare habitats year to year
+# emmeans(richness_mod_2, pairwise ~ habitat | year_factor) # if we want to compare habitats year to year
 # model.sel(dredge(richness_mod_2))
 
-top_rich_mod <- glmmTMB(Richness ~ Year_factor*Habitat + Year_factor*Site + (1 | Site/Transect/Location) + ar1(Year_factor + 0 | Location),   family = poisson, data = alpha_diversity_quad, control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000)))
+top_rich_mod <- glmmTMB(richness ~ year_factor*habitat + year_factor*site + (1 | site/transect/location) + ar1(year_factor + 0 | location),   family = poisson, data = alpha_diversity_quad, control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000)))
 summary(top_rich_mod)
 Anova(top_rich_mod)
 ```
 ```{r turnover troubleshooting, fig.height = 30, fig.width=25}
 
-transect_level$Site_habitat <-  paste(transect_level$Site, transect_level$Habitat)
-transect_level$Stratum <- paste(transect_level$Site, "-", transect_level$Habitat, "-", transect_level$Transect)
+transect_level$site_habitat <-  paste(transect_level$site, transect_level$habitat)
+transect_level$stratum <- paste(transect_level$site, "-", transect_level$habitat, "-", transect_level$transect)
 
-# long_data$Site_habitat <-  paste(long_data$Site, long_data$Habitat)
-# long_data$Stratum <- paste(long_data$Site, "-", long_data$Habitat, "-", long_data$Transect)
+# long_data$site_habitat <-  paste(long_data$site, long_data$habitat)
+# long_data$stratum <- paste(long_data$site, "-", long_data$habitat, "-", long_data$transect)
 
 # turnover analyses break when I try to do it at the quadrat level
 # checking if it's because there are quadrats that have effecively 0% algae
 total_cover_per_quadrat_year <- long_data %>%
-  group_by(Location, Year) %>%
-  summarize(total_cover = sum(Percent_cover), .groups = 'drop')
+  group_by(location, year) %>%
+  summarize(total_cover = sum(percent_cover), .groups = 'drop')
 
 # Filter quadrats where the total percent cover is 0%
 zero_cover_quadrats <- total_cover_per_quadrat_year %>%
@@ -535,19 +537,19 @@ zero_cover_quadrats <- total_cover_per_quadrat_year %>%
 
 # Count the number of years each quadrat had 0% cover
 zero_cover_count <- zero_cover_quadrats %>%
-  group_by(Location) %>%
+  group_by(location) %>%
   summarize(years_with_zero_cover = n())
 
 # Filter quadrats that had 0% cover for multiple years
 quadrats_multiple_years_zero_cover <- zero_cover_count %>%
   filter(years_with_zero_cover > 1)
 
-length(unique(quadrats_multiple_years_zero_cover$Location)) # 144/1200 quadrats have multiple years with no algal cover
+length(unique(quadrats_multiple_years_zero_cover$location)) # 144/1200 quadrats have multiple years with no algal cover
 
 # compare this to the number of transects with 0 algae cover
 total_cover_per_transect_year <- transect_level %>%
-  group_by(Stratum, Year) %>%
-  summarize(total_cover = sum(Mean_cover), .groups = 'drop')
+  group_by(stratum, year) %>%
+  summarize(total_cover = sum(mean_cover), .groups = 'drop')
 
 # Filter quadrats where the total percent cover is 0%
 zero_cover_transects <- total_cover_per_transect_year %>%
@@ -555,7 +557,7 @@ zero_cover_transects <- total_cover_per_transect_year %>%
 
 # Count the number of years each quadrat had 0% cover
 zero_cover_transect_count <- zero_cover_transects %>%
-  group_by(Stratum) %>%
+  group_by(stratum) %>%
   summarize(years_with_zero_cover = n())
 
 # Filter quadrats that had 0% cover for multiple years
@@ -566,28 +568,28 @@ transects_multiple_years_zero_cover <- zero_cover_transect_count %>%
 # Fairly certain this is why the turnover analyses are breaking
 
 # identify quadrats missing timepoints
-years <- unique(long_data$Year)
-quadrats <- unique(long_data$Location)
+years <- unique(long_data$year)
+quadrats <- unique(long_data$location)
 
 # Create a dataframe with all combinations of quadrats and years
-all_combinations <- expand.grid(Location = quadrats, Year = years)
+all_combinations <- expand.grid(location = quadrats, year = years)
 
 # Identify the missing combinations by performing an anti-join with your actual data
-missing_timepoints <- anti_join(all_combinations, long_data, by = c("Location", "Year"))
+missing_timepoints <- anti_join(all_combinations, long_data, by = c("location", "year"))
 
 # Display the missing timepoints
 print(missing_timepoints)
 
 problem_children <- c(
-                      "LTER 5 Fringing Reef Algae Transect 3 Quad 9",
-                      "LTER 5 Fringing Reef Algae Transect 3 Quad 8",
-                      "LTER 5 Fringing Reef Algae Transect 3 Quad 6",
-                      "LTER 5 Fringing Reef Algae Transect 3 Quad 3",
-                      "LTER 5 Fringing Reef Algae Transect 3 Quad 10")
+                      "lter_5_fringing_reef_algae_transect_3_quad_9",
+                      "lter_5_fringing_reef_algae_transect_3_quad_8",
+                      "lter_5_fringing_reef_algae_transect_3_quad_6",
+                      "lter_5_fringing_reef_algae_transect_3_quad_3",
+                      "lter_5_fringing_reef_algae_transect_3_quad_10")
 
-long_data_sub <- long_data[!long_data$Location %in% problem_children, ] # remove problem children
+long_data_sub <- long_data[!long_data$location %in% problem_children, ] # remove problem children
 
-data_sub <- data[!data$Location %in% problem_children, ]
+data_sub <- data[!data$location %in% problem_children, ]
 
 ```
 
@@ -596,15 +598,15 @@ data_sub <- data[!data$Location %in% problem_children, ]
 total_turnover<-
   turnover(
   df = long_data_sub,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Percent_cover",
-  replicate.var = "Location",
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "location",
   metric = "total"
 )
 
 # get relevant metadata for turnover metrics
-data_sub <- data[paste(data$Year, data$Location) %in% paste(total_turnover$Year, total_turnover$Location), ]
+data_sub <- data[paste(data$year, data$location) %in% paste(total_turnover$year, total_turnover$location), ]
 
 # check to make sure everything is the same length
 # nrow(data_sub) # 17829
@@ -614,8 +616,8 @@ data_sub <- data[paste(data$Year, data$Location) %in% paste(total_turnover$Year,
 turnover_meta <- data_sub[ ,which(names(data_sub) %in% meta_cols)]
 
 # merge with turnover df
-total_turnover <- merge(total_turnover, turnover_meta, by = c("Year", "Location"))
-total_turnover$Year_factor <- as.factor(total_turnover$Year)
+total_turnover <- merge(total_turnover, turnover_meta, by = c("year", "location"))
+total_turnover$year_factor <- as.factor(total_turnover$year)
 
 # turnover bounded between 0 and 1 --> beta regression
 # need to transform due to presence of 0s and 1s
@@ -629,14 +631,14 @@ sv_trans = function(prop, N, s = 0.000005){
 total_turnover$Turnover_trans <- sv_trans(total_turnover$total, total_turnover)
 
 # model
-total_turnover_mod1 <- glmmTMB(Turnover_trans ~ Year_factor*Habitat*Site +
-                                 (1 | Site/Transect/Location) + ar1(Year_factor + 0 | Location),
+total_turnover_mod1 <- glmmTMB(Turnover_trans ~ year_factor*habitat*site +
+                                 (1 | site/transect/location) + ar1(year_factor + 0 | location),
                                family = beta_family(), data = total_turnover)
 summary(total_turnover_mod1) # low temporal autocorrelation... maybe don't need ar1 term?
 plot(total_turnover_res <- simulateResiduals(total_turnover_mod1)) # residuals look very weird
 Anova(total_turnover_mod1) # obviously everything sig
 
-total_turnover_mod2 <- glmmTMB(Turnover_trans ~ Year_factor*Habitat*Site + (1 | Site/Transect/Location),
+total_turnover_mod2 <- glmmTMB(Turnover_trans ~ year_factor*habitat*site + (1 | site/transect/location),
                                family = beta_family(), data = total_turnover)
 summary(total_turnover_mod2) # 
 plot(total_turnover_res2 <- simulateResiduals(total_turnover_mod2)) # residuals still look like shit
@@ -651,19 +653,19 @@ plot(allEffects(total_turnover_mod1))
 # plot
 total_turnover_means <-
   total_turnover %>%
-  dplyr::group_by(Year, Island_side, Site, Habitat, Site_habitat) %>%
+  dplyr::group_by(year, island_side, site, habitat, site_habitat) %>%
   dplyr::summarise(Turnover_mean = mean(total), 
             Turnover_se = sd(total)/sqrt(n()))
 
 (turnover_plot <-
   ggplot(data = total_turnover_means) +
-  geom_point(aes(x = Year, y = Turnover_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = Year, y = Turnover_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Turnover_mean - Turnover_se , ymax = Turnover_mean + Turnover_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
+  geom_point(aes(x = year, y = Turnover_mean, colour = site, shape = habitat, group = site_habitat), size = 8, stroke = 2) +
+  geom_line(aes(x = year, y = Turnover_mean, colour = site, group = site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = Turnover_mean - Turnover_se , ymax = Turnover_mean + Turnover_se, colour = site,
+                    group = site_habitat), width = 0.5, size = 1.2) +
   scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site_habitat, nrow = 6)+
+  facet_wrap(~site_habitat, nrow = 6)+
   labs(title = "a. Turnover\n", y = "Total turnover\n") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
@@ -695,26 +697,26 @@ total_turnover_means <-
 appearance <-
   turnover(
   df = long_data_sub,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Percent_cover",
-  replicate.var = "Location",
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "location",
   metric = "appearance"
 )
 
-appearance <- merge(turnover_meta, appearance, by = c("Year", "Location"))
+appearance <- merge(turnover_meta, appearance, by = c("year", "location"))
 appearance$Appearance_trans <- sv_trans(appearance$appearance, appearance)
-appearance$Year_factor <- as.factor(appearance$Year)
+appearance$year_factor <- as.factor(appearance$year)
 
 # model
-appearance_turnover_mod1 <- glmmTMB(Appearance_trans ~ Year_factor*Habitat*Site +
-                                 (1 | Site/Transect/Location) + ar1(Year_factor + 0 | Location),
+appearance_turnover_mod1 <- glmmTMB(Appearance_trans ~ year_factor*habitat*site +
+                                 (1 | site/transect/location) + ar1(year_factor + 0 | location),
                                family = beta_family(), data = appearance)
 summary(appearance_turnover_mod1) # low temporal autocorrelation and it's negative
 plot(appearance_turnover_res <- simulateResiduals(appearance_turnover_mod1)) # similar residuals problem
 Anova(appearance_turnover_mod1) # obviously everything sig
 
-appearance_turnover_mod2 <- glmmTMB(Appearance_trans ~ Year_factor*Habitat*Site + (1 | Site/Transect/Location),
+appearance_turnover_mod2 <- glmmTMB(Appearance_trans ~ year_factor*habitat*site + (1 | site/transect/location),
                                family = beta_family(), data = appearance)
 summary(appearance_turnover_mod2) # 
 plot(appearance_turnover_res2 <- simulateResiduals(appearance_turnover_mod2)) #
@@ -726,19 +728,19 @@ plot(allEffects(appearance_turnover_mod1))
 
 appearance_means <-
   appearance %>%
-  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  dplyr::group_by(year, site, habitat, site_habitat) %>%
   dplyr::summarise(Appearance_mean = mean(appearance), 
             Appearance_se = sd(appearance)/sqrt(n()))
 
 (appearance_plot <-
   ggplot(data = appearance_means) +
-  geom_point(aes(x = Year, y = Appearance_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = Year, y = Appearance_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Appearance_mean - Appearance_se , ymax = Appearance_mean + Appearance_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
+  geom_point(aes(x = year, y = Appearance_mean, colour = site, shape = habitat, group = site_habitat), size = 8, stroke = 2) +
+  geom_line(aes(x = year, y = Appearance_mean, colour = site, group = site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = Appearance_mean - Appearance_se , ymax = Appearance_mean + Appearance_se, colour = site,
+                    group = site_habitat), width = 0.5, size = 1.2) +
   scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site_habitat, nrow = 6)+
+  facet_wrap(~site_habitat, nrow = 6)+
   labs(title = "b. Appearances\n", y = "Total turnover\n") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
@@ -767,26 +769,26 @@ appearance_means <-
 disappearance <-
   turnover(
   df = long_data_sub,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Percent_cover",
-  replicate.var = "Location",
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "location",
   metric = "disappearance"
 )
 
-disappearance <- merge(turnover_meta, disappearance, by = c("Year", "Location"))
+disappearance <- merge(turnover_meta, disappearance, by = c("year", "location"))
 disappearance$Disappearance_trans <- sv_trans(disappearance$disappearance, disappearance)
-disappearance$Year_factor <- as.factor(disappearance$Year)
+disappearance$year_factor <- as.factor(disappearance$year)
 
 # model
-disappearance_turnover_mod1 <- glmmTMB(Disappearance_trans ~ Year_factor*Habitat*Site +
-                                 (1 | Site/Transect/Location) + ar1(Year_factor + 0 | Location),
+disappearance_turnover_mod1 <- glmmTMB(Disappearance_trans ~ year_factor*habitat*site +
+                                 (1 | site/transect/location) + ar1(year_factor + 0 | location),
                                family = beta_family(), data = disappearance)
 summary(disappearance_turnover_mod1) # strong autocorrelation here
 plot(disappearance_turnover_res <- simulateResiduals(disappearance_turnover_mod1)) # 
 Anova(disappearance_turnover_mod1) # 
 
-disappearance_turnover_mod2 <- glmmTMB(Disappearance_trans ~ Year_factor*Habitat*Site + (1 | Site/Transect/Location),
+disappearance_turnover_mod2 <- glmmTMB(Disappearance_trans ~ year_factor*habitat*site + (1 | site/transect/location),
                                family = beta_family(), data = disappearance)
 summary(disappearance_turnover_mod2) # 
 plot(disappearance_turnover_res2 <- simulateResiduals(disappearance_turnover_mod2)) #
@@ -798,19 +800,19 @@ plot(allEffects(disappearance_turnover_mod1))
 
 disappearance_means <-
   disappearance %>%
-  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  dplyr::group_by(year, site, habitat, site_habitat) %>%
   dplyr::summarise(Disappearance_mean = mean(disappearance), 
             Disappearance_se = sd(disappearance)/sqrt(n()))
 
 (disappearance_plot <-
   ggplot(data = disappearance_means) +
-  geom_point(aes(x = Year, y = Disappearance_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = Year, y = Disappearance_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Disappearance_mean - Disappearance_se , ymax = Disappearance_mean + Disappearance_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
+  geom_point(aes(x = year, y = Disappearance_mean, colour = site, shape = habitat, group = site_habitat), size = 8, stroke = 2) +
+  geom_line(aes(x = year, y = Disappearance_mean, colour = site, group = site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = Disappearance_mean - Disappearance_se , ymax = Disappearance_mean + Disappearance_se, colour = site,
+                    group = site_habitat), width = 0.5, size = 1.2) +
   scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site_habitat, nrow = 6)+
+  facet_wrap(~site_habitat, nrow = 6)+
   labs(title = "c. Disappearance\n", y = "Total turnover\n") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
@@ -840,33 +842,33 @@ disappearance_means <-
 rank_shift<-
   rank_shift(
   df = long_data_sub,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Percent_cover",
-  replicate.var = "Location"
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "location"
 )
 
 
-rank_shift <- merge(turnover_meta, rank_shift, by = c("Location"))
+rank_shift <- merge(turnover_meta, rank_shift, by = c("location"))
 
 
 
 
 rank_shift_means <-
   rank_shift %>%
-  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  dplyr::group_by(year, site, habitat, site_habitat) %>%
   dplyr::summarise(Rank_shift_mean = mean(MRS), 
             Rank_shift_se = sd(MRS)/sqrt(n()))
 # Looks very weird - not sure what to do with this
 (rank_shift_plot <-
   ggplot(data = rank_shift_means) +
-  geom_point(aes(x = Year, y = Rank_shift_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = Year, y = Rank_shift_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Rank_shift_mean - Rank_shift_se , ymax = Rank_shift_mean + Rank_shift_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
+  geom_point(aes(x = year, y = Rank_shift_mean, colour = site, shape = habitat, group = site_habitat), size = 8, stroke = 2) +
+  geom_line(aes(x = year, y = Rank_shift_mean, colour = site, group = site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = Rank_shift_mean - Rank_shift_se , ymax = Rank_shift_mean + Rank_shift_se, colour = site,
+                    group = site_habitat), width = 0.5, size = 1.2) +
   scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site_habitat, nrow = 6)+
+  facet_wrap(~site_habitat, nrow = 6)+
   labs(title = "a. rank_shift\n", y = "Total rank_shift\n") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
@@ -893,38 +895,38 @@ rank_shift_means <-
 
 ```{r rate of change, fig.height=15, fig.width=15}
 # rate change
-long_data_sub$Percent_cover_transformed <- wisconsin(long_data_sub$Percent_cover) # wisconsin transform abundance data
+long_data_sub$percent_cover_transformed <- wisconsin(long_data_sub$percent_cover) # wisconsin transform abundance data
 
 # NOTE: the results here vary considerably if you used transformed vs untransformed data
 # Looking into way to change distance matrix from Euclidiean to something else
 rate_change_table_transformed<-
   rate_change(
   df = long_data_sub,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Percent_cover_transformed",
-  replicate.var = "Location"
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover_transformed",
+  replicate.var = "location"
 ) # summarizes rate of change for each quadrat over the course of the time series
 
 
 
-rate_change_table_transformed <- merge(turnover_meta, rate_change_table_transformed, by = "Location")
+rate_change_table_transformed <- merge(turnover_meta, rate_change_table_transformed, by = "location")
 hist(rate_change_table_transformed$rate_change)
 
-rate_change_mod1 <- glmmTMB(rate_change ~ Habitat*Site + (1|Habitat/Site/Transect), data = rate_change_table_transformed)
+rate_change_mod1 <- glmmTMB(rate_change ~ habitat*site + (1|habitat/site/transect), data = rate_change_table_transformed)
 summary(rate_change_mod1)
 plot(rc_res <- simulateResiduals(rate_change_mod1)) # some deviations, but sig likely due to large n
 Anova(rate_change_mod1)
 #                Chisq Df Pr(>Chisq)    
-# Habitat      187.988  3  < 2.2e-16 ***
-# Site          81.209  5  4.686e-16 ***
-# Habitat:Site 143.638 15  < 2.2e-16 ***
+# habitat      187.988  3  < 2.2e-16 ***
+# site          81.209  5  4.686e-16 ***
+# habitat:site 143.638 15  < 2.2e-16 ***
 plot(allEffects(rate_change_mod1))
-# Outer 17 has fewest differences
-# LTER 1 2 3 changing more than 4 5 6 at outer10
-# Backreef change highest at LTER 1 2
-# Fringing highest at LTER 1 2 6
-emmeans(rate_change_mod1, pairwise ~ Site | Habitat)
+# outer_17 has fewest differences
+# lter_1 2 3 changing more than 4 5 6 at outer10
+# backreef change highest at lter_1 2
+# fringing highest at lter_1 2 6
+emmeans(rate_change_mod1, pairwise ~ site | habitat)
 
 
 
@@ -934,38 +936,38 @@ emmeans(rate_change_mod1, pairwise ~ Site | Habitat)
 rate_change_table_untransformed<-
   rate_change(
   df = long_data_sub,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Percent_cover",
-  replicate.var = "Location"
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "location"
 ) # summarizes rate of change for each quadrat over the course of the time series
 
 
 
-rate_change_table_untransformed <- merge(turnover_meta, rate_change_table_untransformed, by = "Location")
+rate_change_table_untransformed <- merge(turnover_meta, rate_change_table_untransformed, by = "location")
 hist(rate_change_table_untransformed$rate_change)
 
-rate_change_mod2 <- glmmTMB(rate_change ~ Habitat*Site + (1|Habitat/Site/Transect), data = rate_change_table_untransformed)
+rate_change_mod2 <- glmmTMB(rate_change ~ habitat*site + (1|habitat/site/transect), data = rate_change_table_untransformed)
 summary(rate_change_mod2)
 plot(rc_res <- simulateResiduals(rate_change_mod2)) # as above
 Anova(rate_change_mod2)
 #                Chisq Df Pr(>Chisq)    
-# Habitat       39.224  3  1.556e-08 ***
-# Site          17.882  5   0.003098 ** 
-# Habitat:Site 123.014 15  < 2.2e-16 ***
+# habitat       39.224  3  1.556e-08 ***
+# site          17.882  5   0.003098 ** 
+# habitat:site 123.014 15  < 2.2e-16 ***
 plot(allEffects(rate_change_mod1))
 # eyeballing it
-# Outer 17 scarcely changing regardless of site
+# outer_17 scarcely changing regardless of site
 # Rate of change similar in backreef between sites
 # big variance between sites in outer10 and fringing
-# Outer 10: As you go around the island, sites become increasing more "stable" over time (i.e. less shift toward dissimilarity)
-# Effectively the opposite trend in Fringing - more dissimilar over time as you go around the island
-emmeans(rate_change_mod1, pairwise ~ Site | Habitat)
+# outer_10: As you go around the island, sites become increasing more "stable" over time (i.e. less shift toward dissimilarity)
+# Effectively the opposite trend in fringing - more dissimilar over time as you go around the island
+emmeans(rate_change_mod1, pairwise ~ site | habitat)
 
 ggplot(data = rate_change_table_transformed) +
-  geom_boxplot(aes(x = Site, y = rate_change, colour = Site) ) +
-  geom_jitter(aes(x = Site, y = rate_change, colour = Site), width = 0.2) +
-  facet_wrap(~Habitat) +
+  geom_boxplot(aes(x = site, y = rate_change, colour = site) ) +
+  geom_jitter(aes(x = site, y = rate_change, colour = site), width = 0.2) +
+  facet_wrap(~habitat) +
   scale_colour_manual(values = site_colours) +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
@@ -988,9 +990,9 @@ ggplot(data = rate_change_table_transformed) +
         )
 
 ggplot(data = rate_change_table_untransformed) +
-  geom_boxplot(aes(x = Site, y = rate_change, colour = Site) ) +
-  geom_jitter(aes(x = Site, y = rate_change, colour = Site), width = 0.2) +
-  facet_wrap(~Habitat) +
+  geom_boxplot(aes(x = site, y = rate_change, colour = site) ) +
+  geom_jitter(aes(x = site, y = rate_change, colour = site), width = 0.2) +
+  facet_wrap(~habitat) +
   scale_colour_manual(values = site_colours) +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
@@ -1019,29 +1021,29 @@ ggplot(data = rate_change_table_untransformed) +
 rate_change_untransformed<-
   rate_change_interval(
   df = long_data_sub,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Percent_cover",
-  replicate.var = "Location"
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "location"
 )
 
-rate_change_untransformed_distances <- merge(rate_change_untransformed, turnover_meta, by = "Location")
+rate_change_untransformed_distances <- merge(rate_change_untransformed, turnover_meta, by = "location")
 
 rate_change_transformed<-
   rate_change_interval(
   df = long_data_sub,
-  time.var = "Year",
-  species.var = "Taxa",
-  abundance.var = "Percent_cover_transformed",
-  replicate.var = "Location"
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover_transformed",
+  replicate.var = "location"
 )
 
-rate_change_transformed_distances <- merge(rate_change_transformed, turnover_meta, by = "Location")
+rate_change_transformed_distances <- merge(rate_change_transformed, turnover_meta, by = "location")
 
 
  ggplot(rate_change_untransformed_distances,
-        aes(x = interval, y = distance, colour = Site, shape = Habitat) )+
-   facet_wrap(~Habitat) + 
+        aes(x = interval, y = distance, colour = site, shape = habitat) )+
+   facet_wrap(~habitat) + 
    geom_point() +
    scale_colour_manual(values = site_colours) +
    scale_linetype_manual(values = habitat_linetypes) +
@@ -1069,8 +1071,8 @@ rate_change_transformed_distances <- merge(rate_change_transformed, turnover_met
          ) 
  
  ggplot(rate_change_transformed_distances,
-        aes(x = interval, y = distance, colour = Site, shape = Habitat) )+
-   facet_wrap(~Habitat) + 
+        aes(x = interval, y = distance, colour = site, shape = habitat) )+
+   facet_wrap(~habitat) + 
    geom_point() +
    scale_colour_manual(values = site_colours) +
    scale_linetype_manual(values = habitat_linetypes) +
@@ -1104,10 +1106,10 @@ rate_change_transformed_distances <- merge(rate_change_transformed, turnover_met
 # multi_change_untransformed <-
 #   multivariate_change(
 #    df = long_data_sub,
-#    time.var = "Year",
-#    species.var = "Taxa",
-#    abundance.var = "Percent_cover",
-#    replicate.var = "Location"
+#    time.var = "year",
+#    species.var = "taxa",
+#    abundance.var = "percent_cover",
+#    replicate.var = "location"
 #   )
 #  
 
@@ -1115,20 +1117,20 @@ rate_change_transformed_distances <- merge(rate_change_transformed, turnover_met
 
 ```{r transect level portfolio effect}
 # using Anderson et al. 2013 definitions of portfolio effects - relevant fxns in ecofolio packages
-wide_transect_level$Stratum <- as.factor(paste(wide_transect_level$Site, "-", wide_transect_level$Habitat, "-", wide_transect_level$Transect))
+wide_transect_level$stratum <- as.factor(paste(wide_transect_level$site, "-", wide_transect_level$habitat, "-", wide_transect_level$transect))
 
 
-transect_portfolio_columns <- c("Stratum", "Portfolio_effect") # names of columns for dataframe
+transect_portfolio_columns <- c("stratum", "Portfolio_effect") # names of columns for dataframe
 transect_level_portfolio <- 
-  data.frame(matrix(nrow = length(unique(wide_transect_level$Stratum)), 
+  data.frame(matrix(nrow = length(unique(wide_transect_level$stratum)), 
                     ncol = length(transect_portfolio_columns))
              )
 colnames(transect_level_portfolio) <- transect_portfolio_columns # change column 
-transect_level_portfolio$Stratum <- levels(wide_transect_level$Stratum) # populate
+transect_level_portfolio$stratum <- levels(wide_transect_level$stratum) # populate
 
-for(i in 1:length(unique(unique(wide_transect_level$Stratum))) ){ # for each  transect
+for(i in 1:length(unique(unique(wide_transect_level$stratum))) ){ # for each  transect
   # create a new dataframe for current transect
-  newData <- subset(wide_transect_level, Stratum == levels(wide_transect_level$Stratum)[i])
+  newData <- subset(wide_transect_level, stratum == levels(wide_transect_level$stratum)[i])
   current_matrix <- newData[ , -which(names(newData) %in% meta_cols)] # remove metadata columns
   if(sum(current_matrix) == 0){ # if this was a 0 algae transect
     transect_level_portfolio[i, 2] <- NA # set portfolio effects to 0
@@ -1150,47 +1152,47 @@ CV<-function(x){
 }
 
 alpha_diversity$Cover <- rowSums(wide_transect_level[ , -which(names(wide_transect_level) %in% meta_cols)])/100
-alpha_diversity$Stratum <- paste(alpha_diversity$Site, "-", alpha_diversity$Habitat, "-", alpha_diversity$Transect)
+alpha_diversity$stratum <- paste(alpha_diversity$site, "-", alpha_diversity$habitat, "-", alpha_diversity$transect)
 lm_synchrony_transect <- codyn::synchrony(df = transect_level,
-                                   time.var = "Year",
-                                   species.var = "Taxa",
-                                   abundance.var = "Mean_cover",
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "mean_cover",
                                    metric = "Loreau",
-                                   replicate.var = "Stratum") # Loreau and Mazancourt synchrony
-colnames(lm_synchrony_transect) = c("Stratum", "Loreau_synchrony") # rename cols for merge later
+                                   replicate.var = "stratum") # Loreau and Mazancourt synchrony
+colnames(lm_synchrony_transect) = c("stratum", "Loreau_synchrony") # rename cols for merge later
 
 # gross_synchrony_transect <- codyn::synchrony(df = transect_level,
-#                                    time.var = "Year",
-#                                    species.var = "Taxa",
-#                                    abundance.var = "Mean_cover",
+#                                    time.var = "year",
+#                                    species.var = "taxa",
+#                                    abundance.var = "mean_cover",
 #                                    metric = "Gross",
-#                                    replicate.var = "Stratum") # lots of warnings in this one - examine further later
-# colnames(gross_synchrony_transect) = c("Stratum", "Gross_synchrony") # rename cols for merge later
+#                                    replicate.var = "stratum") # lots of warnings in this one - examine further later
+# colnames(gross_synchrony_transect) = c("stratum", "Gross_synchrony") # rename cols for merge later
 
 # stability_transect <- community_stability(df = transect_level,
-#                                           time.var = "Year",
-#                                           abundance.var = "Mean_cover",
-#                                           replicate.var = "Stratum") # using codyn measure of stability
+#                                           time.var = "year",
+#                                           abundance.var = "mean_cover",
+#                                           replicate.var = "stratum") # using codyn measure of stability
 # NOTE: codyn community_stability() is just the inverse of CV
 diversity_stability <- alpha_diversity %>%
-  dplyr::group_by(Site, Habitat, Site_habitat, Transect, Stratum) %>%
-  dplyr::summarise(Richness_mean = mean(Richness), 
-            Richness_se = sd(Richness)/sqrt(n()),
-            Richness_cv = CV(Richness),
-            Shannon_mean = mean(Shannon), 
-            Shannon_se = sd(Shannon)/sqrt(n()),
-            Shannon_cv = CV(Shannon),
-            Shannon_stability = 1/CV(Shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
+  dplyr::group_by(site, habitat, site_habitat, transect, stratum) %>%
+  dplyr::summarise(richness_mean = mean(richness), 
+            richness_se = sd(richness)/sqrt(n()),
+            richness_cv = CV(richness),
+            shannon_mean = mean(shannon), 
+            shannon_se = sd(shannon)/sqrt(n()),
+            shannon_cv = CV(shannon),
+            shannon_stability = 1/CV(shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
             Cover_mean = mean(Cover),
             Cover_se = sd(Cover)/sqrt(n()),
             Cover_cv = CV(Cover),
             Cover_stability = 1/CV(Cover)) # as above
 
-diversity_stability <- merge(diversity_stability, lm_synchrony_transect, by = "Stratum") # add in loreau and de Mazancourt synchrony
-# diversity_stability <- merge(diversity_stability, gross_synchrony_transect, by = "Stratum")
-diversity_stability <- merge(diversity_stability, transect_level_portfolio, by = "Stratum") # add in portfolio effects
+diversity_stability <- merge(diversity_stability, lm_synchrony_transect, by = "stratum") # add in loreau and de Mazancourt synchrony
+# diversity_stability <- merge(diversity_stability, gross_synchrony_transect, by = "stratum")
+diversity_stability <- merge(diversity_stability, transect_level_portfolio, by = "stratum") # add in portfolio effects
 pairs(~ Cover_mean + Cover_cv + Cover_stability + 
-        Shannon_mean + Shannon_cv + Shannon_stability + 
+        shannon_mean + shannon_cv + shannon_stability + 
         Loreau_synchrony + Portfolio_effect, data = diversity_stability)
 ```
 
@@ -1199,10 +1201,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r basic diversity stability plots transect level, fig.height=8, fig.width=10}
 (shannon_cv_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Shannon_mean, y = Cover_stability, colour = Site, shape = Habitat), size = 8) + 
+  geom_point(aes(x = shannon_mean, y = Cover_stability, colour = site, shape = habitat), size = 8) + 
    scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-#    stat_smooth(aes(x = Shannon_mean, y = Shannon_cv),method = "lm", se = T, size = 2) + 
+#    stat_smooth(aes(x = shannon_mean, y = shannon_cv),method = "lm", se = T, size = 2) + 
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
@@ -1219,10 +1221,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (shannon_cv_plot_2 = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Shannon_mean, y = Cover_stability, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = shannon_mean, y = Cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~site) +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
@@ -1238,12 +1240,12 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
          )
 
 # maybe some heteroskedasticity?
-# just eyeballing but it looks like "stability" is highest in LTER 2 Fringe, which also has low diversity
+# just eyeballing but it looks like "stability" is highest in lter_2 Fringe, which also has low diversity
 # Functional form vs. portfolio effects?
-# Either way looks sick as shit. Great clustering by habitat within site, and diversity trend is strong in LTER 3 4 5
+# Either way looks sick as shit. Great clustering by habitat within site, and diversity trend is strong in lter_3 4 5
 # LTER2 the trend is reversed
-# LTER 1 is mostly driven by habitat
-# LTER 6 potentially a wash
+# lter_1 is mostly driven by habitat
+# lter_6 potentially a wash
 
 
 ```
@@ -1251,10 +1253,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r variance vs mean diversity plot, fig.height = 8, fig.width = 10}
 (diversity_mean_cv_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Shannon_mean, y = Shannon_cv, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = shannon_mean, y = shannon_cv, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1273,11 +1275,11 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (diversity_mean_cv_plot_2 = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Shannon_mean, y = Shannon_cv, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = shannon_mean, y = shannon_cv, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
     
-#  facet_wrap(~Site) +
+#  facet_wrap(~site) +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
@@ -1296,10 +1298,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r portfolio effects and synchrony transect level,  fig.height = 8, fig.width = 10}
 (loreau_stability_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Loreau_synchrony, y = Cover_stability, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = Loreau_synchrony, y = Cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1317,10 +1319,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 # (gross_stability_plot = 
 #   ggplot(data = diversity_stability) +
-#   geom_point(aes(x = Gross_synchrony, y = Cover_stability, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+#   geom_point(aes(x = Gross_synchrony, y = Cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
 #    scale_colour_manual(values = site_colours) +
 #    scale_shape_manual(values = habitat_shapes) +
-#   facet_wrap(~Site) +
+#   facet_wrap(~site) +
 #    
 #   theme_bw() + 
 #   theme(axis.title.x = element_text(size=18), 
@@ -1338,10 +1340,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 # 
 (portfolio_stability_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Portfolio_effect, y = Cover_stability, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = Portfolio_effect, y = Cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1362,10 +1364,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r diversity, portfolio effects and synchrony transect level,  fig.height = 8, fig.width = 10}
 (loreau_diversity_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Shannon_mean, y = Loreau_synchrony, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = shannon_mean, y = Loreau_synchrony, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1383,10 +1385,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 # (gross_diversity_plot = 
 #   ggplot(data = diversity_stability) +
-#   geom_point(aes(x = Shannon_mean, y = Gross_synchrony, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+#   geom_point(aes(x = shannon_mean, y = Gross_synchrony, colour = site, shape = habitat), size = 8, stroke = 2) + 
 #    scale_colour_manual(values = site_colours) +
 #    scale_shape_manual(values = habitat_shapes) +
-#   facet_wrap(~Site) +
+#   facet_wrap(~site) +
 #    
 #   theme_bw() + 
 #   theme(axis.title.x = element_text(size=18), 
@@ -1404,10 +1406,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (portfolio_diversity_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Shannon_mean, y = Portfolio_effect, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = shannon_mean, y = Portfolio_effect, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1425,12 +1427,12 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```
 
 ```{r model selection}
-diversity_mod_universal <- glmmTMB(Cover_stability ~ Loreau_synchrony + Shannon_mean*Site*Habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
+diversity_mod_universal <- glmmTMB(Cover_stability ~ Loreau_synchrony + shannon_mean*site*habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
 diversity_dredge <- dredge(diversity_mod_universal)
 model.sel(diversity_dredge)
 
 # top model is as follows (by a decent margin):
-diversity_top <- glmmTMB(Cover_stability ~ Loreau_synchrony + Shannon_mean*Site + Site*Habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
+diversity_top <- glmmTMB(Cover_stability ~ Loreau_synchrony + shannon_mean*site + site*habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
 summary(diversity_top)
 Anova(diversity_top)
 ```
@@ -1439,10 +1441,10 @@ Anova(diversity_top)
 ```{r general cover diversity, fig.height = 30, fig.width = 30}
 (diversity_cover_plot = 
   ggplot(data = alpha_diversity) +
-  geom_point(aes(x = Cover, y = Shannon, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = Cover, y = shannon, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Year) +
+  facet_wrap(~year) +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
@@ -1459,21 +1461,21 @@ Anova(diversity_top)
 ```
 
 ```{r diversity stability quadrat level setup, fig.height = 20, fig.width=20}
-data_sub$Stratum <- as.factor(paste(data_sub$Site, "-", data_sub$Habitat, "-", data_sub$Transect))
-data_sub$Location <- as.factor(data_sub$Location)
+data_sub$stratum <- as.factor(paste(data_sub$site, "-", data_sub$habitat, "-", data_sub$transect))
+data_sub$location <- as.factor(data_sub$location)
 
 
-quadrat_portfolio_columns <- c("Location", "Portfolio_effect") # names of columns for dataframe
+quadrat_portfolio_columns <- c("location", "Portfolio_effect") # names of columns for dataframe
 quadrat_level_portfolio <- 
-  data.frame(matrix(nrow = length(unique(data_sub$Location)), 
+  data.frame(matrix(nrow = length(unique(data_sub$location)), 
                     ncol = length(quadrat_portfolio_columns))
              )
 colnames(quadrat_level_portfolio) <- quadrat_portfolio_columns # change column 
-quadrat_level_portfolio$Location <- unique(data_sub$Location) # populate
+quadrat_level_portfolio$location <- unique(data_sub$location) # populate
 
-for(i in 1:length(unique(unique(data_sub$Location))) ){ # for each  quadrat
+for(i in 1:length(unique(unique(data_sub$location))) ){ # for each  quadrat
   # create a new dataframe for current quadrat
-  newData <- subset(data, Location == levels(data_sub$Location)[i])
+  newData <- subset(data, location == levels(data_sub$location)[i])
   current_matrix <- newData[ , -which(names(newData) %in% meta_cols)] # remove metadata columns
   if(sum(current_matrix) == 0 | # if this was a 0 algae quadrat
      # or if there was only 1 column after removing all irrelevant algae
@@ -1492,62 +1494,62 @@ for(i in 1:length(unique(unique(data_sub$Location))) ){ # for each  quadrat
 hist(quadrat_level_portfolio$Portfolio_effect) # some crazy outliers due to low richness
 
 alpha_diversity_quad$Cover <- rowSums(data[ , -which(names(data) %in% meta_cols)])/100
-alpha_diversity_quad_sub <- alpha_diversity_quad[!alpha_diversity_quad$Location %in% problem_children, ]
+alpha_diversity_quad_sub <- alpha_diversity_quad[!alpha_diversity_quad$location %in% problem_children, ]
 
 # alpha_diversity_quad_sub$Cover <- rowSums(data_sub[ , -which(names(data_sub) %in% meta_cols)])/100
-alpha_diversity_quad_sub$Stratum <- 
-  paste(alpha_diversity_quad_sub$Site, "-", alpha_diversity_quad_sub$Habitat, "-", alpha_diversity_quad_sub$Transect)
+alpha_diversity_quad_sub$stratum <- 
+  paste(alpha_diversity_quad_sub$site, "-", alpha_diversity_quad_sub$habitat, "-", alpha_diversity_quad_sub$transect)
 lm_synchrony_quadrat <- codyn::synchrony(df = long_data_sub,
-                                   time.var = "Year",
-                                   species.var = "Taxa",
-                                   abundance.var = "Percent_cover",
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "percent_cover",
                                    metric = "Loreau",
-                                   replicate.var = "Location") # Loreau and Mazancourt synchrony
-colnames(lm_synchrony_quadrat) = c("Location", "Loreau_synchrony") # rename cols for merge later
+                                   replicate.var = "location") # Loreau and Mazancourt synchrony
+colnames(lm_synchrony_quadrat) = c("location", "Loreau_synchrony") # rename cols for merge later
 
 ## gross_synchrony_quadrat <- codyn::synchrony(df = long_data_sub,
-##                                    time.var = "Year",
-##                                    species.var = "Taxa",
-##                                    abundance.var = "Percent_cover",
+##                                    time.var = "year",
+##                                    species.var = "taxa",
+##                                    abundance.var = "percent_cover",
 ##                                    metric = "Gross",
-##                                    replicate.var = "Location") # lots of warnings in this one - examine further later
-## colnames(gross_synchrony_transect) = c("Location", "Gross_synchrony") # rename cols for merge later
+##                                    replicate.var = "location") # lots of warnings in this one - examine further later
+## colnames(gross_synchrony_transect) = c("location", "Gross_synchrony") # rename cols for merge later
 
 variance_ratio_quadrat <- variance_ratio(df = long_data_sub,
-                                   time.var = "Year",
-                                   species.var = "Taxa",
-                                   abundance.var = "Percent_cover",
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "percent_cover",
                                    average.replicates = F,
                                    bootnumber = 1,
-                                   replicate.var = "Location")
+                                   replicate.var = "location")
 
 community_stability_quadrat <- community_stability(df = long_data_sub,
-                                   time.var = "Year",
-                                   abundance.var = "Percent_cover",
-                                   replicate.var = "Location")
-colnames(community_stability_quadrat) = c("Location", "Cover_stability")
+                                   time.var = "year",
+                                   abundance.var = "percent_cover",
+                                   replicate.var = "location")
+colnames(community_stability_quadrat) = c("location", "Cover_stability")
 
 diversity_stability_quadrat <- alpha_diversity_quad_sub %>%
-  dplyr::group_by(Location, Site, Habitat, Site_habitat, Transect, Stratum) %>%
-  dplyr::summarise(Richness_mean = mean(Richness), 
-            Richness_se = sd(Richness)/sqrt(n()),
-            Richness_cv = CV(Richness),
-            Shannon_mean = mean(Shannon), 
-            Shannon_se = sd(Shannon)/sqrt(n()),
-            Shannon_cv = CV(Shannon),
-            Shannon_stability = 1/CV(Shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
+  dplyr::group_by(location, site, habitat, site_habitat, transect, stratum) %>%
+  dplyr::summarise(richness_mean = mean(richness), 
+            richness_se = sd(richness)/sqrt(n()),
+            richness_cv = CV(richness),
+            shannon_mean = mean(shannon), 
+            shannon_se = sd(shannon)/sqrt(n()),
+            shannon_cv = CV(shannon),
+            shannon_stability = 1/CV(shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
             Cover_mean = mean(Cover),
             Cover_se = sd(Cover)/sqrt(n()),
             Cover_cv = CV(Cover)) 
 
 diversity_stability_quadrat <- 
-  merge(diversity_stability_quadrat, lm_synchrony_quadrat, by = "Location") # add in loreau and de Mazancourt synchrony
-diversity_stability_quadrat <- merge(diversity_stability_quadrat, gross_synchrony_quadrat, by = "Location")
-diversity_stability_quadrat <- merge(diversity_stability_quadrat, quadrat_level_portfolio, by = "Location") # add in portfolio effects
-diversity_stability_quadrat <- merge(diversity_stability_quadrat, variance_ratio_quadrat, by = "Location")
-diversity_stability_quadrat <- merge(diversity_stability_quadrat, community_stability_quadrat, by = "Location")
+  merge(diversity_stability_quadrat, lm_synchrony_quadrat, by = "location") # add in loreau and de Mazancourt synchrony
+# diversity_stability_quadrat <- merge(diversity_stability_quadrat, gross_synchrony_quadrat, by = "location")
+diversity_stability_quadrat <- merge(diversity_stability_quadrat, quadrat_level_portfolio, by = "location") # add in portfolio effects
+diversity_stability_quadrat <- merge(diversity_stability_quadrat, variance_ratio_quadrat, by = "location")
+diversity_stability_quadrat <- merge(diversity_stability_quadrat, community_stability_quadrat, by = "location")
 pairs(~ Cover_mean + Cover_cv + Cover_stability + 
-        Shannon_mean + Shannon_cv + Shannon_stability + 
+        shannon_mean + shannon_cv + shannon_stability + 
         Loreau_synchrony +  Portfolio_effect + VR, data = diversity_stability_quadrat)
 
 ```
@@ -1555,10 +1557,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r cover and cv, fig.height = 8, fig.width = 10}
 (cover_cv_plot = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Cover_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 4) + 
+  geom_point(aes(x = Cover_mean, y = Cover_cv, colour = site, shape = habitat), size = 4) + 
    scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-   facet_wrap(~Site) +
+   facet_wrap(~site) +
 
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1576,10 +1578,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (cover_cv_plot = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Cover_mean, y = Shannon_mean, colour = Site, shape = Habitat), size = 4) + 
+  geom_point(aes(x = Cover_mean, y = shannon_mean, colour = site, shape = habitat), size = 4) + 
    scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-   facet_wrap(~Site) +
+   facet_wrap(~site) +
 
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1600,10 +1602,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r basic diversity stability plots quadrat level, fig.height=8, fig.width=10}
 (shannon_cv_plot = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Shannon_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 4) + 
+  geom_point(aes(x = shannon_mean, y = Cover_cv, colour = site, shape = habitat), size = 4) + 
    scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-   facet_wrap(~Site) +
+   facet_wrap(~site) +
 
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1621,10 +1623,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (shannon_cv_plot_2 = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Shannon_mean, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 1) + 
+  geom_point(aes(x = shannon_mean, y = Cover_cv, colour = site, shape = habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Habitat) +
+  facet_wrap(~habitat) +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
@@ -1639,7 +1641,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
         legend.box.background = element_rect(colour = "black"))  # add box around legend
          )
 
-# LTER 2 obscures a lot of the trends
+# lter_2 obscures a lot of the trends
 
 
 ```
@@ -1647,10 +1649,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r portfolio effects and synchrony transect level,  fig.height = 8, fig.width = 10}
 (loreau_stability_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Loreau_synchrony, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 1) + 
+  geom_point(aes(x = Loreau_synchrony, y = Cover_cv, colour = site, shape = habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1668,10 +1670,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 # (gross_stability_plot_quad = 
 #   ggplot(data = diversity_stability_quadrat) +
-#   geom_point(aes(x = Gross_synchrony, y = Cover_stability, colour = Site, shape = Habitat), size = 8, stroke = 2) + 
+#   geom_point(aes(x = Gross_synchrony, y = Cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
 #    scale_colour_manual(values = site_colours) +
 #    scale_shape_manual(values = habitat_shapes) +
-#   facet_wrap(~Site) +
+#   facet_wrap(~site) +
 #    
 #   theme_bw() + 
 #   theme(axis.title.x = element_text(size=18), 
@@ -1689,10 +1691,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (portfolio_stability_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Portfolio_effect, y = Cover_cv, colour = Site, shape = Habitat), size = 4, stroke = 2) + 
+  geom_point(aes(x = Portfolio_effect, y = Cover_cv, colour = site, shape = habitat), size = 4, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
- # facet_wrap(~Site) +
+ # facet_wrap(~site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1713,10 +1715,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r diversity portfolio effects and synchrony quadrat level,  fig.height = 8, fig.width = 10}
 (loreau_diversity_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Shannon_mean, y = Loreau_synchrony, colour = Site, shape = Habitat), size = 4, stroke = 1) + 
+  geom_point(aes(x = shannon_mean, y = Loreau_synchrony, colour = site, shape = habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1736,10 +1738,10 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (portfolio_diversity_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Shannon_mean, y = Portfolio_effect, colour = Site, shape = Habitat), size = 4, stroke = 2) + 
+  geom_point(aes(x = shannon_mean, y = Portfolio_effect, colour = site, shape = habitat), size = 4, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~Site) +
+  facet_wrap(~site) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1757,21 +1759,21 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```
 
 ```{r diversity models quad level}
-diversity_mod_universal <- glmmTMB(Cover_cv ~Shannon_mean*Site + Shannon_mean*Habitat + Site*Habitat + (1|Transect/Location), family = Gamma(link = "log"), data = diversity_stability_quadrat, na.action = na.pass)
+diversity_mod_universal <- glmmTMB(Cover_cv ~shannon_mean*site + shannon_mean*habitat + site*habitat + (1|transect/location), family = Gamma(link = "log"), data = diversity_stability_quadrat, na.action = na.pass)
 diversity_dredge <- dredge(diversity_mod_universal)
 model.sel(diversity_dredge) # best model is as specified
 summary(diversity_mod_universal) # low variance in random effects
 Anova(diversity_mod_universal) # LR Tests are kinda useless
 r.squaredGLMM(diversity_mod_universal) # 0.653, 0.655
 
-synchrony_mod_universal <- glmmTMB(Cover_cv ~Loreau_synchrony*Site + Loreau_synchrony*Habitat + Site*Habitat + (1|Transect/Location), family = Gamma(link = "log"), data = diversity_stability_quadrat, na.action = na.pass)
+synchrony_mod_universal <- glmmTMB(Cover_cv ~Loreau_synchrony*site + Loreau_synchrony*habitat + site*habitat + (1|transect/location), family = Gamma(link = "log"), data = diversity_stability_quadrat, na.action = na.pass)
 synchrony_dredge <- dredge(synchrony_mod_universal)
 model.sel(synchrony_dredge) # best model is as specified
 summary(synchrony_mod_universal)
 r.squaredGLMM(synchrony_mod_universal) # 0.800, 0.802
 
 diversity_stability_quadrat$Loreau_synchrony_trans <- sv_trans(diversity_stability_quadrat$Loreau_synchrony, diversity_stability_quadrat) # for modelling on beta
-synchrony_diversity_universal <- glmmTMB(Loreau_synchrony_trans ~Shannon_mean*Site + Shannon_mean*Habitat + Site*Habitat + (1|Transect/Location), family = beta_family(), data = diversity_stability_quadrat, na.action = na.pass)
+synchrony_diversity_universal <- glmmTMB(Loreau_synchrony_trans ~shannon_mean*site + shannon_mean*habitat + site*habitat + (1|transect/location), family = beta_family(), data = diversity_stability_quadrat, na.action = na.pass)
 model.sel(dredge(synchrony_diversity_universal)) # best model as specified
 summary(synchrony_diversity_universal)
 Anova(synchrony_diversity_universal)
@@ -1783,11 +1785,11 @@ r.squaredGLMM(synchrony_diversity_universal) # Model's distribution-specific var
 ```{r nmds, fig.height = 15, fig.width = 15}
 species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
 species_matrix <- species_matrix/100 # convert from percent to proportion
-rownames(species_matrix) <- paste(data$Year, data$Site_habitat, data$Transect)
+rownames(species_matrix) <- paste(data$year, data$site_habitat, data$transect)
 rows_to_remove <- rowSums(species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
 species_matrix <- species_matrix[!rows_to_remove,] 
 data_subset <- data[!rows_to_remove,] # make sure rows are also removed from dataframe
-data_subset$Stratum <- paste(data_subset$Year, "-", data_subset$Site, "-", data_subset$Habitat )
+data_subset$stratum <- paste(data_subset$year, "-", data_subset$site, "-", data_subset$habitat )
 
 # identifying species w/ > 10% cover for plotting later
 # NOTE: Used ChatGPT to generate these next few lines of code but it looked good so I went with it
@@ -1812,30 +1814,30 @@ stressplot(ord3)
 
 site.scores <- as.data.frame(vegan::scores(ord3)$sites)  # extract the site scores and convert to a data.frame
 # add back in metadata
-site.scores$Year <- as.factor(data_subset$Year)
-site.scores$Site <- as.factor(data_subset$Site)
-site.scores$Habitat <- as.factor(data_subset$Habitat)
-site.scores$Site_habitat <- as.factor(data_subset$Site_habitat)
-site.scores$Transect <- as.factor(data_subset$Transect)
-site.scores$Stratum <- as.factor(data_subset$Stratum)
+site.scores$year <- as.factor(data_subset$year)
+site.scores$site <- as.factor(data_subset$site)
+site.scores$habitat <- as.factor(data_subset$habitat)
+site.scores$site_habitat <- as.factor(data_subset$site_habitat)
+site.scores$transect <- as.factor(data_subset$transect)
+site.scores$stratum <- as.factor(data_subset$stratum)
 
-cent <- aggregate(cbind(NMDS1, NMDS2) ~ Stratum, data = site.scores, FUN = mean) # compute centroids for NMDS1 and NMDS2 
+cent <- aggregate(cbind(NMDS1, NMDS2) ~ stratum, data = site.scores, FUN = mean) # compute centroids for NMDS1 and NMDS2 
 
 # Need to split stratum up for plotting later
 cent<- 
   cent %>%
-    separate(Stratum, into = c("Year", "Site", "Habitat"), sep = "-")
-cent$Site_habitat <- paste(cent$Site, cent$Habitat)
+    separate(stratum, into = c("year", "site", "habitat"), sep = "-")
+cent$site_habitat <- paste(cent$site, cent$habitat)
 # Add back in stratum column
-cent$Stratum <-  aggregate(cbind(NMDS1, NMDS2) ~ Stratum, data = site.scores, FUN = mean)$Stratum
+cent$stratum <-  aggregate(cbind(NMDS1, NMDS2) ~ stratum, data = site.scores, FUN = mean)$stratum
 # A lot of extra spaces
 
 cent <- cent %>%
   mutate(across(everything(), str_trim))
-cent$Year <- as.factor(cent$Year)
-cent$Habitat <- as.factor(cent$Habitat)
-cent$Site <- as.factor(cent$Site)
-cent$Site_habitat <- as.factor(cent$Site_habitat)
+cent$year <- as.factor(cent$year)
+cent$habitat <- as.factor(cent$habitat)
+cent$site <- as.factor(cent$site)
+cent$site_habitat <- as.factor(cent$site_habitat)
 cent$NMDS1 <- as.numeric(cent$NMDS1) # read in as characters for some reason
 cent$NMDS2 <- as.numeric(cent$NMDS2)
 species.scores <- as.data.frame(scores(ord3)$species)  # extract the species scores and convert to a data.frame
@@ -1845,13 +1847,13 @@ species.scores$Species <- rownames(species.scores)
 abundant.species.scores <- species.scores[species.scores$Species %in% abundant_species_names,] 
 
 ggplot() + 
-  geom_point(data= site.scores, aes(x=NMDS1,y=NMDS2, shape = Habitat, colour = Site),
+  geom_point(data= site.scores, aes(x=NMDS1,y=NMDS2, shape = habitat, colour = site),
              alpha = 0.25, size=2) + # add the point markers
   geom_text(data= abundant.species.scores,aes(x=NMDS1,y=NMDS2, label = Species), size = 4) +  # add the species labels
   
-  geom_path(data = cent, aes(x = NMDS1, y = NMDS2, group = Site_habitat, colour = Site),
+  geom_path(data = cent, aes(x = NMDS1, y = NMDS2, group = site_habitat, colour = site),
             arrow = arrow(length=unit(0.5,"cm"), ends="last", type = "closed"), size = 1) +
-  facet_wrap(~factor(Habitat, levels=c('Fringing','Backreef','Outer 10','Outer 17'))) +
+  facet_wrap(~factor(habitat, levels=c('fringing','backreef','outer_10','outer_17'))) +
   scale_linetype_manual(values = habitat_linetypes) +
   scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
@@ -1879,8 +1881,8 @@ ggplot() +
          )  
 
 
-# looks like stochasticity increases from outer 17 --> Fringing
-# Even in lagoon though it looks like communities return to initial state... except for North Shore LTER sites
+# looks like stochasticity increases from outer_17 --> fringing
+# Even in lagoon though it looks like communities return to initial state... except for north Shore lter_sites
 # ways to test stochasticity vs. determinism?
 # seems like deterministic trajectories, although we're not starting from a clean slate
 # accounting for founder effects?
@@ -1890,52 +1892,52 @@ ggplot() +
 ```{r beta dispersion, fig.height = 15, fig.width=20}
 # Want to plot mean distance to centroid, but not sure how to do that with so many factors/interactions...
  bray_matrix <- vegdist(species_matrix, method = "bray")
-# year_beta_disper <- vegan::betadisper(bray_matrix, data_subset$Year)
+# year_beta_disper <- vegan::betadisper(bray_matrix, data_subset$year)
 # year_beta_disper # 
 
 # plot of dispersion test
 # plot(year_beta_disper, sub = "") # lol
-# boxplot(year_beta_disper, main = "Year", xlab = "") 
+# boxplot(year_beta_disper, main = "year", xlab = "") 
 # 
-# site_beta_disper <- vegan::betadisper(bray_matrix, data_subset$Site)
+# site_beta_disper <- vegan::betadisper(bray_matrix, data_subset$site)
 # plot(site_beta_disper, sub = "") # site five stands out
-# boxplot(site_beta_disper, main = "Site", xlab = "") 
+# boxplot(site_beta_disper, main = "site", xlab = "") 
 # 
 # 
-# habitat_beta_disper <- vegan::betadisper(bray_matrix, data_subset$Habitat)
+# habitat_beta_disper <- vegan::betadisper(bray_matrix, data_subset$habitat)
 # plot(habitat_beta_disper, sub = "") 
-# boxplot(habitat_beta_disper, main = "Habitat", xlab = "") # greatest variance in fringing it seems (as expected)
+# boxplot(habitat_beta_disper, main = "habitat", xlab = "") # greatest variance in fringing it seems (as expected)
 # 
-# site_habitat_beta_disper <- vegan::betadisper(bray_matrix, data_subset$Site_habitat)
+# site_habitat_beta_disper <- vegan::betadisper(bray_matrix, data_subset$site_habitat)
 # plot(site_habitat_beta_disper, sub = "") 
-# boxplot(site_habitat_beta_disper, main = "Site_habitat", xlab = "") 
+# boxplot(site_habitat_beta_disper, main = "site_habitat", xlab = "") 
 # 
-stratum_beta_disper <- vegan::betadisper(bray_matrix, data_subset$Stratum)
+stratum_beta_disper <- vegan::betadisper(bray_matrix, data_subset$stratum)
 # plot(site_habitat_beta_disper, sub = "") 
-boxplot(stratum_beta_disper, main = "Site_habitat", xlab = "")
+boxplot(stratum_beta_disper, main = "site_habitat", xlab = "")
 stratum_distances <- as.data.frame(stratum_beta_disper$distances)
 colnames(stratum_distances)[1] <- "Distance"
-stratum_distances$Stratum <- data_subset$Stratum
-stratum_distances$Transect <- data_subset$Transect
-stratum_distances$Year <- data_subset$Year
-stratum_distances$Site <- data_subset$Site
-stratum_distances$Habitat <- data_subset$Habitat
-stratum_distances$Site_habitat <- data_subset$Site_habitat
+stratum_distances$stratum <- data_subset$stratum
+stratum_distances$transect <- data_subset$transect
+stratum_distances$year <- data_subset$year
+stratum_distances$site <- data_subset$site
+stratum_distances$habitat <- data_subset$habitat
+stratum_distances$site_habitat <- data_subset$site_habitat
 
 beta_disper_means <- stratum_distances %>%
-  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  dplyr::group_by(year, site, habitat, site_habitat) %>%
   dplyr::summarise(Distance_mean = mean(Distance), 
             Distance_se = sd(Distance)/sqrt(n()))
 
 (Distance_plot <-
   ggplot(data = beta_disper_means) +
-  geom_point(aes(x = Year, y = Distance_mean, colour = Site, shape = Habitat, group = Site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = Year, y = Distance_mean, colour = Site, group = Site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = Year, ymin = Distance_mean - Distance_se , ymax = Distance_mean + Distance_se, colour = Site,
-                    group = Site_habitat), width = 0.5, size = 1.2) +
+  geom_point(aes(x = year, y = Distance_mean, colour = site, shape = habitat, group = site_habitat), size = 8, stroke = 2) +
+  geom_line(aes(x = year, y = Distance_mean, colour = site, group = site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = Distance_mean - Distance_se , ymax = Distance_mean + Distance_se, colour = site,
+                    group = site_habitat), width = 0.5, size = 1.2) +
   scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~factor(Habitat, levels=c('Fringing','Backreef','Outer 10','Outer 17')))+
+  facet_wrap(~factor(habitat, levels=c('fringing','backreef','outer_10','outer_17')))+
   labs(title = "Distance to centroid\n", y = "Distance\n") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
