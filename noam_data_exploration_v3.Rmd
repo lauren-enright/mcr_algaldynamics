@@ -1120,7 +1120,7 @@ rate_change_transformed_distances <- merge(rate_change_transformed, turnover_met
 wide_transect_level$stratum <- as.factor(paste(wide_transect_level$site, "-", wide_transect_level$habitat, "-", wide_transect_level$transect))
 
 
-transect_portfolio_columns <- c("stratum", "Portfolio_effect") # names of columns for dataframe
+transect_portfolio_columns <- c("stratum", "portfolio_effect") # names of columns for dataframe
 transect_level_portfolio <- 
   data.frame(matrix(nrow = length(unique(wide_transect_level$stratum)), 
                     ncol = length(transect_portfolio_columns))
@@ -1151,7 +1151,7 @@ CV<-function(x){
   return(sd(x,na.rm=T)/mean(x,na.rm=T))
 }
 
-alpha_diversity$Cover <- rowSums(wide_transect_level[ , -which(names(wide_transect_level) %in% meta_cols)])/100
+alpha_diversity$cover <- rowSums(wide_transect_level[ , -which(names(wide_transect_level) %in% meta_cols)])/100
 alpha_diversity$stratum <- paste(alpha_diversity$site, "-", alpha_diversity$habitat, "-", alpha_diversity$transect)
 lm_synchrony_transect <- codyn::synchrony(df = transect_level,
                                    time.var = "year",
@@ -1159,7 +1159,7 @@ lm_synchrony_transect <- codyn::synchrony(df = transect_level,
                                    abundance.var = "mean_cover",
                                    metric = "Loreau",
                                    replicate.var = "stratum") # Loreau and Mazancourt synchrony
-colnames(lm_synchrony_transect) = c("stratum", "Loreau_synchrony") # rename cols for merge later
+colnames(lm_synchrony_transect) = c("stratum", "loreau_synchrony") # rename cols for merge later
 
 # gross_synchrony_transect <- codyn::synchrony(df = transect_level,
 #                                    time.var = "year",
@@ -1183,17 +1183,17 @@ diversity_stability <- alpha_diversity %>%
             shannon_se = sd(shannon)/sqrt(n()),
             shannon_cv = CV(shannon),
             shannon_stability = 1/CV(shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
-            Cover_mean = mean(Cover),
-            Cover_se = sd(Cover)/sqrt(n()),
-            Cover_cv = CV(Cover),
-            Cover_stability = 1/CV(Cover)) # as above
+            cover_mean = mean(cover),
+            cover_se = sd(cover)/sqrt(n()),
+            cover_cv = CV(cover),
+            cover_stability = 1/CV(cover)) # as above
 
 diversity_stability <- merge(diversity_stability, lm_synchrony_transect, by = "stratum") # add in loreau and de Mazancourt synchrony
 # diversity_stability <- merge(diversity_stability, gross_synchrony_transect, by = "stratum")
 diversity_stability <- merge(diversity_stability, transect_level_portfolio, by = "stratum") # add in portfolio effects
-pairs(~ Cover_mean + Cover_cv + Cover_stability + 
+pairs(~ cover_mean + cover_cv + cover_stability + 
         shannon_mean + shannon_cv + shannon_stability + 
-        Loreau_synchrony + Portfolio_effect, data = diversity_stability)
+        loreau_synchrony + portfolio_effect, data = diversity_stability)
 ```
 
 
@@ -1201,7 +1201,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r basic diversity stability plots transect level, fig.height=8, fig.width=10}
 (shannon_cv_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = shannon_mean, y = Cover_stability, colour = site, shape = habitat), size = 8) + 
+  geom_point(aes(x = shannon_mean, y = cover_stability, colour = site, shape = habitat), size = 8) + 
    scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
 #    stat_smooth(aes(x = shannon_mean, y = shannon_cv),method = "lm", se = T, size = 2) + 
@@ -1221,7 +1221,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (shannon_cv_plot_2 = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = shannon_mean, y = Cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = shannon_mean, y = cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~site) +
@@ -1298,7 +1298,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r portfolio effects and synchrony transect level,  fig.height = 8, fig.width = 10}
 (loreau_stability_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Loreau_synchrony, y = Cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = loreau_synchrony, y = cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~site) +
@@ -1319,7 +1319,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 # (gross_stability_plot = 
 #   ggplot(data = diversity_stability) +
-#   geom_point(aes(x = Gross_synchrony, y = Cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
+#   geom_point(aes(x = Gross_synchrony, y = cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
 #    scale_colour_manual(values = site_colours) +
 #    scale_shape_manual(values = habitat_shapes) +
 #   facet_wrap(~site) +
@@ -1340,7 +1340,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 # 
 (portfolio_stability_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = Portfolio_effect, y = Cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = portfolio_effect, y = cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~site) +
@@ -1364,7 +1364,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r diversity, portfolio effects and synchrony transect level,  fig.height = 8, fig.width = 10}
 (loreau_diversity_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = shannon_mean, y = Loreau_synchrony, colour = site, shape = habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = shannon_mean, y = loreau_synchrony, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~site) +
@@ -1406,7 +1406,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (portfolio_diversity_plot = 
   ggplot(data = diversity_stability) +
-  geom_point(aes(x = shannon_mean, y = Portfolio_effect, colour = site, shape = habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = shannon_mean, y = portfolio_effect, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~site) +
@@ -1427,12 +1427,12 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```
 
 ```{r model selection}
-diversity_mod_universal <- glmmTMB(Cover_stability ~ Loreau_synchrony + shannon_mean*site*habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
+diversity_mod_universal <- glmmTMB(cover_stability ~ loreau_synchrony + shannon_mean*site*habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
 diversity_dredge <- dredge(diversity_mod_universal)
 model.sel(diversity_dredge)
 
 # top model is as follows (by a decent margin):
-diversity_top <- glmmTMB(Cover_stability ~ Loreau_synchrony + shannon_mean*site + site*habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
+diversity_top <- glmmTMB(cover_stability ~ loreau_synchrony + shannon_mean*site + site*habitat, family = Gamma(link = "log"), data = diversity_stability, na.action = na.pass)
 summary(diversity_top)
 Anova(diversity_top)
 ```
@@ -1441,7 +1441,7 @@ Anova(diversity_top)
 ```{r general cover diversity, fig.height = 30, fig.width = 30}
 (diversity_cover_plot = 
   ggplot(data = alpha_diversity) +
-  geom_point(aes(x = Cover, y = shannon, colour = site, shape = habitat), size = 8, stroke = 2) + 
+  geom_point(aes(x = cover, y = shannon, colour = site, shape = habitat), size = 8, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~year) +
@@ -1465,7 +1465,7 @@ data_sub$stratum <- as.factor(paste(data_sub$site, "-", data_sub$habitat, "-", d
 data_sub$location <- as.factor(data_sub$location)
 
 
-quadrat_portfolio_columns <- c("location", "Portfolio_effect") # names of columns for dataframe
+quadrat_portfolio_columns <- c("location", "portfolio_effect") # names of columns for dataframe
 quadrat_level_portfolio <- 
   data.frame(matrix(nrow = length(unique(data_sub$location)), 
                     ncol = length(quadrat_portfolio_columns))
@@ -1489,14 +1489,14 @@ for(i in 1:length(unique(unique(data_sub$location))) ){ # for each  quadrat
   
 }
 
-# sum(is.na(quadrat_level_portfolio$Portfolio_effect)) # 4 quadrats causing trouble
+# sum(is.na(quadrat_level_portfolio$portfolio_effect)) # 4 quadrats causing trouble
 
-hist(quadrat_level_portfolio$Portfolio_effect) # some crazy outliers due to low richness
+hist(quadrat_level_portfolio$portfolio_effect) # some crazy outliers due to low richness
 
-alpha_diversity_quad$Cover <- rowSums(data[ , -which(names(data) %in% meta_cols)])/100
+alpha_diversity_quad$cover <- rowSums(data[ , -which(names(data) %in% meta_cols)])/100
 alpha_diversity_quad_sub <- alpha_diversity_quad[!alpha_diversity_quad$location %in% problem_children, ]
 
-# alpha_diversity_quad_sub$Cover <- rowSums(data_sub[ , -which(names(data_sub) %in% meta_cols)])/100
+# alpha_diversity_quad_sub$cover <- rowSums(data_sub[ , -which(names(data_sub) %in% meta_cols)])/100
 alpha_diversity_quad_sub$stratum <- 
   paste(alpha_diversity_quad_sub$site, "-", alpha_diversity_quad_sub$habitat, "-", alpha_diversity_quad_sub$transect)
 lm_synchrony_quadrat <- codyn::synchrony(df = long_data_sub,
@@ -1505,7 +1505,7 @@ lm_synchrony_quadrat <- codyn::synchrony(df = long_data_sub,
                                    abundance.var = "percent_cover",
                                    metric = "Loreau",
                                    replicate.var = "location") # Loreau and Mazancourt synchrony
-colnames(lm_synchrony_quadrat) = c("location", "Loreau_synchrony") # rename cols for merge later
+colnames(lm_synchrony_quadrat) = c("location", "loreau_synchrony") # rename cols for merge later
 
 ## gross_synchrony_quadrat <- codyn::synchrony(df = long_data_sub,
 ##                                    time.var = "year",
@@ -1527,10 +1527,10 @@ community_stability_quadrat <- community_stability(df = long_data_sub,
                                    time.var = "year",
                                    abundance.var = "percent_cover",
                                    replicate.var = "location")
-colnames(community_stability_quadrat) = c("location", "Cover_stability")
+colnames(community_stability_quadrat) = c("location", "cover_stability")
 
 diversity_stability_quadrat <- alpha_diversity_quad_sub %>%
-  dplyr::group_by(location, site, habitat, site_habitat, transect, stratum) %>%
+  dplyr::group_by(location, site, habitat, island_side, site_habitat, transect, stratum) %>%
   dplyr::summarise(richness_mean = mean(richness), 
             richness_se = sd(richness)/sqrt(n()),
             richness_cv = CV(richness),
@@ -1538,9 +1538,9 @@ diversity_stability_quadrat <- alpha_diversity_quad_sub %>%
             shannon_se = sd(shannon)/sqrt(n()),
             shannon_cv = CV(shannon),
             shannon_stability = 1/CV(shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
-            Cover_mean = mean(Cover),
-            Cover_se = sd(Cover)/sqrt(n()),
-            Cover_cv = CV(Cover)) 
+            cover_mean = mean(cover),
+            cover_se = sd(cover)/sqrt(n()),
+            cover_cv = CV(cover)) 
 
 diversity_stability_quadrat <- 
   merge(diversity_stability_quadrat, lm_synchrony_quadrat, by = "location") # add in loreau and de Mazancourt synchrony
@@ -1548,16 +1548,16 @@ diversity_stability_quadrat <-
 diversity_stability_quadrat <- merge(diversity_stability_quadrat, quadrat_level_portfolio, by = "location") # add in portfolio effects
 diversity_stability_quadrat <- merge(diversity_stability_quadrat, variance_ratio_quadrat, by = "location")
 diversity_stability_quadrat <- merge(diversity_stability_quadrat, community_stability_quadrat, by = "location")
-pairs(~ Cover_mean + Cover_cv + Cover_stability + 
+pairs(~ cover_mean + cover_cv + cover_stability + 
         shannon_mean + shannon_cv + shannon_stability + 
-        Loreau_synchrony +  Portfolio_effect + VR, data = diversity_stability_quadrat)
+        loreau_synchrony +  portfolio_effect + VR, data = diversity_stability_quadrat)
 
 ```
 
 ```{r cover and cv, fig.height = 8, fig.width = 10}
 (cover_cv_plot = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Cover_mean, y = Cover_cv, colour = site, shape = habitat), size = 4) + 
+  geom_point(aes(x = cover_mean, y = cover_cv, colour = site, shape = habitat), size = 4) + 
    scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
    facet_wrap(~site) +
@@ -1578,7 +1578,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (cover_cv_plot = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Cover_mean, y = shannon_mean, colour = site, shape = habitat), size = 4) + 
+  geom_point(aes(x = cover_mean, y = shannon_mean, colour = site, shape = habitat), size = 4) + 
    scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
    facet_wrap(~site) +
@@ -1602,7 +1602,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r basic diversity stability plots quadrat level, fig.height=8, fig.width=10}
 (shannon_cv_plot = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = shannon_mean, y = Cover_cv, colour = site, shape = habitat), size = 4) + 
+  geom_point(aes(x = shannon_mean, y = cover_cv, colour = site, shape = habitat), size = 4) + 
    scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
    facet_wrap(~site) +
@@ -1623,7 +1623,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (shannon_cv_plot_2 = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = shannon_mean, y = Cover_cv, colour = site, shape = habitat), size = 4, stroke = 1) + 
+  geom_point(aes(x = shannon_mean, y = cover_cv, colour = site, shape = habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~habitat) +
@@ -1649,7 +1649,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r portfolio effects and synchrony transect level,  fig.height = 8, fig.width = 10}
 (loreau_stability_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Loreau_synchrony, y = Cover_cv, colour = site, shape = habitat), size = 4, stroke = 1) + 
+  geom_point(aes(x = loreau_synchrony, y = cover_cv, colour = site, shape = habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~site) +
@@ -1670,7 +1670,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 # (gross_stability_plot_quad = 
 #   ggplot(data = diversity_stability_quadrat) +
-#   geom_point(aes(x = Gross_synchrony, y = Cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
+#   geom_point(aes(x = Gross_synchrony, y = cover_stability, colour = site, shape = habitat), size = 8, stroke = 2) + 
 #    scale_colour_manual(values = site_colours) +
 #    scale_shape_manual(values = habitat_shapes) +
 #   facet_wrap(~site) +
@@ -1691,7 +1691,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (portfolio_stability_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = Portfolio_effect, y = Cover_cv, colour = site, shape = habitat), size = 4, stroke = 2) + 
+  geom_point(aes(x = portfolio_effect, y = cover_cv, colour = site, shape = habitat), size = 4, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
  # facet_wrap(~site) +
@@ -1715,7 +1715,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```{r diversity portfolio effects and synchrony quadrat level,  fig.height = 8, fig.width = 10}
 (loreau_diversity_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = shannon_mean, y = Loreau_synchrony, colour = site, shape = habitat), size = 4, stroke = 1) + 
+  geom_point(aes(x = shannon_mean, y = loreau_synchrony, colour = site, shape = habitat), size = 4, stroke = 1) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~site) +
@@ -1738,7 +1738,7 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 
 (portfolio_diversity_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = shannon_mean, y = Portfolio_effect, colour = site, shape = habitat), size = 4, stroke = 2) + 
+  geom_point(aes(x = shannon_mean, y = portfolio_effect, colour = site, shape = habitat), size = 4, stroke = 2) + 
    scale_colour_manual(values = site_colours) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~site) +
@@ -1759,21 +1759,21 @@ pairs(~ Cover_mean + Cover_cv + Cover_stability +
 ```
 
 ```{r diversity models quad level}
-diversity_mod_universal <- glmmTMB(Cover_cv ~shannon_mean*site + shannon_mean*habitat + site*habitat + (1|transect/location), family = Gamma(link = "log"), data = diversity_stability_quadrat, na.action = na.pass)
+diversity_mod_universal <- glmmTMB(cover_cv ~shannon_mean*site + shannon_mean*habitat + site*habitat + (1|transect/location), family = Gamma(link = "log"), data = diversity_stability_quadrat, na.action = na.pass)
 diversity_dredge <- dredge(diversity_mod_universal)
 model.sel(diversity_dredge) # best model is as specified
 summary(diversity_mod_universal) # low variance in random effects
 Anova(diversity_mod_universal) # LR Tests are kinda useless
 r.squaredGLMM(diversity_mod_universal) # 0.653, 0.655
 
-synchrony_mod_universal <- glmmTMB(Cover_cv ~Loreau_synchrony*site + Loreau_synchrony*habitat + site*habitat + (1|transect/location), family = Gamma(link = "log"), data = diversity_stability_quadrat, na.action = na.pass)
+synchrony_mod_universal <- glmmTMB(cover_cv ~loreau_synchrony*site + loreau_synchrony*habitat + site*habitat + (1|transect/location), family = Gamma(link = "log"), data = diversity_stability_quadrat, na.action = na.pass)
 synchrony_dredge <- dredge(synchrony_mod_universal)
 model.sel(synchrony_dredge) # best model is as specified
 summary(synchrony_mod_universal)
 r.squaredGLMM(synchrony_mod_universal) # 0.800, 0.802
 
-diversity_stability_quadrat$Loreau_synchrony_trans <- sv_trans(diversity_stability_quadrat$Loreau_synchrony, diversity_stability_quadrat) # for modelling on beta
-synchrony_diversity_universal <- glmmTMB(Loreau_synchrony_trans ~shannon_mean*site + shannon_mean*habitat + site*habitat + (1|transect/location), family = beta_family(), data = diversity_stability_quadrat, na.action = na.pass)
+diversity_stability_quadrat$loreau_synchrony_trans <- sv_trans(diversity_stability_quadrat$loreau_synchrony, diversity_stability_quadrat) # for modelling on beta
+synchrony_diversity_universal <- glmmTMB(loreau_synchrony_trans ~shannon_mean*site + shannon_mean*habitat + site*habitat + (1|transect/location), family = beta_family(), data = diversity_stability_quadrat, na.action = na.pass)
 model.sel(dredge(synchrony_diversity_universal)) # best model as specified
 summary(synchrony_diversity_universal)
 Anova(synchrony_diversity_universal)
@@ -1781,6 +1781,50 @@ r.squaredGLMM(synchrony_diversity_universal) # Model's distribution-specific var
 
 ```
 
+```{r new csvs for joint analyses}
+# write_csv(alpha_diversity_quad, here("data", "algae_diversity_quadrat.csv"))
+# write_csv(diversity_stability_quadrat, here("data", "algae_diversity_stability_metrics_quadrat.csv"))
+
+
+diversity_stability_quadrat <- alpha_diversity_quad_sub %>%
+  dplyr::group_by(location, site, habitat, site_habitat, transect, stratum) %>%
+  dplyr::summarise(richness_mean = mean(richness), 
+            richness_se = sd(richness)/sqrt(n()),
+            richness_cv = CV(richness),
+            shannon_mean = mean(shannon), 
+            shannon_se = sd(shannon)/sqrt(n()),
+            shannon_cv = CV(shannon),
+            shannon_stability = 1/CV(shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
+            cover_mean = mean(cover),
+            cover_se = sd(cover)/sqrt(n()),
+            cover_cv = CV(cover)) 
+# create csv for site level
+new_csv_meta <- c("year", "island_side", "site", "habitat", "site_habitat") # relevant metadata
+cols_to_remove <- meta_cols[!meta_cols %in% new_csv_meta] # columns that don't overlap between metadata vectors
+reduced_diversity_stability <- diversity_stability_quadrat[ , -which(names(diversity_stability_quadrat) %in% cols_to_remove)]
+
+
+## HAD TO RUN TO CITY OFFICE FOR FAMILY SHIT AND COULDN'T FINISH THIS YET - NOAM AUG 08
+# diversity_stability_site <- reduced_diversity_stability %>%
+#   dplyr::group_by(island_side, site, habitat, site_habitat) %>%
+#   dplyr::summarise(richness_mean = mean(richness_mean), 
+#             richness_se = sd(richness_mean)/sqrt(n()),
+#             richness_cv = mean(richness_cv),
+#             shannon_mean = mean(shannon), 
+#             shannon_se = sd(shannon)/sqrt(n()),
+#             shannon_cv = CV(shannon),
+#             shannon_stability = 1/CV(shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
+#             cover_mean = mean(cover),
+#             cover_se = sd(cover)/sqrt(n()),
+#             cover_cv = CV(cover),
+#             loreau_mean = mean(loreau_synchrony),
+#             loreau_se = se(loreau_synchrony),
+#             portfolio_mean = mean(portfolio_effect),
+#             portfolio_se = se(portfolio_effect))
+# 
+
+
+```
 
 ```{r nmds, fig.height = 15, fig.width = 15}
 species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
