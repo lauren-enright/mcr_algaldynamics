@@ -1785,6 +1785,16 @@ r.squaredGLMM(synchrony_diversity_universal) # Model's distribution-specific var
 # write_csv(alpha_diversity_quad, here("data", "algae_diversity_quadrat.csv"))
 # write_csv(diversity_stability_quadrat, here("data", "algae_diversity_stability_metrics_quadrat.csv"))
 
+# algal diversity site level
+diversity_site <- alpha_diversity_quad %>%
+  dplyr::group_by(year, island_side, site, habitat, site_habitat) %>%
+  dplyr::summarise(algae_cover_mean = mean(cover),
+                   algae_cover_se = sd(cover)/sqrt(n()),
+                   algae_richness_mean = mean(richness),
+                   algae_shannon_mean = mean(shannon), 
+                   algae_shannon_se = sd(shannon)/sqrt(n())
+  )
+# write_csv(diversity_site, here("data", "algae_diversity_site.csv"))
 
 diversity_stability_quadrat <- alpha_diversity_quad_sub %>%
   dplyr::group_by(location, site, habitat, site_habitat, transect, stratum) %>%
@@ -1803,26 +1813,32 @@ new_csv_meta <- c("year", "island_side", "site", "habitat", "site_habitat") # re
 cols_to_remove <- meta_cols[!meta_cols %in% new_csv_meta] # columns that don't overlap between metadata vectors
 reduced_diversity_stability <- diversity_stability_quadrat[ , -which(names(diversity_stability_quadrat) %in% cols_to_remove)]
 
+# averaging from the original here to avoid taking average of average, cv of cv, etc.
+diversity_cv_site <- alpha_diversity_quad %>%
+  dplyr::group_by(site, habitat, island_side, site_habitat) %>%
+  dplyr::summarise(algae_richness_mean = mean(richness), 
+            algae_richness_se = sd(richness)/sqrt(n()),
+            algae_richness_cv = CV(richness),
+            algae_shannon_mean = mean(shannon), 
+            algae_shannon_se = sd(shannon)/sqrt(n()),
+            algae_shannon_cv = CV(shannon),
+            algae_shannon_stability = 1/CV(shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
+            algae_cover_mean = mean(cover),
+            algae_cover_se = sd(cover)/sqrt(n()),
+            algae_cover_cv = CV(cover)) 
 
-## HAD TO RUN TO CITY OFFICE FOR FAMILY SHIT AND COULDN'T FINISH THIS YET - NOAM AUG 08
-# diversity_stability_site <- reduced_diversity_stability %>%
-#   dplyr::group_by(island_side, site, habitat, site_habitat) %>%
-#   dplyr::summarise(richness_mean = mean(richness_mean), 
-#             richness_se = sd(richness_mean)/sqrt(n()),
-#             richness_cv = mean(richness_cv),
-#             shannon_mean = mean(shannon), 
-#             shannon_se = sd(shannon)/sqrt(n()),
-#             shannon_cv = CV(shannon),
-#             shannon_stability = 1/CV(shannon), # Stability as defined by codyn and many others (including Pete in 2022 paper)
-#             cover_mean = mean(cover),
-#             cover_se = sd(cover)/sqrt(n()),
-#             cover_cv = CV(cover),
-#             loreau_mean = mean(loreau_synchrony),
-#             loreau_se = se(loreau_synchrony),
-#             portfolio_mean = mean(portfolio_effect),
-#             portfolio_se = se(portfolio_effect))
-# 
+# portfolio and synchrony need to be calculated at quad level, so taking the mean of the quad level for these
+synchrony_portfolio_site <- diversity_stability_quadrat %>%
+  dplyr::group_by(site, habitat, island_side, site_habitat) %>%
+  dplyr::summarise(
+            algae_loreau_mean = mean(loreau_synchrony),
+            algae_loreau_se = sd(loreau_synchrony)/sqrt(n()),
+            algae_portfolio_mean = mean(portfolio_effect),
+            algae_portfolio_se = sd(portfolio_effect)/sqrt(n()))
 
+# merge together
+diversity_stability_site <- merge(diversity_cv_site, synchrony_portfolio_site, by = c("site", "habitat", "island_side", "site_habitat"))
+# write_csv(diversity_stability_site, here("data", "algae_diversity_stability_metrics_site.csv"))
 
 ```
 
