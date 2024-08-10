@@ -1,0 +1,75 @@
+---
+title: "comparing noam and j datasets"
+author: "Noam Altman-Kurosaki"
+date: "2024-08-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# clean up
+rm(list=ls()) 
+
+library(here) 
+library(tidyverse) 
+
+```
+
+This is a document for comparing the datasets N and J prepared
+
+```{r quad level}
+meta_cols <- c("year", "site", "island_side", "habitat")
+
+j_quad <- read_csv(here("data", "j_algal_metrics_quadrat.csv"))
+n_quad <- read_csv(here("data", "algae_diversity_quadrat.csv"))
+
+quad_comp <- merge(j_quad, n_quad, by = meta_cols)
+
+# cover - should be effectively 0 differnces
+sum(quad_comp$cover - quad_comp$algal_perc_cov/100) # 7.297496e-13 --> some rounding issues, but fine
+
+# richness
+sum(quad_comp$richness - quad_comp$algal_richness) # 0
+
+# shannon
+sum(quad_comp$shannon - quad_comp$algal_Shann) # -2.218337e-12 --> rounding issues
+```
+
+```{r site level}
+
+j_site <- read_csv(here("data", "j_algal_metrics_site.csv"))
+n_site <- read_csv(here("data", "algae_diversity_site.csv"))
+
+site_comp <- merge(j_site, n_site, by = meta_cols)
+
+# cover - should be effectively 0 differnces
+sum(site_comp$algae_cover_mean - site_comp$mean_alg_perc_cov/100) # 1.11e-15 --> some rounding issues, but fine
+
+# richness
+sum(site_comp$mean_alg_richness - site_comp$algae_richness_mean) # sameish here
+
+# shannon
+sum(site_comp$algae_shannon_mean - site_comp$mean_alg_Shann) # 0
+
+```
+
+```{r diversity stability}
+j_stab <- read_csv(here("data", "j_algal_metrics_all_time.csv"))
+n_stab <- read_csv(here("data", "algae_diversity_stability_metrics_site.csv"))
+
+stab_comp <- merge(j_stab, n_stab, by = c("site", "island_side", "habitat"))
+
+
+# cover 
+sum(stab_comp$algae_cover_mean - stab_comp$mean_alg_cov/100) # -3.191891e-15--> rounding issues
+
+# richness
+sum(stab_comp$algae_richness_mean - stab_comp$mean_alg_richness) # 5.107026e-15
+
+# shannon
+sum(stab_comp$algae_shannon_mean - stab_comp$mean_Shann) # 0
+
+# CV
+sum(stab_comp$algae_cover_cv - stab_comp$alg_cov_cv) # -9.15934e-15
+```
