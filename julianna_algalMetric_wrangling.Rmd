@@ -269,6 +269,28 @@ Calculate beta disperion
 yrBetaDisperOuter17 <- vegan::betadisper(brayMatOuter17, sppMeta0outer17$year) # error: some squared distances are negative and changed to zero
 ```
 
+### Save dispersions
+
+```{r}
+# save(yrBetaDisperFring, file = here("data/fringingyrdispersion.Rdata"))
+# save(yrBetaDisperBack, file = here("data/backyrdispersion.Rdata"))
+# save(yrBetaDisperOuter10, file = here("data/outer10yrdispersion.Rdata"))
+# save(yrBetaDisperOuter17, file = here("data/outer17yrdispersion.Rdata"))
+```
+
+
+### Load dispersions
+
+This is for if you're not running betadisper() for the first time (loading old runs)
+
+```{r}
+load(here("data/fringingyrdispersion.Rdata"))
+load(here("data/backyrdispersion.Rdata"))
+load(here("data/outer10yrdispersion.Rdata"))
+load(here("data/outer17yrdispersion.Rdata"))
+```
+
+
 ## Join together
 
 Attach back to metadata
@@ -300,36 +322,20 @@ betaDHabYr <- rbind(fringeDist, backDist, outer10Dist, outer17Dist) %>%
   select(year, location, site, habitat, transect, quadrat, hab_yr_distcentroid)
 ```
 
-### Save dispersions
-
-```{r}
-# save(yrBetaDisperFring, file = here("data/fringingyrdispersion.Rdata"))
-# save(yrBetaDisperBack, file = here("data/backyrdispersion.Rdata"))
-# save(yrBetaDisperOuter10, file = here("data/outer10yrdispersion.Rdata"))
-# save(yrBetaDisperOuter17, file = here("data/outer17yrdispersion.Rdata"))
-```
-
-### Load dispersions
-
-```{r}
-load(here("data/fringingyrdispersion.Rdata"))
-load(here("data/backyrdispersion.Rdata"))
-load(here("data/outer10yrdispersion.Rdata"))
-load(here("data/outer17yrdispersion.Rdata"))
-```
 
 # Join all quadrat-level datasets together
 
 ```{r join}
 algDiv %>% 
   full_join(betaDHabYr) %>% 
-  # follow a cleaner naming convention
-  rename(algal_perc_cov = AlgCov_perc,
-         algal_perc_cov_hard = AlgCov_percHard,
-         algal_richness = Richness,
-         algal_Shann = Shannon) %>% 
+  # follow a cleaner naming convention to match Noam's
+  rename(algae_cover = AlgCov_perc,
+         algae_cover_hard = AlgCov_percHard,
+         algae_richness = Richness,
+         algae_shannon = Shannon) %>% 
   # get just the columns we need
   select(-site_habitat, -hab_year, -island_side_hab_year) -> quadData
+
 ```
 
 ```{r save}
@@ -343,13 +349,20 @@ We'll also average these data at the site/habitat/year-level to be more compatib
 ```{r get averages}
 quadData %>% 
   group_by(year, site, habitat, island_side) %>% 
-  summarize(mean_coral_perc_cov = mean(coral),
-            mean_alg_perc_cov = mean(algal_perc_cov),
-            mean_alg_perc_cov_hard = mean(algal_perc_cov_hard),
-            mean_alg_richness = mean(algal_richness),
-            mean_alg_Shann = mean(algal_Shann),
-            mean_dist_centroid_habyear = mean(hab_yr_distcentroid, na.rm = TRUE)
+  summarize(coral_cover_mean = mean(coral),
+            N = n(),
+            coral_cover_se = sd(coral)/sqrt(N),
+            algae_cover_mean = mean(algae_cover),
+            algae_cover_se = sd(algae_cover)/sqrt(N),
+            algae_cover_hard_mean = mean(algae_cover_hard),
+            algae_cover_hard_se = sd(algae_cover_hard)/sqrt(N),
+            algae_richness_mean = mean(algae_richness),
+            algae_richness_se = sd(algae_richness)/sqrt(N),
+            algae_shannon_mean = mean(algae_shannon),
+            algae_shannon_se = sd(algae_shannon)/sqrt(N),
+            centroid_dist_habyear_mean = mean(hab_yr_distcentroid, na.rm = TRUE)
             ) -> siteData
+
 ```
 
 ```{r save dataframe}
@@ -376,30 +389,39 @@ quadData %>%
   # don't include year this time
   group_by(site, habitat, island_side) %>%
   summarize(
-    mean_coral_perc = mean(coral),
-    mean_alg_richness = mean(algal_richness), 
-    richness_se = sd(algal_richness)/sqrt(n()),
-    richness_cv = CV(algal_richness),
-    mean_Shann = mean(algal_Shann), 
-    Shann_se = sd(algal_Shann)/sqrt(n()),
-    Shann_cv = CV(algal_Shann),
+    coral_cover_mean = mean(coral),
+    algae_richness_mean = mean(algae_richness), 
+    algae_richness_se = sd(algae_richness)/sqrt(n()),
+    algae_richness_cv = CV(algae_richness),
+    algae_shannon_mean = mean(algae_shannon), 
+    algae_shannon_se = sd(algae_shannon)/sqrt(n()),
+    algae_shannon_cv = CV(algae_shannon),
     # for total algal cover
-    mean_alg_cov = mean(algal_perc_cov),
-    alg_cov_se = sd(algal_perc_cov)/sqrt(n()),
-    cv_alg_cov = CV(algal_perc_cov),
+    algae_cover_mean = mean(algae_cover),
+    algae_cover_se = sd(algae_cover)/sqrt(n()),
+    algae_cover_cv = CV(algae_cover),
     # and for % of hard substrate
-    mean_alg_cov_hard = mean(algal_perc_cov_hard),
-    alg_cov_hard_se = sd(algal_perc_cov_hard)/sqrt(n()),
-    cv_alg_cov_hard = CV(algal_perc_cov_hard),
+    algae_cover_hard_mean = mean(algae_cover_hard),
+    algae_cover_hard_se = sd(algae_cover_hard)/sqrt(n()),
+    algae_cover_hard_cv = CV(algae_cover_hard),
     ) -> alltimeCV
 ```
 
-```{r save}
-# write_csv(alltimeCV, here(here("data/algal_metrics_all_time.csv")))
+Combine with Noam's synchrony/portfolio estimates:
+
+```{r}
+noamallTime <- read_csv(here("data/algae_diversity_stability_metrics_alltime.csv"))
 ```
 
-- Noam: Add **synchrony** to this dataset + any other relevant metrics
+```{r}
+noamallTime %>% 
+  select(site, habitat, island_side, algae_shannon_stability, algae_loreau_mean, algae_loreau_se, algae_portfolio_mean, algae_portfolio_se) %>% 
+  full_join(alltimeCV) -> alltimeJoin
+```
 
-s
+
+```{r save}
+write_csv(alltimeJoin, here(here("data/algal_metrics_all_time.csv")))
+```
 
 
