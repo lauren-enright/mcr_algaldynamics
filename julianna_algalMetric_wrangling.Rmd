@@ -35,7 +35,7 @@ algae <- read_csv(here("data", "algaeonly_cleaned_colnames.csv")) %>%
 
 # sand cover
 sand <- read_csv(here("data", "allbenthicdata_cleaned_colnames.csv")) %>% 
-  select(year, location, site, habitat, site_habitat, transect, quadrat, sand, coral)
+  select(year, location, site, habitat, site_habitat, transect, quadrat, sand)
 ```
 
 # Calculate algal alpha diversity 
@@ -69,7 +69,7 @@ algae %>%
          island_side_hab_year = paste0(island_side, "_", hab_year)) %>% 
   select(year, location, site, habitat, island_side, site_habitat, 
          hab_year, island_side_hab_year, transect, quadrat, algae_cover, 
-         algae_cover_hard, sand, coral)  -> sppMeta
+         algae_cover_hard)  -> sppMeta
 ```
 
 ## Calculate diversity metrics
@@ -348,9 +348,7 @@ We'll also average these data at the site/habitat/year-level to be more compatib
 ```{r get averages}
 quadData %>% 
   group_by(year, site, habitat, island_side) %>% 
-  summarize(coral_cover_mean = mean(coral),
-            N = n(),
-            coral_cover_se = sd(coral)/sqrt(N),
+  summarize(N = n(),
             algae_cover_mean = mean(algae_cover),
             algae_cover_se = sd(algae_cover)/sqrt(N),
             algae_cover_hard_mean = mean(algae_cover_hard, na.rm = TRUE),
@@ -387,7 +385,6 @@ quadData %>%
   # don't include year this time
   group_by(site, habitat, island_side) %>%
   summarize(
-    coral_cover_mean = mean(coral),
     algae_richness_mean = mean(algae_richness), 
     algae_richness_se = sd(algae_richness)/sqrt(n()),
     algae_richness_cv = CV(algae_richness),
