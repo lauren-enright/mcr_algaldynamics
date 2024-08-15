@@ -1,0 +1,19 @@
+---
+title: "Wrangling coral and macroalgae data to be joinable"
+output: html_document
+date: "2024-08-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# clean up
+rm(list=ls()) 
+
+# load packages
+require(here) # relative file paths
+require(tidyverse) # data wrangling
+require(vegan) # community/diversity analyses
+```
+
+This script summarizes the coral and macroalgae subsets to be joinable with the full algae dataset
