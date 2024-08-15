@@ -12,17 +12,22 @@ knitr::opts_chunk$set(echo = TRUE)
 # clean up
 rm(list=ls()) 
 
+require(librarian)
+
 # load packages
-require(here) # relative file paths
-require(tidyverse) # data wrangling
-require(vegan) # community/diversity analyses
-require(lme4) # glmer()
-require(emmeans) # emmeans()
-require(viridis) # color palette
-require(MoMAColors) # another color palette
-require(patchwork) # putting figures together
-require(BiodiversityR)
-require(ggsci) # scientific jounral and sci-fi themed color palette
+librarian::shelf(
+  here, # relative file paths
+  tidyverse,  # data wrangling
+  vegan, # data wrangling
+  lme4, # glmer()
+  emmeans, # emmeans()
+  viridis, # color palette
+  MoMAColors, # another color palette: devtools::install_github("BlakeRMills/MoMAColors")
+  patchwork, # putting figures together
+  BiodiversityR,
+  ggsci # scientific jounral and sci-fi themed color palette
+)
+
 ```
 
 # Bring in the data

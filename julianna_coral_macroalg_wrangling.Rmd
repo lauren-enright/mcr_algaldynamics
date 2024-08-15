@@ -17,3 +17,35 @@ require(vegan) # community/diversity analyses
 ```
 
 This script summarizes the coral and macroalgae subsets to be joinable with the full algae dataset
+
+# Bring in the data
+
+```{r}
+# algal cover 
+macroalgae <- read_csv(here("data", "algaeonly_cleaned_colnames.csv")) %>% 
+  mutate(island_side = case_when(site == "lter_1" ~ "north",
+                                 site == "lter_2" ~ "north",
+                                 site == "lter_3" ~ "east",
+                                 site == "lter_4" ~ "east",
+                                 site == "lter_5" ~ "west",
+                                 site == "lter_6" ~ "west",
+                                 TRUE ~ "UdINGLEbUTT")) %>% 
+  select(-algal_turf, -crustose_corallines, -cyanophyta, -damselfish_turf, -lithophyllum_kotschyanum,
+         -neogoniolithon_brassica_florida, -sporolithon_sp) # got this from the cleaning code--should Peysonellia be included?
+
+# sand cover and coral cover
+sand_coral <- read_csv(here("data", "allbenthicdata_cleaned_colnames.csv")) %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, sand, coral)
+```
+
+# Calculate macroalgal alpha diversity 
+
+## Make matrices 
+
+Make a spp matrix to use with `vegan`
+
+```{r make species matrix}
+# matrix of just species and their relative percent covers in the same order as the algae tibble
+macroalgae %>% 
+  select(-year, -location, -site, -island_side, -habitat, -site_habitat, -transect, -quadrat) -> sppMat
+```

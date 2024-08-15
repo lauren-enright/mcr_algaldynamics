@@ -59,17 +59,17 @@ endAlg <- grep("valonia_ventricosa", colnames(algae))
 algae %>% 
   # bring in sand data
   full_join(sand) %>% 
-  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg]), # percent cover of algae
-         AlgCov_percHard = case_when(
-           sand == 0 ~ AlgCov_perc, # since we can't divide by a zero
-           TRUE ~ AlgCov_perc/sand 
+  mutate(algae_cover = rowSums(algae[startAlg:endAlg]), # percent cover of algae
+         algae_cover_hard = case_when(
+           sand == 100 ~ NA, # since we can't divide by a zero
+           TRUE ~ (algae_cover/(100-sand))*100 
            )) %>% # percent cover of hard substrate
    # make a year-habitat column for betadisper
   mutate(hab_year = paste0(habitat, "_", year),
          island_side_hab_year = paste0(island_side, "_", hab_year)) %>% 
   select(year, location, site, habitat, island_side, site_habitat, 
-         hab_year, island_side_hab_year, transect, quadrat, AlgCov_perc, 
-         AlgCov_percHard, sand, coral)  -> sppMeta
+         hab_year, island_side_hab_year, transect, quadrat, algae_cover, 
+         algae_cover_hard, sand, coral)  -> sppMeta
 ```
 
 ## Calculate diversity metrics
@@ -89,8 +89,8 @@ We get an error if we run `vegdist()` with quadrats that have no algae. We can s
 
 ```{r look for zeros}
 sppMat %>% 
-  mutate(AlgCov_perc = rowSums(across(where(is.numeric)))) %>% 
-  filter(AlgCov_perc == 0) %>% dim() # 672 with no algae at all
+  mutate(algae_cover = rowSums(across(where(is.numeric)))) %>% 
+  filter(algae_cover == 0) %>% dim() # 672 with no algae at all
 ```
 
 Now we can exclude quadrats with no algae and make a species matrix again
@@ -101,16 +101,16 @@ endAlg <- grep("valonia_ventricosa", colnames(algae))
 
 # spp matrix where 0 observations are filtered out
 algae %>% 
-  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
-  filter(AlgCov_perc != 0) %>% 
-  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgCov_perc) -> sppMat0
+  mutate(algae_cover = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(algae_cover != 0) %>% 
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -algae_cover) -> sppMat0
 ```
 
 ```{r metadata matix}
 # matching metadata matrix
 algae %>% 
-  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
-  filter(AlgCov_perc != 0) %>%
+  mutate(algae_cover = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(algae_cover != 0) %>%
   select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
   # make a year-habitat column for betadisper
   mutate(hab_year = paste0(habitat, "_", year),
@@ -127,15 +127,15 @@ endAlg <- grep("valonia_ventricosa", colnames(algae))
 
 # spp matrix
 algae %>% 
-  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
-  filter(AlgCov_perc != 0) %>% 
+  mutate(algae_cover = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(algae_cover != 0) %>% 
   filter(habitat == "fringing") %>% 
-  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgCov_perc) -> sppMat0fring
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -algae_cover) -> sppMat0fring
 
 # metadata matrix
 algae %>% 
-  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
-  filter(AlgCov_perc != 0) %>%
+  mutate(algae_cover = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(algae_cover != 0) %>%
    filter(habitat == "fringing") %>% 
   select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
   # make a year-habitat column for betadisper
@@ -164,15 +164,15 @@ endAlg <- grep("valonia_ventricosa", colnames(algae))
 
 # spp matrix
 algae %>% 
-  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
-  filter(AlgCov_perc != 0) %>% 
+  mutate(algae_cover = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(algae_cover != 0) %>% 
   filter(habitat == "backreef") %>% 
-  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgCov_perc) -> sppMat0back
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -algae_cover) -> sppMat0back
 
 # metadata matrix
 algae %>% 
-  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
-  filter(AlgCov_perc != 0) %>%
+  mutate(algae_cover = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(algae_cover != 0) %>%
    filter(habitat == "backreef") %>% 
   select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
   # make a year-habitat column for betadisper
@@ -202,15 +202,15 @@ endAlg <- grep("valonia_ventricosa", colnames(algae))
 
 # spp matrix
 algae %>% 
-  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
-  filter(AlgCov_perc != 0) %>% 
+  mutate(algae_cover = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(algae_cover != 0) %>% 
   filter(habitat == "outer_10") %>% 
-  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgCov_perc) -> sppMat0outer10
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -algae_cover) -> sppMat0outer10
 
 # metadata matrix
 algae %>% 
-  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
-  filter(AlgCov_perc != 0) %>%
+  mutate(algae_cover = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(algae_cover != 0) %>%
    filter(habitat == "outer_10") %>% 
   select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
   # make a year-habitat column for betadisper
@@ -240,15 +240,15 @@ endAlg <- grep("valonia_ventricosa", colnames(algae))
 
 # spp matrix
 algae %>% 
-  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
-  filter(AlgCov_perc != 0) %>% 
+  mutate(algae_cover = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(algae_cover != 0) %>% 
   filter(habitat == "outer_17") %>% 
-  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -AlgCov_perc) -> sppMat0outer17
+  select(-year, -location, -island_side, -site, -habitat, -site_habitat, -transect, -quadrat, -algae_cover) -> sppMat0outer17
 
 # metadata matrix
 algae %>% 
-  mutate(AlgCov_perc = rowSums(algae[startAlg:endAlg])) %>% 
-  filter(AlgCov_perc != 0) %>%
+  mutate(algae_cover = rowSums(algae[startAlg:endAlg])) %>% 
+  filter(algae_cover != 0) %>%
    filter(habitat == "outer_17") %>% 
   select(year, location, site, habitat, site_habitat, transect, quadrat, island_side) %>% 
   # make a year-habitat column for betadisper
@@ -316,6 +316,7 @@ colnames(backDist) == colnames(outer10Dist)
 colnames(outer10Dist) == colnames(outer17Dist)
 
 
+
 # join together and tidy up
 betaDHabYr <- rbind(fringeDist, backDist, outer10Dist, outer17Dist) %>% 
   mutate(hab_yr_distcentroid = distance_centriod) %>% 
@@ -329,9 +330,7 @@ betaDHabYr <- rbind(fringeDist, backDist, outer10Dist, outer17Dist) %>%
 algDiv %>% 
   full_join(betaDHabYr) %>% 
   # follow a cleaner naming convention to match Noam's
-  rename(algae_cover = AlgCov_perc,
-         algae_cover_hard = AlgCov_percHard,
-         algae_richness = Richness,
+  rename(algae_richness = Richness,
          algae_shannon = Shannon) %>% 
   # get just the columns we need
   select(-site_habitat, -hab_year, -island_side_hab_year) -> quadData
@@ -354,8 +353,8 @@ quadData %>%
             coral_cover_se = sd(coral)/sqrt(N),
             algae_cover_mean = mean(algae_cover),
             algae_cover_se = sd(algae_cover)/sqrt(N),
-            algae_cover_hard_mean = mean(algae_cover_hard),
-            algae_cover_hard_se = sd(algae_cover_hard)/sqrt(N),
+            algae_cover_hard_mean = mean(algae_cover_hard, na.rm = TRUE),
+            algae_cover_hard_se = sd(algae_cover_hard, na.rm = TRUE)/sqrt(N),
             algae_richness_mean = mean(algae_richness),
             algae_richness_se = sd(algae_richness)/sqrt(N),
             algae_shannon_mean = mean(algae_shannon),
@@ -382,7 +381,6 @@ CV <- function(x){
 }
 ```
 
-Apply it when we summarize
 
 ```{r calculate CV and summarize}
 quadData %>% 
@@ -401,8 +399,8 @@ quadData %>%
     algae_cover_se = sd(algae_cover)/sqrt(n()),
     algae_cover_cv = CV(algae_cover),
     # and for % of hard substrate
-    algae_cover_hard_mean = mean(algae_cover_hard),
-    algae_cover_hard_se = sd(algae_cover_hard)/sqrt(n()),
+    algae_cover_hard_mean = mean(algae_cover_hard, na.rm = TRUE),
+    algae_cover_hard_se = sd(algae_cover_hard, na.rm = TRUE)/sqrt(n()),
     algae_cover_hard_cv = CV(algae_cover_hard),
     ) -> alltimeCV
 ```
