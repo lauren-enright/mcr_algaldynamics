@@ -153,7 +153,7 @@ brayMatFring <- vegdist(sppMat0fring, "bray") # 1 is maximum dissimilarity
 Calculate dispersion (this is using Noam's code)
 
 ```{r calculate beta dispersion}
-yrBetaDisperFring <- vegan::betadisper(brayMatFring, sppMeta0fring$year) # warning: some squared distances are negative and changed to zero (ask Jamie about this??)
+# yrBetaDisperFring <- vegan::betadisper(brayMatFring, sppMeta0fring$year) # warning: some squared distances are negative and changed to zero (ask Jamie about this??)
 ```
 
 ### Backreef
@@ -191,7 +191,7 @@ brayMatBack <- vegdist(sppMat0back, "bray") # 1 is maximum dissimilarity
 Calculate beta disperion
 
 ```{r calculate beta dispersion}
-yrBetaDisperBack <- vegan::betadisper(brayMatBack, sppMeta0back$year) 
+# yrBetaDisperBack <- vegan::betadisper(brayMatBack, sppMeta0back$year) 
 ```
 
 ### Outer 10
@@ -229,7 +229,7 @@ brayMatOuter10 <- vegdist(sppMat0outer10, "bray") # 1 is maximum dissimilarity
 Calculate beta disperion
 
 ```{r calculate beta dispersion}
-yrBetaDisperOuter10 <- vegan::betadisper(brayMatOuter10, sppMeta0outer10$year) # error: some squared distances are negative and changed to zero
+# yrBetaDisperOuter10 <- vegan::betadisper(brayMatOuter10, sppMeta0outer10$year) # error: some squared distances are negative and changed to zero
 ```
 
 ### Outer 17
@@ -266,7 +266,7 @@ brayMatOuter17 <- vegdist(sppMat0outer17, "bray") # 1 is maximum dissimilarity
 Calculate beta disperion
 
 ```{r calculate beta dispersion}
-yrBetaDisperOuter17 <- vegan::betadisper(brayMatOuter17, sppMeta0outer17$year) # error: some squared distances are negative and changed to zero
+# yrBetaDisperOuter17 <- vegan::betadisper(brayMatOuter17, sppMeta0outer17$year) # error: some squared distances are negative and changed to zero
 ```
 
 ### Save dispersions
@@ -338,7 +338,7 @@ algDiv %>%
 ```
 
 ```{r save}
-# write_csv(quadData, here("data/algal_metrics_quadrat.csv"))
+write_csv(quadData, here("data/algae_diversity_quadrat.csv"))
 ```
 
 # Site/habitat/year-level mean
@@ -363,7 +363,7 @@ quadData %>%
 ```
 
 ```{r save dataframe}
-# write_csv(siteData, here("data/algal_metrics_site.csv"))
+write_csv(siteData, here("data/algae_diversity_site.csv"))
 ```
 
 # All time metrics
@@ -416,7 +416,7 @@ noamallTime %>%
 
 
 ```{r save}
-write_csv(alltimeJoin, here(here("data/algal_metrics_all_time.csv")))
+write_csv(alltimeJoin, here(here("data/algae_diversity_stability_metrics_alltime.csv")))
 ```
 
 
