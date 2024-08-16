@@ -1,0 +1,289 @@
+---
+title: "Juilanna's figures for August 29"
+output: html_document
+date: "2024-08-16"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# clean up
+rm(list=ls()) 
+
+# load librarian (for repeatable package loading/installation)
+if (!require("librarian")) install.packages("librarian")
+
+# load packages
+librarian::shelf(
+  here, # relative file paths
+  tidyverse, # data wrangling
+  vegan, # community/diversity analyses
+  MoMAColors # color palette: can install using devtools::install_github("BlakeRMills/MoMAColors")
+                 )
+```
+
+# Read in data
+
+Want data at the quadrat-level data for the trends through time plot.
+
+```{r load data}
+# raw algae information (e.g., for grabbing CCA for Fig 1.)
+algae <- read_csv(here("data/algaeonly_cleaned_colnames.csv")) 
+
+# algae standardized dataset with diversity information at the quadrat-level (generated using julianna_algalMetric_wrangling.Rmd)
+algaeQuad <- read_csv(here("data/algae_diversity_quadrat.csv")) 
+
+# macroalgae & coral dataset in the ancillary data Drive (generated using julianna_coral_macroalg_wrangling.Rmd)
+macroalgQuad <- read_csv(here("data/macroalgae_coral_diversity_quadrat.csv")) 
+
+# all time metrics for stability
+algaeAT <- read_csv(here("data/algae_diversity_stability_metrics_alltime.csv")) 
+macroalgAT <- read_csv(here("data/macroalgae_coral_diversity_stability_metrics_alltime.csv")) 
+```
+
+# Patterns of 4 key spaceholders through time
+
+Deron suggested we make this figure: macroalgae, CCA, turf, and coral through time
+
+```{r get a dataset with the main four spaceholders}
+macroalgQuad %>% 
+  select(year, location, site, habitat, transect, quadrat, island_side, macroalgae_cover, macroalgae_cover_hard, coral_cover, coral_cover_hard, sand_cover) %>% 
+  full_join(algae) %>%
+  rowwise() %>% 
+  # get turf and CCA cover
+  mutate(turf_cover = sum(algal_turf, damselfish_turf),
+         turf_cover_hard = case_when(
+           sand_cover == 100 ~ NA, # since we can't divide by a zero
+           TRUE ~ (turf_cover/(100-sand_cover))*100 
+           ),
+         CCA_cover = sum(lithophyllum_kotschyanum, crustose_corallines, neogoniolithon_brassica_florida, sporolithon_sp),
+         CCA_cover_hard = case_when(
+           sand_cover == 100 ~ NA, # since we can't divide by a zero
+           TRUE ~ (CCA_cover/(100-sand_cover))*100 
+           )
+         ) %>% 
+  select(year, location, site, habitat, transect, quadrat, island_side, 
+         macroalgae_cover, macroalgae_cover_hard, coral_cover, coral_cover_hard, sand_cover, 
+         turf_cover, turf_cover_hard, CCA_cover, CCA_cover_hard
+         ) %>% 
+  # relevel for graphing
+  mutate(island_side = str_to_sentence(island_side),
+         island_side = factor(island_side, levels = c("North", "East", "West")),
+         habitat = case_when(
+           str_detect(habitat, pattern = "_") ~ str_to_sentence(paste0(str_split(habitat, "_")[[1]][1], " ", str_split(habitat, "_")[[1]][2])),
+           TRUE ~ str_to_sentence(habitat)),
+         habitat = factor(habitat, levels = c("Fringing", "Backreef", "Outer 10", "Outer 17"))) %>% 
+  mutate(site = case_when(
+    site == "lter_1" ~ "LTER 1 (N)",
+    site == "lter_2" ~ "LTER 2 (N)",
+    site == "lter_3" ~ "LTER 3 (E)",
+    site == "lter_4" ~ "LTER 4 (E)",
+    site == "lter_5" ~ "LTER 5 (W)",
+    site == "lter_6" ~ "LTER 6 (W)"
+  )) -> main4quad
+```
+
+```{r plot for absolute cover}
+main4quad %>% 
+  select(year, location, site, habitat, transect, quadrat, island_side, 
+         macroalgae_cover, turf_cover, CCA_cover, coral_cover) %>% 
+  # pivot key columns longer
+  pivot_longer(cols = c(macroalgae_cover, turf_cover, CCA_cover, coral_cover),
+               names_to = "Substrate",
+               values_to = "cover") %>% 
+  # summarize and group quadrats by island/habitat
+  group_by(year, habitat, site, island_side, Substrate) %>% 
+  summarise(mean_cov = mean(cover),
+            sd_cov = sd(cover, na.rm = TRUE),
+            n = n(),
+            CI95 = 1.96*(sd_cov)/sqrt(n)) %>% 
+  # plot
+  ggplot(aes(x = year, y = mean_cov, group = Substrate, fill = Substrate)) +
+  geom_ribbon(aes(ymin = mean_cov -CI95, 
+                    ymax = mean_cov + CI95),
+              alpha  = 0.7) +
+  geom_line() +
+  theme_bw() +
+   scale_fill_manual(values = c(
+    moma.colors("Klein", type = "discrete")[2], # CCA
+    moma.colors("Klein", type = "discrete")[1], # coral
+    moma.colors("Klein", type = "discrete")[5], # macro
+    moma.colors("Klein", type = "discrete")[4] # turf
+  ),
+  labels = c("CCA", "Coral", "Macroalgae", "Turf algae")) +
+  facet_grid(site ~ habitat) + # not sure which direction is best here
+  ylab("Mean absolute cover (%)") +
+  xlab("Year") +
+  # add lines for disturbances
+  geom_vline(xintercept = 2006, linetype = "dotdash") + # start of COTS
+  geom_vline(xintercept = 2010,  color = "darkgray") + # cyclone Oli
+  geom_vline(xintercept = 2019, linetype = "dashed", color = "red") 
+```
+
+```{r plot for percent of hard cover}
+main4quad %>% 
+  select(year, location, site, habitat, transect, quadrat, island_side, 
+         macroalgae_cover_hard, turf_cover_hard, CCA_cover_hard, coral_cover_hard) %>% 
+  # pivot key columns longer
+  pivot_longer(cols = c(macroalgae_cover_hard, turf_cover_hard, CCA_cover_hard, coral_cover_hard),
+               names_to = "Substrate",
+               values_to = "cover") %>% 
+  # summarize and group quadrats by island/habitat
+  group_by(year, habitat, site, island_side, Substrate) %>% 
+  summarise(mean_cov = mean(cover, na.rm = TRUE),
+            sd_cov = sd(cover, na.rm = TRUE),
+            n = n(),
+            CI95 = 1.96*(sd_cov)/sqrt(n)) %>% 
+  # plot
+  ggplot(aes(x = year, y = mean_cov, group = Substrate, fill = Substrate)) +
+  geom_ribbon(aes(ymin = mean_cov -CI95, 
+                    ymax = mean_cov + CI95),
+              alpha  = 0.7) +
+  geom_line() +
+  theme_bw() +
+   scale_fill_manual(values = c(
+    moma.colors("Klein", type = "discrete")[2], # CCA
+    moma.colors("Klein", type = "discrete")[1], # coral
+    moma.colors("Klein", type = "discrete")[5], # macro
+    moma.colors("Klein", type = "discrete")[4] # turf
+  ),
+  labels = c("CCA", "Coral", "Macroalgae", "Turf algae")) +
+  facet_grid(site ~ habitat) + # not sure which direction is best here
+  ylab("Mean cover of hard substrate(%)") +
+  xlab("Year") +
+  # add lines for disturbances
+  geom_vline(xintercept = 2006, linetype = "dotdash") + # start of COTS
+  geom_vline(xintercept = 2010,  color = "darkgray") + # cyclone Oli
+  geom_vline(xintercept = 2019, linetype = "dashed", color = "red") 
+```
+
+# Coral cover vs. algal metrics
+
+```{r join coral and algae}
+algaeQuad %>% 
+  full_join(macroalgQuad) -> coralAlgaeQuad
+```
+
+```{r plot algal-richness vs. coral}
+coralAlgaeQuad %>% 
+  ggplot(aes(x = algae_richness, y = coral_cover_hard, color = island_side, group = algae_richness)) +
+  geom_boxplot() + 
+  facet_grid(habitat~site) +
+  scale_color_manual(values = c("darkblue", "darkred", "darkgreen")) +
+  theme_classic()
+```
+
+```{r plot macroalgal-richness vs. coral}
+coralAlgaeQuad %>% 
+  ggplot(aes(x = macroalgae_richness, y = coral_cover_hard, color = island_side, group = macroalgae_richness)) +
+  geom_boxplot() + 
+  facet_grid(habitat~site) +
+  scale_color_manual(values = c("darkblue", "darkred", "darkgreen")) +
+  theme_classic()
+```
+
+```{r plot macroalgal-richness vs. algal richness}
+coralAlgaeQuad %>% 
+  ggplot(aes(x = algae_richness, y = macroalgae_richness, color = island_side, group = algae_richness)) +
+  geom_point() + 
+  facet_grid(habitat~site) +
+  scale_color_manual(values = c("darkblue", "darkred", "darkgreen")) +
+  theme_classic()
+```
+
+# Beta diversity
+
+```{r beta diversity with disturbances}
+coralAlgaeQuad %>% 
+  # first get average coral cover per year
+  group_by(year, habitat, site) %>% 
+  summarize(coral_cover_hard_mean = mean(coral_cover_hard, na.rm = TRUE)) %>% 
+  full_join(coralAlgaeQuad) %>% 
+  ggplot(aes(x = year, y = hab_yr_distcentroid, group = year)) +
+  geom_boxplot() +
+  ylab("Distance to centroid") +
+  xlab("Year") + 
+  theme_bw() +
+  facet_grid(site~habitat) +
+  # add lines for disturbances
+  geom_vline(xintercept = 2006, linetype = "dotdash") + # start of COTS
+  geom_vline(xintercept = 2010,  color = "darkgray") + # cyclone Oli
+  geom_vline(xintercept = 2019, linetype = "dashed", color = "red")  + 
+  # Custom the Y scales:
+  scale_y_continuous(
+    # Features of the first axis
+    name = "Algal beta diversity",
+    # Add a second axis and specify its features
+    sec.axis = sec_axis( trans=~.*100, name="Coral (% hard)")
+  ) +
+  geom_line(aes(group = 1, x = year, y = coral_cover_hard_mean/100), size = 1, color = "coral")
+```
+
+
+# Algal stability vs. coral cover
+
+Join both data frames
+
+```{r join all time data frames}
+macroalgAT %>% 
+  full_join(algaeAT) -> alltime
+```
+
+Plot
+
+```{r cover CV vs. coral cover}
+alltime %>% 
+  ggplot(aes(x = coral_cover_hard_mean, y = algae_cover_hard_cv)) +
+  geom_point(aes(color = island_side)) +
+  facet_wrap(~habitat) +
+  geom_smooth(method = "lm") +
+  theme_bw()
+```
+
+```{r cover CV vs. coral cover CV}
+alltime %>% 
+  ggplot(aes(x = coral_cover_hard_cv, y = algae_cover_hard_cv)) +
+  geom_point(aes(color = island_side)) +
+  facet_wrap(~habitat) +
+  geom_smooth(method = "lm") +
+  theme_bw()
+```
+
+```{r richness CV vs. coral cover CV}
+alltime %>% 
+  ggplot(aes(x = coral_cover_hard_cv, y = algae_richness_cv)) +
+  geom_point(aes(color = island_side)) +
+  facet_wrap(~habitat) +
+  geom_smooth(method = "lm") +
+  theme_bw()
+```
+
+```{r synchrony vs. coral cover}
+alltime %>% 
+  #filter(habitat == "outer_10" | habitat ==  "outer_17") %>% 
+  ggplot(aes(x = coral_cover_hard_mean, y = loreau_synchrony)) +
+  geom_point(aes(color = island_side)) +
+  #facet_wrap(~habitat) +
+  geom_smooth(method = "lm") +
+  theme_bw()
+```
+
+```{r synchrony vs. coral cover CV}
+alltime %>% 
+  ggplot(aes(x = coral_cover_hard_cv, y = loreau_synchrony)) +
+  geom_point(aes(color = island_side)) +
+  facet_wrap(~habitat) +
+  geom_smooth(method = "lm") +
+  theme_bw()
+```
+
+```{r portfolio effects vs. coral cover CV}
+alltime %>% 
+  ggplot(aes(x = coral_cover_hard_cv, y = portfolio_effect)) +
+  geom_point(aes(color = island_side)) +
+  facet_wrap(~habitat) +
+  geom_smooth(method = "lm") +
+  theme_bw()
+```

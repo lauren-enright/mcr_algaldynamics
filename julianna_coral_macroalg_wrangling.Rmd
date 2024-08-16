@@ -337,13 +337,14 @@ betaDHabYr <- rbind(fringeDist, backDist, outer10Dist, outer17Dist) %>%
 ```{r join}
 macroAlgDiv %>% 
   full_join(betaDHabYr) %>% 
+  rename(macroalgae_centroid_dist_habyear_mean = hab_yr_distcentroid) %>% 
   # get just the columns we need
   select(-site_habitat, -hab_year, -island_side_hab_year) -> quadData
 
 ```
 
 ```{r save}
- write_csv(quadData, here("data/macroalgae_diversity_quadrat.csv"))
+ write_csv(quadData, here("data/macroalgae_coral_diversity_quadrat.csv"))
 ```
 
 # Site/habitat/year-level mean
@@ -366,13 +367,13 @@ quadData %>%
             macroalgae_richness_se = sd(macroalgae_richness)/sqrt(N),
             macroalgae_shannon_mean = mean(macroalgae_shannon),
             macroalgae_shannon_se = sd(macroalgae_shannon)/sqrt(N),
-            centroid_dist_habyear_mean = mean(hab_yr_distcentroid, na.rm = TRUE)
+            macroalgae_centroid_dist_habyear_mean = mean(macroalgae_centroid_dist_habyear_mean, na.rm = TRUE)
             ) -> siteData
 
 ```
 
 ```{r save dataframe}
- write_csv(siteData, here("data/macroalgae_diversity_site.csv"))
+ write_csv(siteData, here("data/macroalgae_coral_diversity_site.csv"))
 ```
 
 # All time metrics
@@ -394,24 +395,34 @@ quadData %>%
   # don't include year this time
   group_by(site, habitat, island_side) %>%
   summarize(N = n(),
+            
+            # coral
             coral_cover_mean = mean(coral_cover),
             coral_cover_se = sd(coral_cover)/sqrt(N),
             coral_cover_hard_mean = mean(coral_cover_hard, na.rm = TRUE),
             coral_cover_hard_se = sd(coral_cover_hard, na.rm = TRUE)/sqrt(N),
+            coral_cover_cv = CV(coral_cover),
+            coral_cover_hard_cv = CV(coral_cover_hard),
+            
+            # macroalgae cover
             macroalgae_cover_mean = mean(macroalgae_cover),
             macroalgae_cover_se = sd(macroalgae_cover)/sqrt(N),
             macroalgae_cover_hard_mean = mean(macroalgae_cover_hard, na.rm = TRUE),
             macroalgae_cover_hard_se = sd(macroalgae_cover_hard, na.rm = TRUE)/sqrt(N),
+            macroalgae_cover_cv = CV(macroalgae_cover),
+            macroalgae_cover_hard_cv = CV(macroalgae_cover_hard),
+            
+            # macroalgae richness
             macroalgae_richness_mean = mean(macroalgae_richness),
             macroalgae_richness_se = sd(macroalgae_richness)/sqrt(N),
             macroalgae_shannon_mean = mean(macroalgae_shannon),
             macroalgae_shannon_se = sd(macroalgae_shannon)/sqrt(N),
-            centroid_dist_habyear_mean = mean(hab_yr_distcentroid, na.rm = TRUE)
+            macroalgae_centroid_dist_habyear_mean = mean(macroalgae_centroid_dist_habyear_mean, na.rm = TRUE)
             )  -> alltimeCV
 ```
 
 
 ```{r save}
-write_csv(alltimeCV, here(here("data/macroalgae_stability_metrics_all_time.csv")))
+write_csv(alltimeCV, here(here("data/macroalgae_coral_diversity_stability_metrics_alltime.csv")))
 ```
 

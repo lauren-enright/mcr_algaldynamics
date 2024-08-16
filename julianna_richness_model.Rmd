@@ -16,6 +16,7 @@ rm(list=ls())
 require(here) # relative file paths
 require(tidyverse) # data wrangling
 require(lme4) # mixed models
+
 ```
 
 Make a model for algal richness through time
@@ -23,19 +24,22 @@ Make a model for algal richness through time
 # Bring in the data
 
 ```{r load data}
-cleaned_rich <- read_csv(here("data/algal_metrics_quadrat.csv")) %>% 
-  filter(year != 2020) # fake data
-  # generated using my (Julianna's) algal metric code
+cleaned_rich <- read_csv(here("data/algae_diversity_quadrat.csv")) %>% # generated using my (Julianna's) algal metric wrangling code
+  filter(year != 2020) %>% # fake data
+  # make a unique quadrat ID
+  mutate(quad_id = paste0(transect, "_", quadrat))
+  
 ```
 
-# Make a model
+# Full model no site
+
+WARNING: This is reeeeeally slow code to run
 
 ```{r make Poisson model}
-mRich <- glmer(algal_richness ~ as.factor(year) + habitat + (1|site/transect),
+mRich <- glmer(algae_richness ~ as.factor(year)*habitat + (1|site/quad_id),
                family = poisson,
                data = cleaned_rich)
 ```
-
 
 # Examine output
 
@@ -44,24 +48,77 @@ mRich <- glmer(algal_richness ~ as.factor(year) + habitat + (1|site/transect),
 newdata <- expand_grid(year = unique(cleaned_rich$year),
                        habitat = unique(cleaned_rich$habitat),
                        site = unique(cleaned_rich$site),
-                       transect = unique(cleaned_rich$transect))
+                       quad_id = unique(cleaned_rich$quad_id))
 ```
 
 ```{r generate predictions}
 newdata$Preds <- predict(mRich, newdata = newdata)
 ```
 
+**IMPORTANT**: I don't think this is the correct way to get the error bars
+
 ```{r plot predictions}
 newdata %>% 
   # get transect means
-  group_by(year, habitat, site) %>% 
+  group_by(year, site, habitat) %>% 
   summarize(Pred_mean_richness = mean(Preds),
-            SD_richness = sd(Preds)) %>% 
+            SD_richness = sd(Preds),
+            N = n(),
+            SE_richness = SD_richness/sqrt(N)
+            ) %>% 
   ggplot(aes(x = year, y = Pred_mean_richness, group = habitat, color = habitat)) +
   geom_line() +
   theme_bw() +
-  facet_wrap(~site)
+  # add lines for disturbances
+  geom_vline(xintercept = 2006, linetype = "dotdash") + # start of COTS
+  geom_vline(xintercept = 2010,  color = "darkgray") + # cyclone Oli
+  geom_vline(xintercept = 2019, linetype = "dashed", color = "red")  # bleaching
+
 ```
 
-- Should year be a factor?
 
+# Full model with site
+
+```{r make Poisson model}
+mRichSite <- glmer(algae_richness ~ as.factor(year)*habitat*site + (1|quad_id),
+               family = poisson,
+               data = cleaned_rich,
+               control = glmerControl(optimizer = "bobyqa")) # this taken from : https://stackoverflow.com/questions/69929896/glmer-taking-days-to-compute-and-never-ending)
+```
+
+# Examine output
+
+```{r make prediction grid}
+# create a grid to predict over
+newdataSite <- expand_grid(year = unique(cleaned_rich$year),
+                       habitat = unique(cleaned_rich$habitat),
+                       site = unique(cleaned_rich$site),
+                       quad_id = unique(cleaned_rich$quad_id))
+```
+
+```{r generate predictions}
+newdataSite$Preds <- predict(mRichSite, newdata = newdataSite)
+```
+
+```{r plot predictions}
+newdataSite %>% 
+  # get transect means
+  group_by(year, habitat, site) %>% 
+  summarize(Pred_mean_richness = mean(Preds),
+            SD_richness = sd(Preds),
+            N = n(),
+            SE_richness = SD_richness/sqrt(N)
+            ) %>% 
+  ggplot(aes(x = year, y = Pred_mean_richness, group = habitat, color = habitat)) +
+  geom_line() +
+  theme_bw() +
+  facet_wrap(~site) +
+  geom_ribbon(ymin = Pred_mean_richness-(2*SE_richness),
+              ymax = Pred_mean_richness+(2*SE_richness),
+              alpha = 0.5) +
+  # add lines for disturbances
+  geom_vline(xintercept = 2006, linetype = "dotdash") + # start of COTS
+  geom_vline(xintercept = 2010,  color = "darkgray") + # cyclone Oli
+  geom_vline(xintercept = 2019, linetype = "dashed", color = "red")  # bleaching
+
+```
