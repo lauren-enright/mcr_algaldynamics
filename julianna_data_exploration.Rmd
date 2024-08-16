@@ -1499,11 +1499,6 @@ diversity_stability %>%
 ```
 
 
-
-
-
-
-
 # Stability
 
 Is change in algal cover in a given quadrat from one year to the next influenced by diversity? Need to set up a lag/change to calculate this

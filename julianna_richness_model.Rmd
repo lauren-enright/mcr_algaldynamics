@@ -52,7 +52,7 @@ newdata <- expand_grid(year = unique(cleaned_rich$year),
 ```
 
 ```{r generate predictions}
-newdata$Preds <- predict(mRich, newdata = newdata)
+newdata$Preds <- predict(mRich, newdata = newdata, "response")
 ```
 
 **IMPORTANT**: I don't think this is the correct way to get the error bars
@@ -60,7 +60,7 @@ newdata$Preds <- predict(mRich, newdata = newdata)
 ```{r plot predictions}
 newdata %>% 
   # get transect means
-  group_by(year, site, habitat) %>% 
+  group_by(year, habitat) %>% 
   summarize(Pred_mean_richness = mean(Preds),
             SD_richness = sd(Preds),
             N = n(),
@@ -69,6 +69,8 @@ newdata %>%
   ggplot(aes(x = year, y = Pred_mean_richness, group = habitat, color = habitat)) +
   geom_line() +
   theme_bw() +
+  ylab("Predicted mean richness") +
+  xlab("Year") +
   # add lines for disturbances
   geom_vline(xintercept = 2006, linetype = "dotdash") + # start of COTS
   geom_vline(xintercept = 2010,  color = "darkgray") + # cyclone Oli
@@ -76,14 +78,13 @@ newdata %>%
 
 ```
 
-
 # Full model with site
 
 ```{r make Poisson model}
-mRichSite <- glmer(algae_richness ~ as.factor(year)*habitat*site + (1|quad_id),
+mRichSite <- glm(algae_richness ~ as.factor(year)*habitat*site,
                family = poisson,
-               data = cleaned_rich,
-               control = glmerControl(optimizer = "bobyqa")) # this taken from : https://stackoverflow.com/questions/69929896/glmer-taking-days-to-compute-and-never-ending)
+               data = cleaned_rich) # optimizer when using glmer() was taken from : https://stackoverflow.com/questions/69929896/glmer-taking-days-to-compute-and-never-ending)
+# not converging I'm not sure what's wrong? Maybe that's just like literally specifying everything? Took 1|quad_id out
 ```
 
 # Examine output
@@ -97,7 +98,7 @@ newdataSite <- expand_grid(year = unique(cleaned_rich$year),
 ```
 
 ```{r generate predictions}
-newdataSite$Preds <- predict(mRichSite, newdata = newdataSite)
+newdataSite$Preds <- predict(mRichSite, newdata = newdataSite, "response")
 ```
 
 ```{r plot predictions}
@@ -109,13 +110,10 @@ newdataSite %>%
             N = n(),
             SE_richness = SD_richness/sqrt(N)
             ) %>% 
-  ggplot(aes(x = year, y = Pred_mean_richness, group = habitat, color = habitat)) +
-  geom_line() +
+  ggplot(aes(x = year, y = Pred_mean_richness, group = habitat)) +
+  geom_line(aes(color = site, group = site)) +
   theme_bw() +
-  facet_wrap(~site) +
-  geom_ribbon(ymin = Pred_mean_richness-(2*SE_richness),
-              ymax = Pred_mean_richness+(2*SE_richness),
-              alpha = 0.5) +
+  facet_wrap(~habitat) +
   # add lines for disturbances
   geom_vline(xintercept = 2006, linetype = "dotdash") + # start of COTS
   geom_vline(xintercept = 2010,  color = "darkgray") + # cyclone Oli
