@@ -66,10 +66,11 @@ long_data <- pivot_longer(
    dplyr::summarise(mean_cover = mean(percent_cover), 
              SE = sd(percent_cover)/sqrt(n()))
  
-site_level <- transect_level %>%
-  dplyr::group_by(year, island_side, site, habitat, taxa) %>%
-  dplyr::summarise(mean_site_cover = mean(mean_cover), 
-            site_se = sd(mean_cover)/sqrt(n()))
+site_level <- long_data %>%
+  dplyr::group_by(year, island_side, site, habitat, site_habitat, taxa) %>%
+  dplyr::summarise(mean_site_cover = mean(percent_cover), 
+            site_se = sd(percent_cover)/sqrt(n()))
+
 ```
 
 ```{r diversity indicies, fig.height = 15, fig.width=20}
@@ -1828,16 +1829,55 @@ diversity_cv_site <- alpha_diversity_quad %>%
             algae_cover_cv = CV(cover)) 
 
 # portfolio and synchrony need to be calculated at quad level, so taking the mean of the quad level for these
-synchrony_portfolio_site <- diversity_stability_quadrat %>%
-  dplyr::group_by(site, habitat, island_side, site_habitat) %>%
-  dplyr::summarise(
-            algae_loreau_mean = mean(loreau_synchrony),
-            algae_loreau_se = sd(loreau_synchrony)/sqrt(n()),
-            algae_portfolio_mean = mean(portfolio_effect),
-            algae_portfolio_se = sd(portfolio_effect)/sqrt(n()))
+# synchrony_portfolio_site <- diversity_stability_quadrat %>%
+#   dplyr::group_by(site, habitat, island_side, site_habitat) %>%
+#   dplyr::summarise(
+#             algae_loreau_mean = mean(loreau_synchrony),
+#             algae_loreau_se = sd(loreau_synchrony)/sqrt(n()),
+#             algae_portfolio_mean = mean(portfolio_effect),
+#             algae_portfolio_se = sd(portfolio_effect)/sqrt(n()))
+# NOT DOING IT LIKE THIS ANYMORE! DOING IT BY RECALCULATING SYNCHRONY WITH SITE AS REPLICATE
+lm_synchrony_site <- codyn::synchrony(df = site_level,
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "mean_site_cover",
+                                   metric = "Loreau",
+                                   replicate.var = "site_habitat") # Loreau and Mazancourt synchrony
+colnames(lm_synchrony_site) = c("site_habitat", "loreau_synchrony") # rename cols for merge later
+
+
+wide_site_level <- data %>%
+  dplyr::group_by(year, island_side, island_side_habitat, site, habitat, site_habitat) %>%
+  dplyr::summarize(across(all_of(species_cols), mean, na.rm = TRUE))
+wide_site_level$site_habitat <- as.factor(wide_site_level$site_habitat)
+
+site_portfolio_columns <- c("site_habitat", "portfolio_effect") # names of columns for dataframe
+site_level_portfolio <- 
+  data.frame(matrix(nrow = length(unique(wide_site_level$site_habitat)), 
+                    ncol = length(site_portfolio_columns))
+             )
+colnames(site_level_portfolio) <- site_portfolio_columns # change column 
+site_level_portfolio$site_habitat <- unique(wide_site_level$site_habitat) # populate
+
+
+for(i in 1:length(unique(wide_site_level$site_habitat)) ){ # for each  site
+  # create a new dataframe for current site
+  newData <- subset(wide_site_level, site_habitat == levels(wide_site_level$site_habitat)[i])
+  current_matrix <- newData[ , -which(names(newData) %in% meta_cols)] # remove metadata columns
+  if(sum(current_matrix) == 0){ # if this was a 0 algae site
+    site_level_portfolio[i, 2] <- NA # set portfolio effects to 0
+  }else{ # otherwise
+    current_matrix <- current_matrix[, which(colSums(current_matrix) != 0)] # remove irrelevant algae
+    
+    site_level_portfolio[i, 2] <- pe_mv(current_matrix, "loess_detrended") # calculate portfolio effects for current time series
+  }
+  
+}
 
 # merge together
-diversity_stability_site <- merge(diversity_cv_site, synchrony_portfolio_site, by = c("site", "habitat", "island_side", "site_habitat"))
+diversity_stability_site <- merge(diversity_cv_site, lm_synchrony_site, by = "site_habitat")
+diversity_stability_site <- merge(diversity_stability_site, site_level_portfolio, by = "site_habitat")
+
 # write_csv(diversity_stability_site, here("data", "algae_diversity_stability_metrics_site.csv"))
 
 ```
