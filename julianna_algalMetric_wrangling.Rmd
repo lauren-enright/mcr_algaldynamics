@@ -405,12 +405,12 @@ quadData %>%
 Combine with Noam's synchrony/portfolio estimates:
 
 ```{r}
-noamallTime <- read_csv(here("data/algae_diversity_stability_metrics_alltime.csv"))
+noamallTime <- read_csv(here("data/NOAMalgae_diversity_stability_metrics_alltime.csv"))
 ```
 
 ```{r}
 noamallTime %>% 
-  select(site, habitat, island_side, algae_shannon_stability, algae_loreau_mean, algae_loreau_se, algae_portfolio_mean, algae_portfolio_se) %>% 
+  select(site, habitat, island_side, algae_shannon_stability, loreau_synchrony, portfolio_effect) %>% 
   full_join(alltimeCV) -> alltimeJoin
 ```
 
