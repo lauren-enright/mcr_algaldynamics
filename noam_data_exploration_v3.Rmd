@@ -222,11 +222,11 @@ alpha_diversity_quad_means <- alpha_diversity_quad %>%
 
 (richness_quad_plot <-
   ggplot(data = alpha_diversity_quad_means) +
-  geom_point(aes(x = year, y = richness_mean, colour = site, shape = habitat, group = site_habitat), size = 8) +
-  geom_line(aes(x = year, y = richness_mean, colour = site, group = site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = year, ymin = richness_mean - richness_se , ymax = richness_mean + richness_se, colour = site,
-                    group = site_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = site_colours) +
+  geom_point(aes(x = year, y = richness_mean, colour = island_side, shape = habitat, group = island_side_habitat), size = 8) +
+  geom_line(aes(x = year, y = richness_mean, colour = island_side, group = island_side_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = richness_mean - richness_se , ymax = richness_mean + richness_se, colour = island_side,
+                    group = island_side_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = island_side_colours) +
   scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~habitat)+
   labs(title = "a. richness quad level\n", y = "richness\n") +
@@ -342,7 +342,7 @@ sum(gam_coefficients$edf > 1.01) # all but 18/1200 quadrats can be fit by a smoo
 
 # FRAMING: What is the general trend in algal alpha diversity over the course of the time series? Increasing, decreasing, neutral?
 
-columns <- c("location", "Intercept", "Slope") # names of columns for dataframe
+columns <- c("location", "Intercept", "Slope", "Phi") # names of columns for dataframe
 gls_coefficients <- # new dataframe name
   data.frame(matrix(nrow = length(unique(alpha_diversity_quad$location)), # 1200 quadrats = 1200 different time series
                     ncol = length(columns)) # specified to make sure number of columns doesn't exceed what was specified
@@ -360,12 +360,14 @@ for(i in 1:length(unique(alpha_diversity_quad$location)) ){ # for each  quadrat
   # populate appropriate row and column with the relevant coeffcients from gls
   gls_coefficients[i, 2] <- unname(coef(loop_mod)[1])
   gls_coefficients[i, 3] <- unname(coef(loop_mod)[2])
+  gls_coefficients[i, 4] <- loop_mod[["modelStruct"]][["corStruct"]]
   
 }
 
 hist(gls_coefficients$Slope) # looks basically normal, bounded -Inf, Inf
 
 hist(gls_coefficients$Intercept) # same with intercept - although it probably shouldn't be
+hist(gls_coefficients$Phi)
 
 # Start adding back in relevant metadata - probably a more elegant way to do this!!!
 habitat_vector <- c(rep("backreef", 50), rep("fringing", 50), rep("outer_10", 50), rep("outer_17", 50))
@@ -419,18 +421,59 @@ slope_emm <- emmeans(slope_mod, ~ habitat*site) # create emmeans object
 emmeans::contrast(slope_emm, "consec", simple = "each", combine = TRUE, adjust = "bonferroni")
 # Note: not sure I want to include this
 emmeans(slope_mod, pairwise ~ site | habitat)
+
+
+## AT COAST-LEVEL
+slope_mod <- glmmTMB(Slope ~ habitat*island_side + (1|island_side/site/transect), data = gls_coefficients_merged)
+summary(slope_mod) # pretty low variance in random effects
+plot(gls_res <- simulateResiduals(slope_mod)) 
+
+hist(residuals(slope_mod))
+plot(predict(slope_mod) ~ residuals(slope_mod))
+Anova(slope_mod)
+#                        Chisq Df Pr(>Chisq)    
+# habitat             1301.246  3  < 2.2e-16 ***
+# island_side           16.075  2  0.0003231 ***
+# habitat:island_side  799.999  6  < 2.2e-16 ***
+r.squaredGLMM(slope_mod) # 0.16, 0.18
+plot(allEffects(slope_mod))
+# backreef: richness increases on east and north shore, but relatively constant west side
+# Fringe: richness decreasing on east and west side, but relatvely constant on north shore
+# outer_10: richness neutral/decreasing on east side, but neutral/increasing on north and west side
+# outer_17: richness decreasing north/east side, but neutral west side
+# Worth noting trends are slight - arguable whether they are biologically meaningful
+
+
+
+
+slope_emm <- emmeans(slope_mod, ~ habitat*island_side) # create emmeans object
+emmeans::contrast(slope_emm, "consec", simple = "each", combine = TRUE, adjust = "bonferroni")
+# Note: not sure I want to include this
+emmeans(slope_mod, pairwise ~ island_side | habitat)
+# north and east coast not different from each other in backreef
+# east and west not different from each other in fringing
+# north and west not different from each other outer 10
+# no sites different from each other outer 17
+slope_est <- as.data.frame(slope_emm) # create df of emmeans estimates
+
+
 ```
 
 
-```{r gls plot, fig.height=20, fig.width=20}
+```{r gls plot, fig.height=20, fig.width=25}
 # not sure how to visualize here... thinking something like Dornelas et al. 2014 Fig 2a
 # I reached out to them about getting their code for this
 
-ggplot(data = gls_coefficients_merged) +
-  geom_histogram(aes(x = Slope), bins = 30) +
+ggplot(data = gls_coefficients_merged, aes(x = Slope)) +
+  geom_histogram(bins = 40, aes(y = after_stat(ndensity))) +
+  geom_density(alpha=0,aes(y = after_stat(ndensity)), size = 1.5 ) +
   geom_vline(xintercept = 0, size = 2, linetype = 2) +
-  facet_grid(habitat ~ site) +
-#  theme_classic() +
+  geom_ribbon(data = merge(gls_coefficients_merged, slope_est), aes(xmin = lower.CL, xmax = upper.CL, ymin = 0, ymax = Inf),
+              fill = "red", alpha = 0.1)+
+  geom_vline(data = slope_est, aes(xintercept = emmean), size = 2, linetype = 1, colour = "red") +
+  facet_grid(island_side ~ habitat) +
+  theme_classic() +
+  labs(y = "Density\n") +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
 #        panel.background = element_blank(),
@@ -447,8 +490,8 @@ ggplot(data = gls_coefficients_merged) +
 
 ```
 
-```{r gls intercept, fig.height=20, fig.width=20}
-intercept_mod <- glmmTMB(Intercept ~ habitat*island_side + (1|site/transect), data = gls_coefficients_merged)
+```{r gls intercept, fig.height=20, fig.width=25}
+intercept_mod <- glmmTMB(Intercept ~ habitat*island_side + (1|island_side/site/transect), data = gls_coefficients_merged)
 summary(intercept_mod) # a lot of variance w/i transect, less so w/i site
 plot(gls_int_res <- simulateResiduals(intercept_mod)) # same issues as above
 
@@ -456,17 +499,30 @@ hist(residuals(intercept_mod))
 plot(predict(intercept_mod) ~ residuals(intercept_mod))
 Anova(intercept_mod)
 #                        Chisq Df Pr(>Chisq)    
-# habitat             1307.838  3  < 2.2e-16 ***
-# island_side           26.358  2  1.889e-06 ***
-# habitat:island_side  789.627  6  < 2.2e-16 ***
-r.squaredGLMM(intercept_mod) # 0.16, 0.18
+# habitat             1285.762  3  < 2.2e-16 ***
+# island_side           15.644  2  0.0004009 ***
+# habitat:island_side  776.312  6  < 2.2e-16 ***
+r.squaredGLMM(intercept_mod) # 0.16, 0.17
 plot(allEffects(intercept_mod))
 
-ggplot(data = gls_coefficients_merged) +
-  geom_histogram(aes(x = Intercept), bins = 30) +
+int_emm <- emmeans(intercept_mod, ~ habitat*island_side) # create emmeans object
+#emmeans::contrast(int_emm, "consec", simple = "each", combine = TRUE, adjust = "bonferroni")
+
+emmeans(intercept_mod, pairwise ~ island_side | habitat)
+# same trends as with slope
+
+int_est <- as.data.frame(int_emm) # create df of emmeans estimates
+
+ggplot(data = gls_coefficients_merged, aes(x = Intercept)) +
+  geom_histogram(bins = 40, aes(y = after_stat(ndensity))) +
+  geom_density(alpha=0,aes(y = after_stat(ndensity)), size = 1.5 ) +
   geom_vline(xintercept = 0, size = 2, linetype = 2) +
-  facet_grid(habitat ~ island_side) +
-#  theme_classic() +
+  geom_ribbon(data = merge(gls_coefficients_merged, int_est), aes(xmin = lower.CL, xmax = upper.CL, ymin = 0, ymax = Inf),
+              fill = "red", alpha = 0.1)+
+  geom_vline(data = int_est, aes(xintercept = emmean), size = 2, linetype = 1, colour = "red") +
+  facet_grid(island_side ~ habitat) +
+  theme_classic() +
+  labs(y = "Density\n") +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
 #        panel.background = element_blank(),
@@ -502,7 +558,7 @@ alpha_diversity_quad$year_factor <- as.factor(alpha_diversity_quad$year) # for g
 
 # probably the closest to what others have done:
 richness_mod_2 <- glmmTMB(
-  richness ~ year_factor*habitat*site + (1 | site/transect/location) + ar1(year_factor + 0 | location),
+  richness ~ year_factor*habitat*island_side + (1 | island_side/transect/location) + ar1(year_factor + 0 | location),
   family = poisson,
   data = alpha_diversity_quad,
   control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000)), na.action = na.pass
@@ -514,10 +570,38 @@ plot(allEffects(richness_mod_2))
 # emmeans(richness_mod_2, pairwise ~ habitat | year_factor) # if we want to compare habitats year to year
 # model.sel(dredge(richness_mod_2))
 
-top_rich_mod <- glmmTMB(richness ~ year_factor*habitat + year_factor*site + (1 | site/transect/location) + ar1(year_factor + 0 | location),   family = poisson, data = alpha_diversity_quad, control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000)))
-summary(top_rich_mod)
-Anova(top_rich_mod)
+# top_rich_mod <- glmmTMB(richness ~ year_factor*habitat + year_factor*island_side + (1 | island_side/transect/location) + # ar1(year_factor + 0 | location),   family = poisson, data = alpha_diversity_quad, control = glmmTMBControl(optCtrl = list(iter.max = # 2000, eval.max = 2000)))
+# summary(top_rich_mod)
+# Anova(top_rich_mod)
+
+# Julianna's model structure
+j_rich_mod <- glmmTMB(richness ~ year + habitat + (1|site/transect),
+               family = poisson,
+               data = alpha_diversity_quad)
+summary(j_rich_mod)
+plot(allEffects(j_rich_mod))
+
+grid <- expand_grid(year = unique(alpha_diversity_quad$year),
+                       habitat = unique(alpha_diversity_quad$habitat),
+                       site = unique(alpha_diversity_quad$site),
+                       island_side = unique(alpha_diversity_quad$island_side),
+                       transect = unique(alpha_diversity_quad$transect))
+grid$Preds <- predict(j_rich_mod, newdata = grid)
+
+grid %>% 
+  # get transect means
+  group_by(year, habitat, island_side) %>% 
+  summarize(Pred_mean_richness = mean(Preds),
+            SD_richness = sd(Preds)) %>% 
+  ggplot(aes(x = year, y = Pred_mean_richness, group = habitat, color = habitat)) +
+  geom_line() +
+  theme_bw() +
+  facet_wrap(~island_side)
+
+# Given that this is largely looking at slopes for temporal trends in adiv, I prefer the gls
 ```
+
+
 ```{r turnover troubleshooting, fig.height = 30, fig.width=25}
 
 transect_level$site_habitat <-  paste(transect_level$site, transect_level$habitat)
@@ -632,23 +716,23 @@ sv_trans = function(prop, N, s = 0.000005){
 total_turnover$Turnover_trans <- sv_trans(total_turnover$total, total_turnover)
 
 # model
-total_turnover_mod1 <- glmmTMB(Turnover_trans ~ year_factor*habitat*site +
-                                 (1 | site/transect/location) + ar1(year_factor + 0 | location),
+total_turnover_mod1 <- glmmTMB(Turnover_trans ~ year_factor*habitat*island_side +
+                                 (1 | island_side/site/transect) + ar1(year_factor + 0 | location),
                                family = beta_family(), data = total_turnover)
 summary(total_turnover_mod1) # low temporal autocorrelation... maybe don't need ar1 term?
 plot(total_turnover_res <- simulateResiduals(total_turnover_mod1)) # residuals look very weird
 Anova(total_turnover_mod1) # obviously everything sig
 
-total_turnover_mod2 <- glmmTMB(Turnover_trans ~ year_factor*habitat*site + (1 | site/transect/location),
-                               family = beta_family(), data = total_turnover)
-summary(total_turnover_mod2) # 
-plot(total_turnover_res2 <- simulateResiduals(total_turnover_mod2)) # residuals still look like shit
-Anova(total_turnover_mod2) 
-anova(total_turnover_mod2, total_turnover_mod1) # models are sig different from each other
-AICc(total_turnover_mod2, total_turnover_mod1) # first model is better
-# need to figure out residuals problem
-plot(allEffects(total_turnover_mod1))
-
+# total_turnover_mod2 <- glmmTMB(Turnover_trans ~ year_factor*habitat*site + (1 | site/transect/location),
+#                                family = beta_family(), data = total_turnover)
+# summary(total_turnover_mod2) # 
+# plot(total_turnover_res2 <- simulateResiduals(total_turnover_mod2)) # residuals still look like shit
+# Anova(total_turnover_mod2) 
+# anova(total_turnover_mod2, total_turnover_mod1) # models are sig different from each other
+# AICc(total_turnover_mod2, total_turnover_mod1) # first model is better
+# # need to figure out residuals problem
+# plot(allEffects(total_turnover_mod1))
+# 
 
 
 # plot
@@ -660,13 +744,13 @@ total_turnover_means <-
 
 (turnover_plot <-
   ggplot(data = total_turnover_means) +
-  geom_point(aes(x = year, y = Turnover_mean, colour = site, shape = habitat, group = site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = year, y = Turnover_mean, colour = site, group = site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = year, ymin = Turnover_mean - Turnover_se , ymax = Turnover_mean + Turnover_se, colour = site,
-                    group = site_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = site_colours) +
+  geom_point(aes(x = year, y = Turnover_mean, colour = island_side, shape = habitat, group = island_side_habitat), size = 8, stroke = 2) +
+  geom_line(aes(x = year, y = Turnover_mean, colour = island_side, group = island_side_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = Turnover_mean - Turnover_se , ymax = Turnover_mean + Turnover_se, colour = island_side,
+                    group = island_side_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = island_side_colours) +
   scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~site_habitat, nrow = 6)+
+  facet_wrap(~island_side_habitat, nrow = 6)+
   labs(title = "a. Turnover\n", y = "Total turnover\n") +
   theme_bw() + 
   theme(panel.grid.major = element_blank(), 
@@ -1882,7 +1966,32 @@ diversity_stability_site <- merge(diversity_stability_site, site_level_portfolio
 
 ```
 
-```{r nmds, fig.height = 15, fig.width = 15}
+```{r bray curtis set up}
+species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
+species_matrix <- species_matrix/100 # convert from percent to proportion
+rownames(species_matrix) <- data$location
+rows_to_remove <- rowSums(species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+species_matrix <- species_matrix[!rows_to_remove,] 
+data_subset <- data[!rows_to_remove,] # make sure rows are also removed from dataframe
+# data_subset$stratum <- paste(data_subset$year, "-", data_subset$site, "-", data_subset$habitat )
+brayfull <- vegdist(species_matrix, "bray")
+# View(brayfull)
+
+# playing around with stuff here - ignore for now
+x <- subset(data_subset, location == "lter_1_backreef_algae_transect_1_quad_1")
+year_combinations <- expand.grid(Year1 = x$year, Year2 = x$year)
+year_combinations <- year_combinations[year_combinations$Year1 != year_combinations$Year2, ] # filter out year 1 == year 2
+year_combinations$Year_Difference <- abs(year_combinations$Year1 - year_combinations$Year2) # find difference in years
+year_combinations$location <- rep("lter_1_backreef_algae_transect_1_quad_1", nrow(year_combinations))
+year_combinations$bray <- NA
+for(i in 1:nrow(year_combinations)){
+  subset(x, year == year_combinations[i,1] | year_combinations[i,2])
+}
+
+
+```
+
+```{r old nmds code, fig.height = 15, fig.width = 15, eval = FALSE}
 species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
 species_matrix <- species_matrix/100 # convert from percent to proportion
 rownames(species_matrix) <- paste(data$year, data$site_habitat, data$transect)
@@ -1890,7 +1999,6 @@ rows_to_remove <- rowSums(species_matrix) == 0 # remove rows with no algal speci
 species_matrix <- species_matrix[!rows_to_remove,] 
 data_subset <- data[!rows_to_remove,] # make sure rows are also removed from dataframe
 data_subset$stratum <- paste(data_subset$year, "-", data_subset$site, "-", data_subset$habitat )
-
 # identifying species w/ > 10% cover for plotting later
 # NOTE: Used ChatGPT to generate these next few lines of code but it looked good so I went with it
 columns_to_keep <- apply(species_matrix, 2, function(x) any(x >= 0.1))
