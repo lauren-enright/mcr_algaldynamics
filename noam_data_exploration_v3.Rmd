@@ -1985,7 +1985,7 @@ year_combinations$Year_Difference <- abs(year_combinations$Year1 - year_combinat
 year_combinations$location <- rep("lter_1_backreef_algae_transect_1_quad_1", nrow(year_combinations))
 year_combinations$bray <- NA
 for(i in 1:nrow(year_combinations)){
-  subset(x)
+  subset(x, year == year_combinations[i,1] | year_combinations[i,2])
 }
 
 
