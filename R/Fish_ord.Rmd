@@ -144,8 +144,6 @@ herb_algal_constrained_ord = capscale(species.data.use ~ Herbivore.Biomass, dist
 herb_algal_constrained_ord
 ```
 
-
-
 ```{r}
 par(mfrow = c(1, 3))  # 1 row, 3 columns
 
@@ -161,6 +159,39 @@ points(herb_algal_constrained_ord, display = "sites", col = color_palette[colors
 plot(herb_algal_constrained_ord, display = "sites", type = 'n', main = "Relationship with Herbivore Biomass")
 points(herb_algal_constrained_ord, display = "sites", col = 'grey')
 text(herb_algal_constrained_ord, display = 'bp', col = 'blue')
+```
+
+### PERMANOVA
+
+```{r}
+herb_perm <- adonis2(species.data.use ~ Herbivore.Biomass + Year + Site + Habitat, data = merged_clean_filtered, dist = 'bray', by = 'margin')
+herb_perm
+```
+
+##### stratified? 
+```{r}
+library(permute)
+merged_clean_filtered$Site <- as.factor(merged_clean_filtered$Site)
+merged_clean_filtered$Habitat <- as.factor(merged_clean_filtered$Habitat)
+
+# Set up the permutation design
+perm_design <- how(
+  blocks = merged_clean_filtered$Year,  # stratify by Year
+  plots = Plots(strata = merged_clean_filtered$Site),  # stratify by Site within Year
+  within = Within(type = "free"),  # free permutations within each Site
+  nperm = 999  # number of permutations
+)
+
+# Apply the permutation design in adonis2
+herb_perm <- adonis2(
+  species.data.use ~ Herbivore.Biomass + Year + Site + Habitat, 
+  data = merged_clean_filtered, 
+  dist = 'bray', 
+  by = 'margin', 
+  permutations = perm_design
+)
+
+herb_perm
 ```
 
 
@@ -212,6 +243,7 @@ anova(cont)
 anova(cont, by = "margin")
 ```
 
+
 # Mantel 
 I have no idea what I'm doing here
 ```{r}
@@ -223,4 +255,26 @@ response_by_explan
 ```
 
 ### Part 3: Model-Based Clustering
+
+
+#BECAUSE I LIKE WORKING IN MARKDOWN AND PRINTING IN SCRIPTS:
+
+```{r}
+herb_beta <- ggplot(merged_div, aes(x = year)) +
+  geom_line(aes(y = centroid_dist_habyear_mean, color = "Centroid Distance")) +
+  geom_line(aes(y = Herbivore.Biomass /103388.3, color = "Herbivore Biomass")) + # Rescale Herbivore.Biomass
+  facet_grid(site ~ habitat) +
+  scale_y_continuous(
+    name = "Mean Centroid Distance",
+    sec.axis = sec_axis(~ . * 103388.3, name = "Herbivore Biomass") # Rescale back for labeling
+  ) +
+  scale_color_manual(values = c("Centroid Distance" = "darkgreen", "Herbivore Biomass" = "darkblue")) +
+  labs(x = "Year", color = "Legend", title = "Trends in Algal Beta Dispersion and Herbivore Biomass" # Add the plot title here
+  ) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+
+
 
