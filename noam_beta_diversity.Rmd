@@ -1,0 +1,773 @@
+---
+title: "noam_beta_diversity"
+author: "Noam Altman-Kurosaki"
+date: "2024-08-19"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+library(here)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(vegan)
+library(glmmTMB)
+library(car)
+library(effects)
+library(DHARMa)
+library(stringr)
+library(MuMIn)
+library(codyn)
+library(nlme)
+library(mgcv)
+library(emmeans)
+# library(ecofolio) # possible other method for examining portfolio effects 
+```
+
+```{r import and format data}
+# starting with all data now because of 0 algae transects/quadrats
+data <- read.csv(here::here("data", "allbenthicdata_cleaned_colnames.csv"), stringsAsFactors = F) 
+
+not_algae <- c("ascidian", "bare_space", "coral", "coral_rubble", "corallimorpharia", "heteractis_sp", "millepora_platyphylla", "no_data", "sand", "sacrophyton_sp", "shell_debris", "soft_coral", "sponge", "tridacna_sp", "zooxanthellae", "row_sums")
+
+data <- data[ , -which(names(data) %in% not_algae)]
+
+# adding island side - adapted from Julianna's code
+data <- data %>% mutate(island_side = case_when(site == "lter_1" ~ "north",
+                                 site == "lter_2" ~ "north",
+                                 site == "lter_3" ~ "east",
+                                 site == "lter_4" ~ "east",
+                                 site == "lter_5" ~ "west",
+                                 site == "lter_6" ~ "west"))
+data$island_side_habitat <- paste(data$island_side, data$habitat)
+
+
+str(data)
+
+
+meta_cols <- c(colnames(data[1:7] ), "island_side", "island_side_habitat", "stratum")
+species_cols <- colnames(data)[!colnames(data) %in% meta_cols]
+
+meta_df <- data[ , which(names(data) %in% meta_cols)]
+
+site_colours <- c("lter_1" = "cornflowerblue",
+                  "lter_2" = "darkblue",
+                  "lter_3" = "yellowgreen",
+                  "lter_4" = "forestgreen",
+                  "lter_5" = "mediumorchid",
+                  "lter_6" = "orange")
+island_side_colours <- c("north" = "darkblue",
+                         "east" = "mediumorchid",
+                         "west" = "orange")
+habitat_linetypes <- c("fringing" = "solid",
+                       "backreef" = "longdash",
+                       "outer_10" = "twodash",
+                       "outer_17" = "dotted")
+habitat_shapes <- c("fringing" = 16,
+                     "backreef" = 17,
+                     "outer_10" = 1,
+                     "outer_17" = 2)
+
+
+#pivot long 
+long_data <- pivot_longer(
+  data = data,
+  cols = 8:77,
+  names_to = "taxa",
+  values_to = "percent_cover") 
+
+
+ transect_level <- long_data %>%
+   dplyr::group_by(year, island_side, site, habitat, transect, taxa) %>%
+   dplyr::summarise(mean_cover = mean(percent_cover), 
+             SE = sd(percent_cover)/sqrt(n()))
+ 
+site_level <- long_data %>%
+  dplyr::group_by(year, island_side, site, habitat, site_habitat, taxa) %>%
+  dplyr::summarise(mean_site_cover = mean(percent_cover), 
+            site_se = sd(percent_cover)/sqrt(n()))
+
+# subset based on habitat
+fringing <- subset(data, habitat == "fringing")
+backreef <- subset(data, habitat == "backreef")
+outer10 <- subset(data, habitat == "outer_10")
+outer17 <- subset(data, habitat == "outer_17")
+
+```
+
+```{r fringing bray curtis}
+fringing_species_matrix <- as.matrix(fringing[ , -which(names(fringing) %in% meta_cols)])
+fringing_species_matrix <- fringing_species_matrix/100 # convert from percent to proportion
+rownames(fringing_species_matrix) <- paste(fringing$year,"-", fringing$location, sep = "")
+fringing_rows_to_remove <- rowSums(fringing_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+fringing_species_matrix <- fringing_species_matrix[!fringing_rows_to_remove,] 
+fringing_species_matrix <- asin(sqrt(fringing_species_matrix)) # arcsin squareroot transform
+fringing_subset <- fringing[!fringing_rows_to_remove,] # make sure rows are also removed from dataframe
+fringing_subset$stratum <- paste(fringing_subset$year,"-", fringing_subset$location, sep = "") # for merging with bray matrix later
+brayfringing <- vegdist(fringing_species_matrix, "bray") # create bray dissimilarity matrix
+# View(brayfringing)
+fringing_braymat <- as.matrix(brayfringing) # conver to matrix object
+# convert to pairwise comparison
+fringing_comp <- fringing_braymat[lower.tri(fringing_braymat)] # extract lower triangle
+fringing_row_indices <- row(fringing_braymat)[lower.tri(fringing_braymat)] # extract row indices for first quad in comparison
+fringing_col_indices <- col(fringing_braymat)[lower.tri(fringing_braymat)] # extract col indices = second quad in comp
+fringing_loc1 <- rownames(fringing_braymat)[fringing_row_indices] # populate appropriate vector
+fringing_loc2 <- colnames(fringing_braymat)[fringing_col_indices] # populate appropriate vector
+fringing_pairwise_df <- data.frame(loc1 = fringing_loc1, loc2 = fringing_loc2, dissimilarity = fringing_comp)
+fringing_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", fringing_pairwise_df$loc1)) # extract timepoint from first quad in comp
+fringing_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", fringing_pairwise_df$loc2)) # repeat for second quad
+fringing_pairwise_df$time <- abs(fringing_pairwise_df$year2 - fringing_pairwise_df$year1) # extract length of differences
+fringing_pairwise_df$location_1 <- sub(".*-(.*)", "\\1", fringing_pairwise_df$loc1) # extract quadrat id from first quad in comp
+fringing_pairwise_df$location_2 <- sub(".*-(.*)", "\\1", fringing_pairwise_df$loc2) # repeat for second quad
+
+```
+
+```{r backreef bray curtis}
+backreef_species_matrix <- as.matrix(backreef[ , -which(names(backreef) %in% meta_cols)])
+backreef_species_matrix <- backreef_species_matrix/100 # convert from percent to proportion
+rownames(backreef_species_matrix) <- paste(backreef$year,"-", backreef$location, sep = "")
+backreef_rows_to_remove <- rowSums(backreef_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+backreef_species_matrix <- backreef_species_matrix[!backreef_rows_to_remove,] 
+backreef_species_matrix <- asin(sqrt(backreef_species_matrix)) # arcsin squareroot transform
+backreef_subset <- backreef[!backreef_rows_to_remove,] # make sure rows are also removed from dataframe
+backreef_subset$stratum <- paste(backreef_subset$year,"-", backreef_subset$location, sep = "") # for merging with bray matrix later
+braybackreef <- vegdist(backreef_species_matrix, "bray") # create bray dissimilarity matrix
+# View(braybackreef)
+backreef_braymat <- as.matrix(braybackreef) # conver to matrix object
+# convert to pairwise comparison
+backreef_comp <- backreef_braymat[lower.tri(backreef_braymat)] # extract lower triangle
+backreef_row_indices <- row(backreef_braymat)[lower.tri(backreef_braymat)] # extract row indices for first quad in comparison
+backreef_col_indices <- col(backreef_braymat)[lower.tri(backreef_braymat)] # extract col indices = second quad in comp
+backreef_loc1 <- rownames(backreef_braymat)[backreef_row_indices] # populate appropriate vector
+backreef_loc2 <- colnames(backreef_braymat)[backreef_col_indices] # populate appropriate vector
+backreef_pairwise_df <- data.frame(loc1 = backreef_loc1, loc2 = backreef_loc2, dissimilarity = backreef_comp)
+backreef_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", backreef_pairwise_df$loc1)) # extract timepoint from first quad in comp
+backreef_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", backreef_pairwise_df$loc2)) # repeat for second quad
+backreef_pairwise_df$time <- abs(backreef_pairwise_df$year2 - backreef_pairwise_df$year1) # extract length of differences
+backreef_pairwise_df$location_1 <- sub(".*-(.*)", "\\1", backreef_pairwise_df$loc1) # extract quadrat id from first quad in comp
+backreef_pairwise_df$location_2 <- sub(".*-(.*)", "\\1", backreef_pairwise_df$loc2) # repeat for second quad
+
+
+
+```
+
+```{r outer10 bray curtis}
+outer10_species_matrix <- as.matrix(outer10[ , -which(names(outer10) %in% meta_cols)])
+outer10_species_matrix <- outer10_species_matrix/100 # convert from percent to proportion
+rownames(outer10_species_matrix) <- paste(outer10$year,"-", outer10$location, sep = "")
+outer10_rows_to_remove <- rowSums(outer10_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+outer10_species_matrix <- outer10_species_matrix[!outer10_rows_to_remove,] 
+outer10_species_matrix <- asin(sqrt(outer10_species_matrix)) # arcsin squareroot transform
+outer10_subset <- outer10[!outer10_rows_to_remove,] # make sure rows are also removed from dataframe
+outer10_subset$stratum <- paste(outer10_subset$year,"-", outer10_subset$location, sep = "") # for merging with bray matrix later
+brayouter10 <- vegdist(outer10_species_matrix, "bray") # create bray dissimilarity matrix
+# View(brayouter10)
+outer10_braymat <- as.matrix(brayouter10) # conver to matrix object
+# convert to pairwise comparison
+outer10_comp <- outer10_braymat[lower.tri(outer10_braymat)] # extract lower triangle
+outer10_row_indices <- row(outer10_braymat)[lower.tri(outer10_braymat)] # extract row indices for first quad in comparison
+outer10_col_indices <- col(outer10_braymat)[lower.tri(outer10_braymat)] # extract col indices = second quad in comp
+outer10_loc1 <- rownames(outer10_braymat)[outer10_row_indices] # populate appropriate vector
+outer10_loc2 <- colnames(outer10_braymat)[outer10_col_indices] # populate appropriate vector
+outer10_pairwise_df <- data.frame(loc1 = outer10_loc1, loc2 = outer10_loc2, dissimilarity = outer10_comp)
+outer10_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", outer10_pairwise_df$loc1)) # extract timepoint from first quad in comp
+outer10_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", outer10_pairwise_df$loc2)) # repeat for second quad
+outer10_pairwise_df$time <- abs(outer10_pairwise_df$year2 - outer10_pairwise_df$year1) # extract length of differences
+outer10_pairwise_df$location_1 <- sub(".*-(.*)", "\\1", outer10_pairwise_df$loc1) # extract quadrat id from first quad in comp
+outer10_pairwise_df$location_2 <- sub(".*-(.*)", "\\1", outer10_pairwise_df$loc2) # repeat for second quad
+
+```
+
+```{r outer17 bray curtis}
+outer17_species_matrix <- as.matrix(outer17[ , -which(names(outer17) %in% meta_cols)])
+outer17_species_matrix <- outer17_species_matrix/100 # convert from percent to proportion
+rownames(outer17_species_matrix) <- paste(outer17$year,"-", outer17$location, sep = "")
+outer17_rows_to_remove <- rowSums(outer17_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+outer17_species_matrix <- outer17_species_matrix[!outer17_rows_to_remove,] 
+outer17_species_matrix <- asin(sqrt(outer17_species_matrix)) # arcsin squareroot transform
+outer17_subset <- outer17[!outer17_rows_to_remove,] # make sure rows are also removed from dataframe
+outer17_subset$stratum <- paste(outer17_subset$year,"-", outer17_subset$location, sep = "") # for merging with bray matrix later
+brayouter17 <- vegdist(outer17_species_matrix, "bray") # create bray dissimilarity matrix
+# View(brayouter17)
+outer17_braymat <- as.matrix(brayouter17) # conver to matrix object
+# convert to pairwise comparison
+outer17_comp <- outer17_braymat[lower.tri(outer17_braymat)] # extract lower triangle
+outer17_row_indices <- row(outer17_braymat)[lower.tri(outer17_braymat)] # extract row indices for first quad in comparison
+outer17_col_indices <- col(outer17_braymat)[lower.tri(outer17_braymat)] # extract col indices = second quad in comp
+outer17_loc1 <- rownames(outer17_braymat)[outer17_row_indices] # populate appropriate vector
+outer17_loc2 <- colnames(outer17_braymat)[outer17_col_indices] # populate appropriate vector
+outer17_pairwise_df <- data.frame(loc1 = outer17_loc1, loc2 = outer17_loc2, dissimilarity = outer17_comp)
+outer17_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", outer17_pairwise_df$loc1)) # extract timepoint from first quad in comp
+outer17_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", outer17_pairwise_df$loc2)) # repeat for second quad
+outer17_pairwise_df$time <- abs(outer17_pairwise_df$year2 - outer17_pairwise_df$year1) # extract length of differences
+outer17_pairwise_df$location_1 <- sub(".*-(.*)", "\\1", outer17_pairwise_df$loc1) # extract quadrat id from first quad in comp
+outer17_pairwise_df$location_2 <- sub(".*-(.*)", "\\1", outer17_pairwise_df$loc2) # repeat for second quad
+
+
+
+
+```
+
+```{r bray dissimilarity over time, fig.height=15, fig.width=15}
+# for the purposes of this first set of analyses, I'm interested in dissimilarity of a given quad over time
+# not necessarily interested in how quads compare to each other over time/at each timepoint
+fringing_pairwise_subset <- fringing_pairwise_df[fringing_pairwise_df$location_1 == fringing_pairwise_df$location_2,]
+backreef_pairwise_subset <- backreef_pairwise_df[backreef_pairwise_df$location_1 == backreef_pairwise_df$location_2,]
+outer10_pairwise_subset <- outer10_pairwise_df[outer10_pairwise_df$location_1 == outer10_pairwise_df$location_2,]
+outer17_pairwise_subset <- outer17_pairwise_df[outer17_pairwise_df$location_1 == outer17_pairwise_df$location_2,]
+
+comb_subset <- rbind(fringing_pairwise_subset,
+                     backreef_pairwise_subset,
+                     outer10_pairwise_subset,
+                     outer17_pairwise_subset)
+# location_1 and location_2 columns are all the same now
+# create new col just called "location" for merge with other metadata
+comb_subset$location <- comb_subset$location_1
+bray_time_series <- merge(meta_df, comb_subset, by = "location")
+
+
+# model
+
+# some quadrats have dissimilarity = 0 or 1
+
+# Smithson verkuilen transformation for beta-regression
+sv_trans = function(prop, N, s = 0.000005){
+  (prop*(nrow(N) - 1) + s)/nrow(N)
+  # where prop is the proportional value you're transforming, 
+  # N is the sample size, which is specified by taking the number of rows/observations from a given dataframe,
+  # and s is a small offset 
+}
+
+# transformed dissimilarities
+bray_time_series$dissimilarity_trans <- sv_trans(bray_time_series$dissimilarity, bray_time_series)
+
+
+# bray_mod_universal <- glmmTMB(dissimilarity_trans ~ time*habitat*island_side + (1 | island_side/site/transect/location),
+#                               na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series) #
+# summary(bray_mod_universal) # a fair bit of variance w/i quads/transects
+# 
+# bray_mod_reduced <- glmmTMB(dissimilarity_trans ~ time*habitat + time*island_side + (1 | island_side/site/transect/location),
+#                               na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series)
+
+```
+
+```{r dissimilarity over time plot, fig.height=15, fig.width=15}
+ ggplot(bray_time_series,
+        aes(x = time, y = dissimilarity, colour = island_side) )+
+   facet_wrap(~habitat) + 
+   geom_point() +
+   scale_colour_manual(values = island_side_colours) +
+   stat_smooth(se = T, linewidth = 2) +
+   labs(y = "Dissimilarity\n") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") # make legend horizontal
+         ) 
+
+
+```
+
+```{r fringing nmds set up}
+# identifying species w/ > 10% cover for plotting later
+
+
+#### FRINGING
+# NOTE: Used ChatGPT to generate these next few lines of code but it looked good so I went with it
+# fringing_columns_to_keep <- apply(fringing_species_matrix, 2, function(x) any(x >= 0.1))
+# fringing_abundant_species_matrix <- as.data.frame(fringing_species_matrix)[ , fringing_columns_to_keep]
+# fringing_abundant_species_names <- colnames(fringing_abundant_species_matrix)
+# 
+# fringing_subset_meta <- fringing_subset[ , which(names(fringing_subset) %in% meta_cols)]
+# 
+# # for mean centroid:
+# fringing_subset_meta$island_side_year <- paste(fringing_subset_meta$year, "-", fringing_subset_meta$island_side_habitat, sep = "")
+# 
+# # takes several hours to run - do so at your own peril
+# set.seed(1032) 
+# # ord3 <- metaMDS(fringing_braymat, dist	= "bray", k = 3, trymax = 100) 
+# fringing_ord3 # stress = 0.018
+# 
+# 
+# sppscores(fringing_ord3) <- fringing_species_matrix # add back in species scores
+# fringing.species.scores <- as.data.frame(scores(fringing_ord3, "species")) # some NaN for absent species
+# fringing.species.scores <- na.omit(fringing.species.scores)
+# fringing.species.scores$species <- rownames(fringing.species.scores) 
+# 
+# 
+# fringing.site.scores <- as.data.frame(vegan::scores(fringing_ord3, "sites"))  # extract the site scores and convert to a data.frame
+# # add back in metadata
+# fringing.site.scores$stratum <- rownames(fringing.site.scores)
+# fringing.site.scores <- merge(fringing_subset_meta, fringing.site.scores, by = "stratum")
+# 
+# 
+# 
+# 
+# write_csv(site.scores, here("data", "fringing_site_scores.csv"))
+# write_csv(species.scores, here("data", "fringing_species_scores.csv"))
+
+
+fringing.species.scores <- read.csv(here::here("data", "fringing_species_scores.csv"), stringsAsFactors = F) 
+fringing.site.scores <- read.csv(here::here("data", "fringing_site_scores.csv"), stringsAsFactors = F) 
+# fringing.cent <- read.csv(here::here("data", "fringing_mean_centroid.csv"), stringsAsFactors = F) 
+
+fringing.cent <- aggregate(cbind(NMDS1, NMDS2) ~ island_side_year, data = fringing.site.scores, FUN = mean) 
+# fringing.cent.meta <- fringing_subset_meta %>%
+#    dplyr::group_by(year, island_side, island_side_habitat, island_side_year, site, habitat, transect, quadrat) %>%
+#    dplyr::summarise(year = unique(year), 
+#                     island_side = unique(island_side),
+#                     island_side_habitat = unique(island_side_habitat),
+#                     island_side_year = unique(island_side_year),
+#                     site = unique(site),
+#                     habitat = unique(habitat),
+#                     transect = unique(transect),
+#                     quadrat = unique(quadrat))
+# fringing.cent <- merge(fringing.cent, fringing_subset_meta[,-which(names(fringing_subset_meta) %in% c("stratum"))],  by = "island_side_year")
+
+# subset only the species w/ > 10% cover
+fringing.abundant.species.scores <- fringing.species.scores[fringing.species.scores$species %in% fringing_abundant_species_names,]
+
+
+
+#############
+# BACKREEF #
+############
+backreef_columns_to_keep <- apply(backreef_species_matrix, 2, function(x) any(x >= 0.1))
+backreef_abundant_species_matrix <- as.data.frame(backreef_species_matrix)[ , backreef_columns_to_keep]
+backreef_abundant_species_names <- colnames(backreef_abundant_species_matrix)
+
+backreef_subset_meta <- backreef_subset[ , which(names(backreef_subset) %in% meta_cols)]
+
+# for mean centroid:
+backreef_subset_meta$island_side_year <- paste(backreef_subset_meta$year, "-", backreef_subset_meta$island_side_habitat, sep = "")
+
+# takes several hours to run - do so at your own peril
+set.seed(1032) 
+# ord3 <- metaMDS(backreef_braymat, dist	= "bray", k = 3, trymax = 100) 
+backreef_ord3 # stress = 0.018
+
+
+sppscores(backreef_ord3) <- backreef_species_matrix # add back in species scores
+backreef.species.scores <- as.data.frame(scores(backreef_ord3, "species")) # some NaN for absent species
+backreef.species.scores <- na.omit(backreef.species.scores)
+backreef.species.scores$species <- rownames(backreef.species.scores) 
+
+
+backreef.site.scores <- as.data.frame(vegan::scores(backreef_ord3, "sites"))  # extract the site scores and convert to a data.frame
+# add back in metadata
+backreef.site.scores$stratum <- rownames(backreef.site.scores)
+backreef.site.scores <- merge(backreef_subset_meta, backreef.site.scores, by = "stratum")
+
+
+
+
+write_csv(site.scores, here("data", "backreef_site_scores.csv"))
+write_csv(species.scores, here("data", "backreef_species_scores.csv"))
+
+
+backreef.species.scores <- read.csv(here::here("data", "backreef_species_scores.csv"), stringsAsFactors = F) 
+backreef.site.scores <- read.csv(here::here("data", "backreef_site_scores.csv"), stringsAsFactors = F) 
+# backreef.cent <- read.csv(here::here("data", "backreef_mean_centroid.csv"), stringsAsFactors = F) 
+
+backreef.cent <- aggregate(cbind(NMDS1, NMDS2) ~ island_side_year, data = backreef.site.scores, FUN = mean) 
+# backreef.cent.meta <- backreef_subset_meta %>%
+#    dplyr::group_by(year, island_side, island_side_habitat, island_side_year, site, habitat, transect, quadrat) %>%
+#    dplyr::summarise(year = unique(year), 
+#                     island_side = unique(island_side),
+#                     island_side_habitat = unique(island_side_habitat),
+#                     island_side_year = unique(island_side_year),
+#                     site = unique(site),
+#                     habitat = unique(habitat),
+#                     transect = unique(transect),
+#                     quadrat = unique(quadrat))
+# backreef.cent <- merge(backreef.cent, backreef_subset_meta[,-which(names(backreef_subset_meta) %in% c("stratum"))],  by = "island_side_year")
+
+# subset only the species w/ > 10% cover
+backreef.abundant.species.scores <- backreef.species.scores[backreef.species.scores$species %in% backreef_abundant_species_names,]
+
+
+
+
+
+#######
+# OUTER10
+#######
+
+outer10_columns_to_keep <- apply(outer10_species_matrix, 2, function(x) any(x >= 0.1))
+outer10_abundant_species_matrix <- as.data.frame(outer10_species_matrix)[ , outer10_columns_to_keep]
+outer10_abundant_species_names <- colnames(outer10_abundant_species_matrix)
+
+outer10_subset_meta <- outer10_subset[ , which(names(outer10_subset) %in% meta_cols)]
+
+# for mean centroid:
+outer10_subset_meta$island_side_year <- paste(outer10_subset_meta$year, "-", outer10_subset_meta$island_side_habitat, sep = "")
+
+# takes several hours to run - do so at your own peril
+set.seed(1032) 
+# ord3 <- metaMDS(outer10_braymat, dist	= "bray", k = 3, trymax = 100) 
+outer10_ord3 # stress = 0.018
+
+
+sppscores(outer10_ord3) <- outer10_species_matrix # add back in species scores
+outer10.species.scores <- as.data.frame(scores(outer10_ord3, "species")) # some NaN for absent species
+outer10.species.scores <- na.omit(outer10.species.scores)
+outer10.species.scores$species <- rownames(outer10.species.scores) 
+
+
+outer10.site.scores <- as.data.frame(vegan::scores(outer10_ord3, "sites"))  # extract the site scores and convert to a data.frame
+# add back in metadata
+outer10.site.scores$stratum <- rownames(outer10.site.scores)
+outer10.site.scores <- merge(outer10_subset_meta, outer10.site.scores, by = "stratum")
+
+
+
+
+write_csv(site.scores, here("data", "outer10_site_scores.csv"))
+write_csv(species.scores, here("data", "outer10_species_scores.csv"))
+
+
+outer10.species.scores <- read.csv(here::here("data", "outer10_species_scores.csv"), stringsAsFactors = F) 
+outer10.site.scores <- read.csv(here::here("data", "outer10_site_scores.csv"), stringsAsFactors = F) 
+# outer10.cent <- read.csv(here::here("data", "outer10_mean_centroid.csv"), stringsAsFactors = F) 
+
+outer10.cent <- aggregate(cbind(NMDS1, NMDS2) ~ island_side_year, data = outer10.site.scores, FUN = mean) 
+# outer10.cent.meta <- outer10_subset_meta %>%
+#    dplyr::group_by(year, island_side, island_side_habitat, island_side_year, site, habitat, transect, quadrat) %>%
+#    dplyr::summarise(year = unique(year), 
+#                     island_side = unique(island_side),
+#                     island_side_habitat = unique(island_side_habitat),
+#                     island_side_year = unique(island_side_year),
+#                     site = unique(site),
+#                     habitat = unique(habitat),
+#                     transect = unique(transect),
+#                     quadrat = unique(quadrat))
+# outer10.cent <- merge(outer10.cent, outer10_subset_meta[,-which(names(outer10_subset_meta) %in% c("stratum"))],  by = "island_side_year")
+
+# subset only the species w/ > 10% cover
+outer10.abundant.species.scores <- outer10.species.scores[outer10.species.scores$species %in% outer10_abundant_species_names,]
+
+
+
+
+
+
+
+#############
+# OUTER 17 ##
+#############
+
+outer17_columns_to_keep <- apply(outer17_species_matrix, 2, function(x) any(x >= 0.1))
+outer17_abundant_species_matrix <- as.data.frame(outer17_species_matrix)[ , outer17_columns_to_keep]
+outer17_abundant_species_names <- colnames(outer17_abundant_species_matrix)
+
+outer17_subset_meta <- outer17_subset[ , which(names(outer17_subset) %in% meta_cols)]
+
+# for mean centroid:
+outer17_subset_meta$island_side_year <- paste(outer17_subset_meta$year, "-", outer17_subset_meta$island_side_habitat, sep = "")
+
+# takes several hours to run - do so at your own peril
+set.seed(1032) 
+# ord3 <- metaMDS(outer17_braymat, dist	= "bray", k = 3, trymax = 100) 
+outer17_ord3 # stress = 0.018
+
+
+sppscores(outer17_ord3) <- outer17_species_matrix # add back in species scores
+outer17.species.scores <- as.data.frame(scores(outer17_ord3, "species")) # some NaN for absent species
+outer17.species.scores <- na.omit(outer17.species.scores)
+outer17.species.scores$species <- rownames(outer17.species.scores) 
+
+
+outer17.site.scores <- as.data.frame(vegan::scores(outer17_ord3, "sites"))  # extract the site scores and convert to a data.frame
+# add back in metadata
+outer17.site.scores$stratum <- rownames(outer17.site.scores)
+outer17.site.scores <- merge(outer17_subset_meta, outer17.site.scores, by = "stratum")
+
+
+
+
+write_csv(site.scores, here("data", "outer17_site_scores.csv"))
+write_csv(species.scores, here("data", "outer17_species_scores.csv"))
+
+
+outer17.species.scores <- read.csv(here::here("data", "outer17_species_scores.csv"), stringsAsFactors = F) 
+outer17.site.scores <- read.csv(here::here("data", "outer17_site_scores.csv"), stringsAsFactors = F) 
+# outer17.cent <- read.csv(here::here("data", "outer17_mean_centroid.csv"), stringsAsFactors = F) 
+
+outer17.cent <- aggregate(cbind(NMDS1, NMDS2) ~ island_side_year, data = outer17.site.scores, FUN = mean) 
+# outer17.cent.meta <- outer17_subset_meta %>%
+#    dplyr::group_by(year, island_side, island_side_habitat, island_side_year, site, habitat, transect, quadrat) %>%
+#    dplyr::summarise(year = unique(year), 
+#                     island_side = unique(island_side),
+#                     island_side_habitat = unique(island_side_habitat),
+#                     island_side_year = unique(island_side_year),
+#                     site = unique(site),
+#                     habitat = unique(habitat),
+#                     transect = unique(transect),
+#                     quadrat = unique(quadrat))
+# outer17.cent <- merge(outer17.cent, outer17_subset_meta[,-which(names(outer17_subset_meta) %in% c("stratum"))],  by = "island_side_year")
+
+# subset only the species w/ > 10% cover
+outer17.abundant.species.scores <- outer17.species.scores[outer17.species.scores$species %in% outer17_abundant_species_names,]
+```
+
+
+```{r plot fringing}
+ggplot() + 
+  geom_point(data= site.scores, aes(x=NMDS1,y=NMDS2, colour = island_side),
+             alpha = 0.25, size=2) + # add the point markers
+  geom_text(data= abundant.species.scores,aes(x=NMDS1,y=NMDS2, label = species), size = 4) +  # add the species labels
+  
+  geom_path(data = cent, aes(x = NMDS1, y = NMDS2, group = island_side_habitat, colour = island_side),
+            arrow = arrow(length=unit(0.5,"cm"), ends="last", type = "closed"), size = 1) +
+#  facet_wrap(~factor(habitat, levels=c('fringing','backreef','outer_10','outer_17'))) +
+  scale_linetype_manual(values = habitat_linetypes) +
+  scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        strip.text.x = element_text(size = 25),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(1.5)), # increase legend text
+        legend.title = element_text(size = rel(1.5)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) + # add box around legend
+  guides(colour=guide_legend(title.position="top", # make color legend title go above legend
+                                     title.hjust =0.5, nrow = 2),
+         shape=guide_legend(title.position="top",  # make shape legend title go above legend
+                                     title.hjust =0.5,
+                            nrow = 2),
+         path = guide_legend(title.position="top",  # make shape legend title go above legend
+                                     title.hjust =0.5)
+         )  
+
+
+
+```
+
+```{r full bray curtis set up, eval = FALSE}
+### I DON'T THINK ANY COMPUTER CAN RUN THIS
+species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
+species_matrix <- species_matrix/100 # convert from percent to proportion
+rownames(species_matrix) <- paste(data$year,"-", data$location, sep = "")
+rows_to_remove <- rowSums(species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+species_matrix <- species_matrix[!rows_to_remove,] 
+data_subset <- data[!rows_to_remove,] # make sure rows are also removed from dataframe
+data_subset$stratum <- paste(data_subset$year,"-", data_subset$location, sep = "") # for merging with bray matrix later
+brayfull <- vegdist(species_matrix, "bray") # create bray dissimilarity matrix
+# View(brayfull)
+braymat <- as.matrix(brayfull) # conver to matrix object
+# convert to pairwise comparison
+comp <- braymat[lower.tri(braymat)] # extract lower triangle
+row_indices <- row(braymat)[lower.tri(braymat)] # extract row indices for first quad in comparison
+col_indices <- col(braymat)[lower.tri(braymat)] # 
+loc1 <- rownames(braymat)[row_indices]
+loc2 <- colnames(braymat)[col_indices]
+pairwise_df <- data.frame(loc1 = loc1, loc2 = loc2, dissimilarity = comp)
+# pairwise_df$year1 <- sub("(.*)-.*", "\\1", pairwise_df$loc1)
+year1 <- strsplit(pairwise_df$loc1, "-")[[1]]
+
+
+
+```
+
+```{r old nmds code, fig.height = 15, fig.width = 15, eval = FALSE}
+species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
+species_matrix <- species_matrix/100 # convert from percent to proportion
+rownames(species_matrix) <- paste(data$year, data$site_habitat, data$transect)
+rows_to_remove <- rowSums(species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+species_matrix <- species_matrix[!rows_to_remove,] 
+data_subset <- data[!rows_to_remove,] # make sure rows are also removed from dataframe
+data_subset$stratum <- paste(data_subset$year, "-", data_subset$site, "-", data_subset$habitat )
+# identifying species w/ > 10% cover for plotting later
+# NOTE: Used ChatGPT to generate these next few lines of code but it looked good so I went with it
+columns_to_keep <- apply(species_matrix, 2, function(x) any(x >= 0.1))
+abundant_species_matrix <- as.data.frame(species_matrix)[ , c(TRUE, columns_to_keep)]
+abundant_species_names <- colnames(abundant_species_matrix)
+
+# My computer can't run this at the quadrat level
+
+# ord2 # stress = 0.22
+# stressplot(ord2)
+
+set.seed(1032)
+ord3 <- metaMDS(species_matrix, dist	= "bray",	trymax	= 100,	k	= 3)
+ord3 # 0.166
+stressplot(ord3)
+
+# pro <- procrustes(ord2, ord3) # visually compare w procrustes rotation
+
+# plot(pro, cex=1.5)
+
+site.scores <- as.data.frame(vegan::scores(ord3)$sites)  # extract the site scores and convert to a data.frame
+# add back in metadata
+site.scores$year <- as.factor(data_subset$year)
+site.scores$site <- as.factor(data_subset$site)
+site.scores$habitat <- as.factor(data_subset$habitat)
+site.scores$site_habitat <- as.factor(data_subset$site_habitat)
+site.scores$transect <- as.factor(data_subset$transect)
+site.scores$stratum <- as.factor(data_subset$stratum)
+
+cent <- aggregate(cbind(NMDS1, NMDS2) ~ stratum, data = site.scores, FUN = mean) # compute centroids for NMDS1 and NMDS2 
+
+# Need to split stratum up for plotting later
+cent<- 
+  cent %>%
+    separate(stratum, into = c("year", "site", "habitat"), sep = "-")
+cent$site_habitat <- paste(cent$site, cent$habitat)
+# Add back in stratum column
+cent$stratum <-  aggregate(cbind(NMDS1, NMDS2) ~ stratum, data = site.scores, FUN = mean)$stratum
+# A lot of extra spaces
+
+cent <- cent %>%
+  mutate(across(everything(), str_trim))
+cent$year <- as.factor(cent$year)
+cent$habitat <- as.factor(cent$habitat)
+cent$site <- as.factor(cent$site)
+cent$site_habitat <- as.factor(cent$site_habitat)
+cent$NMDS1 <- as.numeric(cent$NMDS1) # read in as characters for some reason
+cent$NMDS2 <- as.numeric(cent$NMDS2)
+species.scores <- as.data.frame(scores(ord3)$species)  # extract the species scores and convert to a data.frame
+species.scores$Species <- rownames(species.scores) 
+
+# subset only the species w/ > 10% cover
+abundant.species.scores <- species.scores[species.scores$Species %in% abundant_species_names,] 
+
+ggplot() + 
+  geom_point(data= site.scores, aes(x=NMDS1,y=NMDS2, shape = habitat, colour = site),
+             alpha = 0.25, size=2) + # add the point markers
+  geom_text(data= abundant.species.scores,aes(x=NMDS1,y=NMDS2, label = Species), size = 4) +  # add the species labels
+  
+  geom_path(data = cent, aes(x = NMDS1, y = NMDS2, group = site_habitat, colour = site),
+            arrow = arrow(length=unit(0.5,"cm"), ends="last", type = "closed"), size = 1) +
+  facet_wrap(~factor(habitat, levels=c('fringing','backreef','outer_10','outer_17'))) +
+  scale_linetype_manual(values = habitat_linetypes) +
+  scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        strip.text.x = element_text(size = 25),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(1.5)), # increase legend text
+        legend.title = element_text(size = rel(1.5)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) + # add box around legend
+  guides(colour=guide_legend(title.position="top", # make color legend title go above legend
+                                     title.hjust =0.5, nrow = 2),
+         shape=guide_legend(title.position="top",  # make shape legend title go above legend
+                                     title.hjust =0.5,
+                            nrow = 2),
+         path = guide_legend(title.position="top",  # make shape legend title go above legend
+                                     title.hjust =0.5)
+         )  
+
+
+# looks like stochasticity increases from outer_17 --> fringing
+# Even in lagoon though it looks like communities return to initial state... except for north Shore lter_sites
+# ways to test stochasticity vs. determinism?
+# seems like deterministic trajectories, although we're not starting from a clean slate
+# accounting for founder effects?
+
+```
+
+```{r beta dispersion, fig.height = 15, fig.width=20}
+# Want to plot mean distance to centroid, but not sure how to do that with so many factors/interactions...
+ bray_matrix <- vegdist(species_matrix, method = "bray")
+# year_beta_disper <- vegan::betadisper(bray_matrix, data_subset$year)
+# year_beta_disper # 
+
+# plot of dispersion test
+# plot(year_beta_disper, sub = "") # lol
+# boxplot(year_beta_disper, main = "year", xlab = "") 
+# 
+# site_beta_disper <- vegan::betadisper(bray_matrix, data_subset$site)
+# plot(site_beta_disper, sub = "") # site five stands out
+# boxplot(site_beta_disper, main = "site", xlab = "") 
+# 
+# 
+# habitat_beta_disper <- vegan::betadisper(bray_matrix, data_subset$habitat)
+# plot(habitat_beta_disper, sub = "") 
+# boxplot(habitat_beta_disper, main = "habitat", xlab = "") # greatest variance in fringing it seems (as expected)
+# 
+# site_habitat_beta_disper <- vegan::betadisper(bray_matrix, data_subset$site_habitat)
+# plot(site_habitat_beta_disper, sub = "") 
+# boxplot(site_habitat_beta_disper, main = "site_habitat", xlab = "") 
+# 
+stratum_beta_disper <- vegan::betadisper(bray_matrix, data_subset$stratum)
+# plot(site_habitat_beta_disper, sub = "") 
+boxplot(stratum_beta_disper, main = "site_habitat", xlab = "")
+stratum_distances <- as.data.frame(stratum_beta_disper$distances)
+colnames(stratum_distances)[1] <- "Distance"
+stratum_distances$stratum <- data_subset$stratum
+stratum_distances$transect <- data_subset$transect
+stratum_distances$year <- data_subset$year
+stratum_distances$site <- data_subset$site
+stratum_distances$habitat <- data_subset$habitat
+stratum_distances$site_habitat <- data_subset$site_habitat
+
+beta_disper_means <- stratum_distances %>%
+  dplyr::group_by(year, site, habitat, site_habitat) %>%
+  dplyr::summarise(Distance_mean = mean(Distance), 
+            Distance_se = sd(Distance)/sqrt(n()))
+
+(Distance_plot <-
+  ggplot(data = beta_disper_means) +
+  geom_point(aes(x = year, y = Distance_mean, colour = site, shape = habitat, group = site_habitat), size = 8, stroke = 2) +
+  geom_line(aes(x = year, y = Distance_mean, colour = site, group = site_habitat), size = 1.2) +
+  geom_errorbar(aes(x = year, ymin = Distance_mean - Distance_se , ymax = Distance_mean + Distance_se, colour = site,
+                    group = site_habitat), width = 0.5, size = 1.2) +
+  scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  facet_wrap(~factor(habitat, levels=c('fringing','backreef','outer_10','outer_17')))+
+  labs(title = "Distance to centroid\n", y = "Distance\n") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        )
+    )
+# beta dispersion increases as we move from forereef to lagoon, lagoon to shore
+
+```
