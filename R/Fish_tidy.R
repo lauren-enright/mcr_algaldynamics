@@ -67,4 +67,11 @@ biomass_by_herb_status_wide <- cleaned_fish %>%
 
 write_csv(biomass_by_herb_status_wide, here("data", "biomass_herb_summary.csv"))
 write_csv(biomass_by_functional_group_wide, here("data", "biomass_functional_summary.csv"))
+
+### Summary for CS slide
+common_fish <- fish %>% 
+  group_by(Habitat, Taxonomy) %>%
+  summarise(total_count = sum(Count)) %>%
+  arrange(Habitat, Taxonomy)
+  
   
