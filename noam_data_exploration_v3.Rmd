@@ -542,7 +542,7 @@ ggplot(data = gls_coefficients_merged, aes(x = Intercept)) +
 
 
 
-```{r glmm approach}
+```{r glmm approach, fig.height = 15, fig.width=20}
 alpha_diversity_quad$year_factor <- as.factor(alpha_diversity_quad$year) # for glmmTMB ar1 structure
 # Framing - is adiv generally higher in certain habitats/regions?
 
@@ -567,8 +567,37 @@ richness_mod_2 <- glmmTMB(
 summary(richness_mod_2) # looks like strong autocorrelation, which makes sense to me
 Anova(richness_mod_2)
 plot(allEffects(richness_mod_2))
-# emmeans(richness_mod_2, pairwise ~ habitat | year_factor) # if we want to compare habitats year to year
+mod_emm <- emmeans(richness_mod_2, ~ habitat * island_side * year_factor) # if we want to compare habitats year to year
+plot(mod_emm) +
+  geom_point(aes(x = emmean, y = year_factor, colour = habitat))
+  facet_wrap(island_side~habitat)
 # model.sel(dredge(richness_mod_2))
+  
+emmip(richness_mod_2, island_side ~ year_factor | habitat, CIs = TRUE) +
+  scale_colour_manual(values = island_side_colours) +
+  scale_shape_manual(values = habitat_shapes) +
+  scale_y_continuous(limits = c(0,2)) +
+#  facet_wrap(~habitat)+
+#  labs(title = "b. shannon quad level\n", y = "shannon\n") +
+  theme_bw() + 
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+        axis.line.y = element_line(colour = "black"),
+        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        axis.line.x = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(size = 32),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(2)), # increase legend text
+        legend.title = element_text(size = rel(2.25)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal',
+        legend.box.background = element_rect(colour = "black") # make legend horizontal
+        )
 
 # top_rich_mod <- glmmTMB(richness ~ year_factor*habitat + year_factor*island_side + (1 | island_side/transect/location) + # ar1(year_factor + 0 | location),   family = poisson, data = alpha_diversity_quad, control = glmmTMBControl(optCtrl = list(iter.max = # 2000, eval.max = 2000)))
 # summary(top_rich_mod)
