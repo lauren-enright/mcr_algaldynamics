@@ -341,7 +341,7 @@ sum(gam_coefficients$edf > 1.01) # all but 18/1200 quadrats can be fit by a smoo
 ```{r gls approach, fig.height=10, fig.width=14}
 
 # FRAMING: What is the general trend in algal alpha diversity over the course of the time series? Increasing, decreasing, neutral?
-
+alpha_diversity_quad$logRich <- log(alpha_diversity_quad$richness + 1)
 columns <- c("location", "Intercept", "Slope", "Phi") # names of columns for dataframe
 gls_coefficients <- # new dataframe name
   data.frame(matrix(nrow = length(unique(alpha_diversity_quad$location)), # 1200 quadrats = 1200 different time series
