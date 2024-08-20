@@ -338,7 +338,7 @@ sum(gam_coefficients$edf > 1.01) # all but 18/1200 quadrats can be fit by a smoo
 # argument for just looking at mean richness and slope?
 ```
 
-```{r gls approach}
+```{r gls approach, fig.height=10, fig.width=14}
 
 # FRAMING: What is the general trend in algal alpha diversity over the course of the time series? Increasing, decreasing, neutral?
 
@@ -448,6 +448,28 @@ plot(allEffects(slope_mod))
 
 slope_emm <- emmeans(slope_mod, ~ habitat*island_side) # create emmeans object
 emmeans::contrast(slope_emm, "consec", simple = "each", combine = TRUE, adjust = "bonferroni")
+slope_plot_info <- plot(slope_emm, plotit = FALSE)
+(emmeans_slope_graph <- 
+  ggplot(data =slope_plot_info) +
+  geom_point(aes(y = the.emmean, x = habitat, colour = island_side), size = 8, position = position_dodge(0.3)) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL, x = habitat, colour = island_side), width = 0.2, size = 1.5,
+                position = position_dodge(0.3) )+
+  geom_hline(yintercept = 0) +
+  theme_classic() +
+  labs(y = "Estimated maringal mean slope\n", x = "Habitat") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+#        panel.background = element_blank(),
+        legend.text = element_text(size=20),
+        legend.title = element_text(size=20),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        axis.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain") ) )
+
 # Note: not sure I want to include this
 emmeans(slope_mod, pairwise ~ island_side | habitat)
 # north and east coast not different from each other in backreef
@@ -542,7 +564,7 @@ ggplot(data = gls_coefficients_merged, aes(x = Intercept)) +
 
 
 
-```{r glmm approach, fig.height = 15, fig.width=20}
+```{r glmm approach, fig.height = 20, fig.width=15}
 alpha_diversity_quad$year_factor <- as.factor(alpha_diversity_quad$year) # for glmmTMB ar1 structure
 # Framing - is adiv generally higher in certain habitats/regions?
 
@@ -558,7 +580,7 @@ alpha_diversity_quad$year_factor <- as.factor(alpha_diversity_quad$year) # for g
 
 # probably the closest to what others have done:
 richness_mod_2 <- glmmTMB(
-  richness ~ year_factor*habitat*island_side + (1 | island_side/transect/location) + ar1(year_factor + 0 | location),
+  richness ~ year_factor*habitat*island_side + (1 | site/transect/location) + ar1(year_factor + 0 | location),
   family = poisson,
   data = alpha_diversity_quad,
   control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000)), na.action = na.pass
@@ -568,36 +590,28 @@ summary(richness_mod_2) # looks like strong autocorrelation, which makes sense t
 Anova(richness_mod_2)
 plot(allEffects(richness_mod_2))
 mod_emm <- emmeans(richness_mod_2, ~ habitat * island_side * year_factor) # if we want to compare habitats year to year
-plot(mod_emm) +
-  geom_point(aes(x = emmean, y = year_factor, colour = habitat))
-  facet_wrap(island_side~habitat)
-# model.sel(dredge(richness_mod_2))
-  
-emmip(richness_mod_2, island_side ~ year_factor | habitat, CIs = TRUE) +
-  scale_colour_manual(values = island_side_colours) +
-  scale_shape_manual(values = habitat_shapes) +
-  scale_y_continuous(limits = c(0,2)) +
-#  facet_wrap(~habitat)+
-#  labs(title = "b. shannon quad level\n", y = "shannon\n") +
-  theme_bw() + 
+richness_plot_info <- plot(mod_emm, plotit = FALSE)
+(emmeans_graph <- 
+  ggplot(data =richness_plot_info) +
+  geom_point(aes(x = exp(the.emmean), y = year_factor, colour = island_side), size = 8) +
+  geom_errorbar(aes(xmin = exp(asymp.LCL), xmax = exp(asymp.UCL), y = year_factor, colour = island_side), width = 0.2, size = 1.5) +
+  facet_wrap(~habitat) +
+  theme_classic() +
+  labs(y = "Year\n", x = "Estimated marginal mean richness") +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
-        axis.line.y = element_line(colour = "black"),
-        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
-        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        axis.line.x = element_line(colour = "black"),
-        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
-        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        strip.text.x = element_text(size = 32),
-        legend.key.size = unit(2, "cm"), # increase legend size
-        legend.text = element_text(size = rel(2)), # increase legend text
-        legend.title = element_text(size = rel(2.25)),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal',
-        legend.box.background = element_rect(colour = "black") # make legend horizontal
-        )
+#        panel.background = element_blank(),
+        legend.text = element_text(size=20),
+        legend.title = element_text(size=20),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        axis.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain") ) )
+  
+
 
 # top_rich_mod <- glmmTMB(richness ~ year_factor*habitat + year_factor*island_side + (1 | island_side/transect/location) + # ar1(year_factor + 0 | location),   family = poisson, data = alpha_diversity_quad, control = glmmTMBControl(optCtrl = list(iter.max = # 2000, eval.max = 2000)))
 # summary(top_rich_mod)
