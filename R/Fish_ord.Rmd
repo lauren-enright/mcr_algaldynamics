@@ -21,7 +21,7 @@ library(scales)
 ```{r data, message=FALSE, echo=FALSE}
 #algae <- read.csv(here("data", "algaeonly_cleaned.csv"))
 fish_fun <- read.csv(here("data", "biomass_functional_summary.csv"))
-fish <- read.csv(here("data", "biomass_herb_summary.csv"))
+herb <- read.csv(here("data", "biomass_herb_summary.csv"))
 alpha <- read.csv(here("data", "algae_alpha_diversity.csv")) %>% 
   filter(Habitat != "Outer 17")
 ```
@@ -70,7 +70,8 @@ habitat_shapes <- c("Fringing" = 16,
 ```
 
 
-### Ordination of Algal Communities with Fish Community as Drivers:
+
+# Ordination of Algal Communities with Fish Community as Drivers:
 
 Transform the data and remove rows that are 100% coral cover
 
@@ -121,7 +122,49 @@ plot(1, type = 'n', xlab = '', ylab = '', xaxt = 'n', yaxt = 'n')
 legend("center", legend = levels(colors), col = color_palette, pch = 21, pt.bg = color_palette)
 ```
 
+## Just Herbivore Biomass:
+```{r}
+herb_merge <- herb %>% 
+  mutate(Site = paste0("LTER ",Site))
+herb_algal_merge <- left_join(wide_site_level_merge, herb_merge[,c("Year", "Site", "Habitat", "Herbivore.Biomass")], 
+                              by = join_by(Year, Site, Habitat)) %>% 
+  filter(Year != "2023")
 
+species.data.transform = wisconsin(sqrt(herb_algal_merge[c(5:74)]))
+non_zero_rows <- rowSums(species.data.transform == 0) != ncol(species.data.transform)
+species.data.use <- species.data.transform[non_zero_rows, ]
+merged_clean_filtered <- herb_algal_merge[non_zero_rows, ]
+```
+
+```{r}
+herb_algal_constrained_ord = capscale(species.data.use ~ Herbivore.Biomass, dist = "bray", data = merged_clean_filtered)
+```
+
+```{r}
+herb_algal_constrained_ord
+```
+
+
+
+```{r}
+par(mfrow = c(1, 3))  # 1 row, 3 columns
+
+# Plot 1: Species driving the community composition
+plot(herb_algal_constrained_ord, display = "species", main = "Species Driving Community Composition", type = "n")
+text(herb_algal_constrained_ord, display = "species", col = "blue", cex = 1)
+
+# Plot 2: Communities (sites) plotted
+plot(herb_algal_constrained_ord, display = "sites", main = "Communities", type = "n")
+points(herb_algal_constrained_ord, display = "sites", col = color_palette[colors], pch = 21)  # Sites colored by the same scheme
+
+# Plot 3: Constrained ordination axes (environmental variables)
+plot(herb_algal_constrained_ord, display = "sites", type = 'n', main = "Relationship with Herbivore Biomass")
+points(herb_algal_constrained_ord, display = "sites", col = 'grey')
+text(herb_algal_constrained_ord, display = 'bp', col = 'blue')
+```
+
+
+## The whole fish community:
 ```{r}
 fish_fun1 <- fish_fun
 fish_fun1[is.na(fish_fun1)] <- 0
