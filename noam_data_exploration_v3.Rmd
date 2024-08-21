@@ -355,7 +355,8 @@ for(i in 1:length(unique(alpha_diversity_quad$location)) ){ # for each  quadrat
   newData <- subset(alpha_diversity_quad, location == levels(alpha_diversity_quad$location)[i]) 
   
   # fit gls for current time series
-  loop_mod <- gls(richness ~ year, correlation =corAR1(form=~year), data = newData)
+  loop_mod <- gls(logRich ~ year, correlation =corAR1(form=~year), 
+                  control=glsControl(msVerbose=T), data = newData)
   
   # populate appropriate row and column with the relevant coeffcients from gls
   gls_coefficients[i, 2] <- unname(coef(loop_mod)[1])
@@ -393,35 +394,35 @@ extra_meta <-
 
 gls_coefficients_merged <- merge(gls_coefficients, extra_meta, by = "location")             
 
-slope_mod <- glmmTMB(Slope ~ habitat*site + (1|site/transect), data = gls_coefficients_merged)
-# model convergence problem
-summary(slope_mod) # pretty low variance in random effects
-plot(gls_res <- simulateResiduals(slope_mod)) # there are issues, but I can't figure out what they are...
-# I think this is due to 1200 obs in model
-hist(residuals(slope_mod))
-plot(predict(slope_mod) ~ residuals(slope_mod))
-Anova(slope_mod)
-# Response: Slope
-#                 Chisq Df Pr(>Chisq)    
-# habitat      1397.999  3  < 2.2e-16 ***
-# site           39.095  5  2.273e-07 ***
-# habitat:site 1738.155 15  < 2.2e-16 ***
-r.squaredGLMM(slope_mod) # 0.22, 0.24
-plot(allEffects(slope_mod))
-# backreef: richness increases on east and north shore, but relatively constant west side
-# Fringe: richness decreasing on east and west side, but relatvely constant on north shore
-# outer_10: richness neutral/decreasing on east side, but neutral/increasing on north and west side
-# outer_17: richness decreasing north/east side, but neutral west side
-# Worth noting trends are slight - arguable whether they are biologically meaningful
-
-
-
-
-slope_emm <- emmeans(slope_mod, ~ habitat*site) # create emmeans object
-emmeans::contrast(slope_emm, "consec", simple = "each", combine = TRUE, adjust = "bonferroni")
-# Note: not sure I want to include this
-emmeans(slope_mod, pairwise ~ site | habitat)
-
+# slope_mod <- glmmTMB(Slope ~ habitat*site + (1|site/transect), data = gls_coefficients_merged)
+# # model convergence problem
+# summary(slope_mod) # pretty low variance in random effects
+# plot(gls_res <- simulateResiduals(slope_mod)) # there are issues, but I can't figure out what they are...
+# # I think this is due to 1200 obs in model
+# hist(residuals(slope_mod))
+# plot(predict(slope_mod) ~ residuals(slope_mod))
+# Anova(slope_mod)
+# # Response: Slope
+# #                 Chisq Df Pr(>Chisq)    
+# # habitat      1397.999  3  < 2.2e-16 ***
+# # site           39.095  5  2.273e-07 ***
+# # habitat:site 1738.155 15  < 2.2e-16 ***
+# r.squaredGLMM(slope_mod) # 0.22, 0.24
+# plot(allEffects(slope_mod))
+# # backreef: richness increases on east and north shore, but relatively constant west side
+# # Fringe: richness decreasing on east and west side, but relatvely constant on north shore
+# # outer_10: richness neutral/decreasing on east side, but neutral/increasing on north and west side
+# # outer_17: richness decreasing north/east side, but neutral west side
+# # Worth noting trends are slight - arguable whether they are biologically meaningful
+# 
+# 
+# 
+# 
+# slope_emm <- emmeans(slope_mod, ~ habitat*site) # create emmeans object
+# emmeans::contrast(slope_emm, "consec", simple = "each", combine = TRUE, adjust = "bonferroni")
+# # Note: not sure I want to include this
+# emmeans(slope_mod, pairwise ~ site | habitat)
+# 
 
 ## AT COAST-LEVEL
 slope_mod <- glmmTMB(Slope ~ habitat*island_side + (1|island_side/site/transect), data = gls_coefficients_merged)
@@ -564,7 +565,7 @@ ggplot(data = gls_coefficients_merged, aes(x = Intercept)) +
 
 
 
-```{r glmm approach, fig.height = 20, fig.width=15}
+```{r glmm approach, fig.height = 15, fig.width=25}
 alpha_diversity_quad$year_factor <- as.factor(alpha_diversity_quad$year) # for glmmTMB ar1 structure
 # Framing - is adiv generally higher in certain habitats/regions?
 
@@ -591,13 +592,18 @@ Anova(richness_mod_2)
 plot(allEffects(richness_mod_2))
 mod_emm <- emmeans(richness_mod_2, ~ habitat * island_side * year_factor) # if we want to compare habitats year to year
 richness_plot_info <- plot(mod_emm, plotit = FALSE)
+richness_plot_info$year_numeric <- as.numeric(levels(richness_plot_info$year_factor))
 (emmeans_graph <- 
   ggplot(data =richness_plot_info) +
-  geom_point(aes(x = exp(the.emmean), y = year_factor, colour = island_side), size = 8) +
-  geom_errorbar(aes(xmin = exp(asymp.LCL), xmax = exp(asymp.UCL), y = year_factor, colour = island_side), width = 0.2, size = 1.5) +
+  geom_point(aes(y = exp(the.emmean), x = year_numeric, colour = island_side), size = 8) +
+  geom_errorbar(aes(ymin = exp(asymp.LCL), ymax = exp(asymp.UCL), x = year_numeric, colour = island_side), 
+                width = 0.2, size = 1.5) +
+  geom_segment(aes(y = 5.2, yend = 5.2, x = 2006, xend = 2010), linewidth = 4, alpha = 0.2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 2) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 2) +
   facet_wrap(~habitat) +
   theme_classic() +
-  labs(y = "Year\n", x = "Estimated marginal mean richness") +
+  labs(x = "Year", y = "Estimated marginal mean richness\n") +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
 #        panel.background = element_blank(),
@@ -721,7 +727,7 @@ data_sub <- data[!data$location %in% problem_children, ]
 
 ```
 
-```{r total turnover, fig.height = 24, fig.width=16}
+```{r total turnover, fig.height = 16, fig.width=24}
 # the turnover function calculates turnover as the proportion or species that either appear or disappear between timepoints
 total_turnover<-
   turnover(
@@ -756,69 +762,90 @@ sv_trans = function(prop, N, s = 0.000005){
   # N is the sample size, which is specified by taking the number of rows/observations from a given dataframe,
   # and s is a small offset 
 }
+
+# for backtransforming logit transformed data in graph
+inv_logit <- function(x){
+  exp(x)/(1+exp(x))
+}
+
 total_turnover$Turnover_trans <- sv_trans(total_turnover$total, total_turnover)
 
 # model
 total_turnover_mod1 <- glmmTMB(Turnover_trans ~ year_factor*habitat*island_side +
-                                 (1 | island_side/site/transect) + ar1(year_factor + 0 | location),
-                               family = beta_family(), data = total_turnover)
+                                 (1 | site/transect/location) + ar1(year_factor + 0 | location),
+                               family = beta_family(), data = total_turnover) # convergence problem, probably overspecified
 summary(total_turnover_mod1) # low temporal autocorrelation... maybe don't need ar1 term?
 plot(total_turnover_res <- simulateResiduals(total_turnover_mod1)) # residuals look very weird
 Anova(total_turnover_mod1) # obviously everything sig
+total_turnover_emm <- emmeans(total_turnover_mod1, ~ year_factor*habitat*island_side)
+total_turnover_plot_info <- plot(total_turnover_emm, plotit = F)
+total_turnover_plot_info$year_numeric <- as.numeric(levels(total_turnover_plot_info$year_factor))
 
-# total_turnover_mod2 <- glmmTMB(Turnover_trans ~ year_factor*habitat*site + (1 | site/transect/location),
-#                                family = beta_family(), data = total_turnover)
-# summary(total_turnover_mod2) # 
-# plot(total_turnover_res2 <- simulateResiduals(total_turnover_mod2)) # residuals still look like shit
-# Anova(total_turnover_mod2) 
-# anova(total_turnover_mod2, total_turnover_mod1) # models are sig different from each other
-# AICc(total_turnover_mod2, total_turnover_mod1) # first model is better
-# # need to figure out residuals problem
-# plot(allEffects(total_turnover_mod1))
-# 
-
-
-# plot
-total_turnover_means <-
-  total_turnover %>%
-  dplyr::group_by(year, island_side, site, habitat, site_habitat) %>%
-  dplyr::summarise(Turnover_mean = mean(total), 
-            Turnover_se = sd(total)/sqrt(n()))
-
-(turnover_plot <-
-  ggplot(data = total_turnover_means) +
-  geom_point(aes(x = year, y = Turnover_mean, colour = island_side, shape = habitat, group = island_side_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = year, y = Turnover_mean, colour = island_side, group = island_side_habitat), size = 1.2) +
-  geom_errorbar(aes(x = year, ymin = Turnover_mean - Turnover_se , ymax = Turnover_mean + Turnover_se, colour = island_side,
-                    group = island_side_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = island_side_colours) +
-  scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~island_side_habitat, nrow = 6)+
-  labs(title = "a. Turnover\n", y = "Total turnover\n") +
-  theme_bw() + 
+(total_turnover_emmeans_graph <- 
+  ggplot(data =total_turnover_plot_info) +
+  geom_point(aes(y = inv_logit(the.emmean), x = year_numeric, colour = island_side), size = 8) +
+  geom_errorbar(aes(ymin = inv_logit(asymp.LCL), ymax = inv_logit(asymp.UCL), x = year_numeric, colour = island_side), 
+                width = 0.2, size = 1.5) +
+  geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 4, alpha = 0.2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 2) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 2) +
+  facet_wrap(~habitat) +
+  theme_classic() +
+  labs(x = "Year", y = "Estimated marginal mean total turnover\n") +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
-        axis.line.y = element_line(colour = "black"),
-        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
-        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        axis.line.x = element_line(colour = "black"),
-        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
-        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        strip.text.x = element_text(size = 32),
-        legend.key.size = unit(2, "cm"), # increase legend size
-        legend.text = element_text(size = rel(2)), # increase legend text
-        legend.title = element_text(size = rel(2.25)),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal',
-        legend.box.background = element_rect(colour = "black") # make legend horizontal
-        )
-    )
+#        panel.background = element_blank(),
+        legend.text = element_text(size=20),
+        legend.title = element_text(size=20),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        axis.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain") ) )
+
+# plot
+#total_turnover_means <-
+#  total_turnover %>%
+#  dplyr::group_by(year, island_side, site, habitat, site_habitat) %>%
+#  dplyr::summarise(Turnover_mean = mean(total), 
+#            Turnover_se = sd(total)/sqrt(n()))
+#
+#(turnover_plot <-
+#  ggplot(data = total_turnover_means) +
+#  geom_point(aes(x = year, y = Turnover_mean, colour = island_side, shape = habitat, group = island_side_habitat), size = 8, stroke = #2) +
+#  geom_line(aes(x = year, y = Turnover_mean, colour = island_side, group = island_side_habitat), size = 1.2) +
+#  geom_errorbar(aes(x = year, ymin = Turnover_mean - Turnover_se , ymax = Turnover_mean + Turnover_se, colour = island_side,
+#                    group = island_side_habitat), width = 0.5, size = 1.2) +
+#  scale_colour_manual(values = island_side_colours) +
+#  scale_shape_manual(values = habitat_shapes) +
+#  facet_wrap(~island_side_habitat, nrow = 6)+
+#  labs(title = "a. Turnover\n", y = "Total turnover\n") +
+#  theme_bw() + 
+#  theme(panel.grid.major = element_blank(), 
+#        panel.grid.minor = element_blank(),
+#        panel.background = element_blank(),
+#        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+#        axis.line.y = element_line(colour = "black"),
+#        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+#        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+#        axis.line.x = element_line(colour = "black"),
+#        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+#        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+#        strip.text.x = element_text(size = 32),
+#        legend.key.size = unit(2, "cm"), # increase legend size
+#        legend.text = element_text(size = rel(2)), # increase legend text
+#        legend.title = element_text(size = rel(2.25)),
+#        legend.position = 'bottom', # move legend to bottom
+#        legend.box = 'horizontal',
+#        legend.box.background = element_rect(colour = "black") # make legend horizontal
+#        )
+#    )
 #
 ```
 
-```{r appearances, fig.height = 24, fig.width=16}
+```{r appearances, fig.height = 16, fig.width=24}
 # examine appearance and disappearances independently 
 # refers to the proportion of species that appeared or disappeared relative to total species pool between two time points
 
@@ -837,63 +864,91 @@ appearance$Appearance_trans <- sv_trans(appearance$appearance, appearance)
 appearance$year_factor <- as.factor(appearance$year)
 
 # model
-appearance_turnover_mod1 <- glmmTMB(Appearance_trans ~ year_factor*habitat*site +
+appearance_turnover_mod1 <- glmmTMB(Appearance_trans ~ year_factor*habitat*island_side +
                                  (1 | site/transect/location) + ar1(year_factor + 0 | location),
-                               family = beta_family(), data = appearance)
+                               family = beta_family(), data = appearance) # overspecified
 summary(appearance_turnover_mod1) # low temporal autocorrelation and it's negative
 plot(appearance_turnover_res <- simulateResiduals(appearance_turnover_mod1)) # similar residuals problem
 Anova(appearance_turnover_mod1) # obviously everything sig
 
-appearance_turnover_mod2 <- glmmTMB(Appearance_trans ~ year_factor*habitat*site + (1 | site/transect/location),
-                               family = beta_family(), data = appearance)
-summary(appearance_turnover_mod2) # 
-plot(appearance_turnover_res2 <- simulateResiduals(appearance_turnover_mod2)) #
-Anova(appearance_turnover_mod2) 
-anova(appearance_turnover_mod2, appearance_turnover_mod1) # models are sig different from each other
-AICc(appearance_turnover_mod2, appearance_turnover_mod1) # first model is better but not as drastic as total
+# appearance_turnover_mod2 <- glmmTMB(Appearance_trans ~ year_factor*habitat*site + (1 | site/transect/location),
+#                                family = beta_family(), data = appearance)
+# summary(appearance_turnover_mod2) # 
+# plot(appearance_turnover_res2 <- simulateResiduals(appearance_turnover_mod2)) #
+# Anova(appearance_turnover_mod2) 
+# anova(appearance_turnover_mod2, appearance_turnover_mod1) # models are sig different from each other
+# AICc(appearance_turnover_mod2, appearance_turnover_mod1) # first model is better but not as drastic as total
+
+appearance_turnover_emm <- emmeans(appearance_turnover_mod1, ~ year_factor*habitat*island_side)
+appearance_turnover_plot_info <- plot(appearance_turnover_emm, plotit = F)
+appearance_turnover_plot_info$year_numeric <- as.numeric(levels(appearance_turnover_plot_info$year_factor))
+
+(appearance_turnover_emmeans_graph <- 
+  ggplot(data =appearance_turnover_plot_info) +
+  geom_point(aes(y = inv_logit(the.emmean), x = year_numeric, colour = island_side), size = 8) +
+  geom_errorbar(aes(ymin = inv_logit(asymp.LCL), ymax = inv_logit(asymp.UCL), x = year_numeric, colour = island_side), 
+                width = 0.2, size = 1.5) +
+  geom_segment(aes(y = 0.5, yend = 0.5, x = 2006, xend = 2010), linewidth = 4, alpha = 0.2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 2) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 2) +
+  facet_wrap(~habitat) +
+  theme_classic() +
+  labs(x = "Year", y = "Estimated marginal mean appearance turnover\n") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+#        panel.background = element_blank(),
+        legend.text = element_text(size=20),
+        legend.title = element_text(size=20),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        axis.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain") ) )
 
 plot(allEffects(appearance_turnover_mod1))
 
-appearance_means <-
-  appearance %>%
-  dplyr::group_by(year, site, habitat, site_habitat) %>%
-  dplyr::summarise(Appearance_mean = mean(appearance), 
-            Appearance_se = sd(appearance)/sqrt(n()))
-
-(appearance_plot <-
-  ggplot(data = appearance_means) +
-  geom_point(aes(x = year, y = Appearance_mean, colour = site, shape = habitat, group = site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = year, y = Appearance_mean, colour = site, group = site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = year, ymin = Appearance_mean - Appearance_se , ymax = Appearance_mean + Appearance_se, colour = site,
-                    group = site_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = site_colours) +
-  scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~site_habitat, nrow = 6)+
-  labs(title = "b. Appearances\n", y = "Total turnover\n") +
-  theme_bw() + 
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
-        axis.line.y = element_line(colour = "black"),
-        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
-        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        axis.line.x = element_line(colour = "black"),
-        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
-        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        strip.text.x = element_text(size = 32),
-        legend.key.size = unit(2, "cm"), # increase legend size
-        legend.text = element_text(size = rel(2)), # increase legend text
-        legend.title = element_text(size = rel(2.25)),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal',
-        legend.box.background = element_rect(colour = "black") # make legend horizontal
-        )
-    )
-#
+# appearance_means <-
+#   appearance %>%
+#   dplyr::group_by(year, site, habitat, site_habitat) %>%
+#   dplyr::summarise(Appearance_mean = mean(appearance), 
+#             Appearance_se = sd(appearance)/sqrt(n()))
+# 
+# (appearance_plot <-
+#   ggplot(data = appearance_means) +
+#   geom_point(aes(x = year, y = Appearance_mean, colour = site, shape = habitat, group = site_habitat), size = 8, stroke = 2) +
+#   geom_line(aes(x = year, y = Appearance_mean, colour = site, group = site_habitat), size = 1.2) +
+#   geom_errorbar(aes(x = year, ymin = Appearance_mean - Appearance_se , ymax = Appearance_mean + Appearance_se, colour = site,
+#                     group = site_habitat), width = 0.5, size = 1.2) +
+#   scale_colour_manual(values = site_colours) +
+#   scale_shape_manual(values = habitat_shapes) +
+#   facet_wrap(~site_habitat, nrow = 6)+
+#   labs(title = "b. Appearances\n", y = "Total turnover\n") +
+#   theme_bw() + 
+#   theme(panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         panel.background = element_blank(),
+#         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+#         axis.line.y = element_line(colour = "black"),
+#         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+#         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+#         axis.line.x = element_line(colour = "black"),
+#         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+#         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+#         strip.text.x = element_text(size = 32),
+#         legend.key.size = unit(2, "cm"), # increase legend size
+#         legend.text = element_text(size = rel(2)), # increase legend text
+#         legend.title = element_text(size = rel(2.25)),
+#         legend.position = 'bottom', # move legend to bottom
+#         legend.box = 'horizontal',
+#         legend.box.background = element_rect(colour = "black") # make legend horizontal
+#         )
+#     )
+# #
 ```
 
-```{r disappearances, fig.height = 24, fig.width=16}
+```{r disappearances, fig.width = 24, fig.height=16}
 disappearance <-
   turnover(
   df = long_data_sub,
@@ -905,63 +960,91 @@ disappearance <-
 )
 
 disappearance <- merge(turnover_meta, disappearance, by = c("year", "location"))
-disappearance$Disappearance_trans <- sv_trans(disappearance$disappearance, disappearance)
+disappearance$disappearance_trans <- sv_trans(disappearance$disappearance, disappearance)
 disappearance$year_factor <- as.factor(disappearance$year)
 
 # model
-disappearance_turnover_mod1 <- glmmTMB(Disappearance_trans ~ year_factor*habitat*site +
+disappearance_turnover_mod1 <- glmmTMB(disappearance_trans ~ year_factor*habitat*island_side +
                                  (1 | site/transect/location) + ar1(year_factor + 0 | location),
-                               family = beta_family(), data = disappearance)
-summary(disappearance_turnover_mod1) # strong autocorrelation here
-plot(disappearance_turnover_res <- simulateResiduals(disappearance_turnover_mod1)) # 
-Anova(disappearance_turnover_mod1) # 
+                               family = beta_family(), data = disappearance) # overspecified
+summary(disappearance_turnover_mod1) # low temporal autocorrelation and it's negative
+plot(disappearance_turnover_res <- simulateResiduals(disappearance_turnover_mod1)) # similar residuals problem
+Anova(disappearance_turnover_mod1) # obviously everything sig
 
-disappearance_turnover_mod2 <- glmmTMB(Disappearance_trans ~ year_factor*habitat*site + (1 | site/transect/location),
-                               family = beta_family(), data = disappearance)
-summary(disappearance_turnover_mod2) # 
-plot(disappearance_turnover_res2 <- simulateResiduals(disappearance_turnover_mod2)) #
-Anova(disappearance_turnover_mod2) 
-anova(disappearance_turnover_mod2, disappearance_turnover_mod1) # only case where models are not sig different from each other
-AICc(disappearance_turnover_mod2, disappearance_turnover_mod1) # models almost equivalent
+# disappearance_turnover_mod2 <- glmmTMB(disappearance_trans ~ year_factor*habitat*site + (1 | site/transect/location),
+#                                family = beta_family(), data = disappearance)
+# summary(disappearance_turnover_mod2) # 
+# plot(disappearance_turnover_res2 <- simulateResiduals(disappearance_turnover_mod2)) #
+# Anova(disappearance_turnover_mod2) 
+# anova(disappearance_turnover_mod2, disappearance_turnover_mod1) # models are sig different from each other
+# AICc(disappearance_turnover_mod2, disappearance_turnover_mod1) # first model is better but not as drastic as total
+
+disappearance_turnover_emm <- emmeans(disappearance_turnover_mod1, ~ year_factor*habitat*island_side)
+disappearance_turnover_plot_info <- plot(disappearance_turnover_emm, plotit = F)
+disappearance_turnover_plot_info$year_numeric <- as.numeric(levels(disappearance_turnover_plot_info$year_factor))
+
+(disappearance_turnover_emmeans_graph <- 
+  ggplot(data =disappearance_turnover_plot_info) +
+  geom_point(aes(y = inv_logit(the.emmean), x = year_numeric, colour = island_side), size = 8) +
+  geom_errorbar(aes(ymin = inv_logit(asymp.LCL), ymax = inv_logit(asymp.UCL), x = year_numeric, colour = island_side), 
+                width = 0.2, size = 1.5) +
+  geom_segment(aes(y = 0.5, yend = 0.5, x = 2006, xend = 2010), linewidth = 4, alpha = 0.2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 2) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 2) +
+  facet_wrap(~habitat) +
+  theme_classic() +
+  labs(x = "Year", y = "Estimated marginal mean disappearance turnover\n") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+#        panel.background = element_blank(),
+        legend.text = element_text(size=20),
+        legend.title = element_text(size=20),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        axis.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain") ) )
 
 plot(allEffects(disappearance_turnover_mod1))
 
-disappearance_means <-
-  disappearance %>%
-  dplyr::group_by(year, site, habitat, site_habitat) %>%
-  dplyr::summarise(Disappearance_mean = mean(disappearance), 
-            Disappearance_se = sd(disappearance)/sqrt(n()))
-
-(disappearance_plot <-
-  ggplot(data = disappearance_means) +
-  geom_point(aes(x = year, y = Disappearance_mean, colour = site, shape = habitat, group = site_habitat), size = 8, stroke = 2) +
-  geom_line(aes(x = year, y = Disappearance_mean, colour = site, group = site_habitat), size = 1.2) +
-  geom_errorbar(aes(x = year, ymin = Disappearance_mean - Disappearance_se , ymax = Disappearance_mean + Disappearance_se, colour = site,
-                    group = site_habitat), width = 0.5, size = 1.2) +
-  scale_colour_manual(values = site_colours) +
-  scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~site_habitat, nrow = 6)+
-  labs(title = "c. Disappearance\n", y = "Total turnover\n") +
-  theme_bw() + 
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
-        axis.line.y = element_line(colour = "black"),
-        axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
-        axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        axis.line.x = element_line(colour = "black"),
-        axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
-        axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
-        strip.text.x = element_text(size = 32),
-        legend.key.size = unit(2, "cm"), # increase legend size
-        legend.text = element_text(size = rel(2)), # increase legend text
-        legend.title = element_text(size = rel(2.25)),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal',
-        legend.box.background = element_rect(colour = "black") # make legend horizontal
-        )
-    )
+# disappearance_means <-
+#   disappearance %>%
+#   dplyr::group_by(year, site, habitat, site_habitat) %>%
+#   dplyr::summarise(Disappearance_mean = mean(disappearance), 
+#             Disappearance_se = sd(disappearance)/sqrt(n()))
+# 
+# (disappearance_plot <-
+#   ggplot(data = disappearance_means) +
+#   geom_point(aes(x = year, y = Disappearance_mean, colour = site, shape = habitat, group = site_habitat), size = 8, stroke = 2) +
+#   geom_line(aes(x = year, y = Disappearance_mean, colour = site, group = site_habitat), size = 1.2) +
+#   geom_errorbar(aes(x = year, ymin = Disappearance_mean - Disappearance_se , ymax = Disappearance_mean + Disappearance_se, colour = # site,
+#                     group = site_habitat), width = 0.5, size = 1.2) +
+#   scale_colour_manual(values = site_colours) +
+#   scale_shape_manual(values = habitat_shapes) +
+#   facet_wrap(~site_habitat, nrow = 6)+
+#   labs(title = "c. Disappearance\n", y = "Total turnover\n") +
+#   theme_bw() + 
+#   theme(panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),
+#         panel.background = element_blank(),
+#         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+#         axis.line.y = element_line(colour = "black"),
+#         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+#         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+#         axis.line.x = element_line(colour = "black"),
+#         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+#         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+#         strip.text.x = element_text(size = 32),
+#         legend.key.size = unit(2, "cm"), # increase legend size
+#         legend.text = element_text(size = rel(2)), # increase legend text
+#         legend.title = element_text(size = rel(2.25)),
+#         legend.position = 'bottom', # move legend to bottom
+#         legend.box = 'horizontal',
+#         legend.box.background = element_rect(colour = "black") # make legend horizontal
+#         )
+#     )
 ```
 
 ```{r mean rank shift, fig.height = 24, fig.width=16}
@@ -1728,12 +1811,27 @@ pairs(~ cover_mean + cover_cv + cover_stability +
 ```
 
 ```{r basic diversity stability plots quadrat level, fig.height=8, fig.width=10}
-(shannon_cv_plot = 
-  ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = shannon_mean, y = cover_cv, colour = site, shape = habitat), size = 4) + 
-   scale_colour_manual(values = site_colours) +
+
+
+richness_cv_mod <- glmmTMB(cover_cv ~ richness_mean*habitat*island_side + (1|site/transect), family = Gamma(link = "log"),
+                          data = diversity_stability_quadrat, na.action = na.pass)
+# model.sel(dredge(richness_cv_mod)) # top model is as specified, second best (delta = 10) doesn't include rich:hab:coast
+r.squaredGLMM(richness_cv_mod) # 0.61, 0.64
+summary(richness_cv_mod)
+emmeans(richness_cv_mod, pairwise ~ island_side | habitat, var = "richness_mean")
+richness_cv_emm <- emmip(richness_cv_mod,
+                        habitat ~ richness_mean | island_side,
+                        at = list(richness_mean = seq(0,5,0.1)), plotit = F, CIs = T)
+
+(richness_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_quadrat,
+             aes(x = richness_mean, y = cover_cv, colour = island_side, shape = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = richness_cv_emm, aes(x = richness_mean, y = exp(yvar), colour = island_side), size = 2) +
+  geom_ribbon(data = richness_cv_emm, aes(x = richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = island_side), alpha = 0.3) +
+#   scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
-   facet_wrap(~site) +
+  facet_wrap(~habitat) +
 
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -1775,12 +1873,25 @@ pairs(~ cover_mean + cover_cv + cover_stability +
 ```
 
 ```{r portfolio effects and synchrony transect level,  fig.height = 8, fig.width = 10}
+synchrony_cv_mod <- glmmTMB(cover_cv ~ loreau_synchrony*habitat*island_side + (1|island_side/site/transect), 
+                             family = Gamma(link = "log"),
+                          data = diversity_stability_quadrat, na.action = na.pass)
+# model.sel(dredge(synchrony_cv_mod)) # top model by far is as specified
+r.squaredGLMM(synchrony_cv_mod) # 0.78, 0.79
+summary(synchrony_cv_mod)
+emmeans(synchrony_cv_mod, pairwise ~ island_side | habitat, var = "loreau_synchrony", at = list(loreau_synchrony = seq(0,1,0.05)))
+synchrony_cv_emm <- emmip(synchrony_cv_mod,
+                        habitat ~ loreau_synchrony | island_side,
+                        at = list(loreau_synchrony = seq(0,1,0.05)), plotit = F, CIs = T)
+
 (loreau_stability_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = loreau_synchrony, y = cover_cv, colour = site, shape = habitat), size = 4, stroke = 1) + 
-   scale_colour_manual(values = site_colours) +
+  geom_point(aes(x = loreau_synchrony, y = cover_cv, colour = island_side, shape = habitat), size = 2, alpha = 0.5) + 
+ # geom_line(data = synchrony_cv_emm, aes(x = loreau_synchrony, y = exp(yvar), colour = island_side), size = 1) +
+ # geom_ribbon(data = synchrony_cv_emm, aes(x = loreau_synchrony, ymin = LCL, ymax = UCL, fill = island_side),
+ #             alpha = 0.3) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~site) +
+#  facet_wrap(~habitat) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
