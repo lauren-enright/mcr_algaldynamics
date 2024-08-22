@@ -562,7 +562,84 @@ ggplot(data = gls_coefficients_merged, aes(x = Intercept)) +
 
 ```
 
+```{r gls shannon, fig.height=10, fig.width=14}
+alpha_diversity_quad$logShann <- log(alpha_diversity_quad$shannon + 1)
+columns <- c("location", "Intercept", "Slope", "Phi") # names of columns for dataframe
+gls_shann_coefficients <- # new dataframe name
+  data.frame(matrix(nrow = length(unique(alpha_diversity_quad$location)), # 1200 quadrats = 1200 different time series
+                    ncol = length(columns)) # specified to make sure number of columns doesn't exceed what was specified
+             )
+colnames(gls_shann_coefficients) <- columns # change column names to what was specified
+gls_shann_coefficients$location <- levels(alpha_diversity_quad$location) # populate location column with each quad/time series
 
+for(i in 1:length(unique(alpha_diversity_quad$location)) ){ # for each  quadrat
+  # create a new dataframe for the quadrat of the current iteration
+  newData <- subset(alpha_diversity_quad, location == levels(alpha_diversity_quad$location)[i]) 
+  
+  # fit gls for current time series
+  loop_mod <- gls(shannon ~ year, correlation =corAR1(form=~year), control = list(singular.ok = TRUE), data = newData)
+  
+  # populate appropriate row and column with the relevant coeffcients from gls
+  gls_shann_coefficients[i, 2] <- unname(coef(loop_mod)[1])
+  gls_shann_coefficients[i, 3] <- unname(coef(loop_mod)[2])
+  gls_shann_coefficients[i, 4] <- loop_mod[["modelStruct"]][["corStruct"]]
+  
+}
+
+hist(gls_shann_coefficients$Slope) # looks basically normal, bounded -Inf, Inf
+
+hist(gls_shann_coefficients$Intercept) # same with intercept - although it probably shouldn't be
+hist(gls_shann_coefficients$Phi)
+
+
+
+gls_shann_coefficients_merged <- merge(gls_shann_coefficients, extra_meta, by = "location")             
+
+slope_shann_mod <- glmmTMB(Slope ~ habitat*island_side + (1|island_side/site/transect), data = gls_shann_coefficients_merged)
+summary(slope_shann_mod) # pretty low variance in random effects
+plot(gls_res <- simulateResiduals(slope_shann_mod)) 
+
+hist(residuals(slope_shann_mod))
+plot(predict(slope_shann_mod) ~ residuals(slope_shann_mod))
+Anova(slope_shann_mod)
+
+r.squaredGLMM(slope_shann_mod) # 0.19, 0.22
+plot(allEffects(slope_shann_mod))
+
+
+slope_emm <- emmeans(slope_shann_mod, ~ habitat*island_side) # create emmeans object
+slope_plot_info <- plot(slope_emm, plotit = FALSE)
+(emmeans_slope_graph <- 
+  ggplot(data =slope_plot_info) +
+  geom_point(aes(y = the.emmean, x = habitat, colour = island_side), size = 8, position = position_dodge(0.3)) +
+  geom_errorbar(aes(ymin = lower.CL, ymax = upper.CL, x = habitat, colour = island_side), width = 0.2, size = 1.5,
+                position = position_dodge(0.3) )+
+  geom_hline(yintercept = 0) +
+  theme_classic() +
+  labs(y = "Estimated maringal mean slope\n", x = "Habitat") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+#        panel.background = element_blank(),
+        legend.text = element_text(size=20),
+        legend.title = element_text(size=20),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        axis.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain") ) )
+
+# Note: not sure I want to include this
+emmeans(slope_shann_mod, pairwise ~ island_side | habitat)
+# north and east coast not different from each other in backreef
+# east and west not different from each other in fringing
+# north and west not different from each other outer 10
+# no sites different from each other outer 17
+slope_est <- as.data.frame(slope_emm) # create df of emmeans estimates
+
+
+```
 
 
 ```{r glmm approach, fig.height = 15, fig.width=25}
@@ -601,6 +678,7 @@ richness_plot_info$year_numeric <- as.numeric(levels(richness_plot_info$year_fac
   geom_segment(aes(y = 5.2, yend = 5.2, x = 2006, xend = 2010), linewidth = 4, alpha = 0.2, colour = "grey") +
   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 2) +
   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 2) +
+  scale_y_log10() +
   facet_wrap(~habitat) +
   theme_classic() +
   labs(x = "Year", y = "Estimated marginal mean richness\n") +
@@ -648,6 +726,48 @@ grid %>%
   facet_wrap(~island_side)
 
 # Given that this is largely looking at slopes for temporal trends in adiv, I prefer the gls
+```
+
+```{r glmm shannon, fig.height = 15, fig.width=25}
+shannon_mod <- glmmTMB(
+  log(shannon+1) ~ year_factor*habitat*island_side + (1 | site/transect/location) + ar1(year_factor + 0 | location),
+  
+  data = alpha_diversity_quad,
+  control = glmmTMBControl(optCtrl = list(iter.max = 2000, eval.max = 2000)), na.action = na.pass
+) # overspecified but going with it for now
+
+summary(shannon_mod) # looks like strong autocorrelation, which makes sense to me
+Anova(shannon_mod)
+plot(allEffects(shannon_mod_2))
+mod_emm <- emmeans(shannon_mod, ~ habitat * island_side * year_factor) # if we want to compare habitats year to year
+shannon_plot_info <- plot(mod_emm, plotit = FALSE)
+shannon_plot_info$year_numeric <- as.numeric(levels(shannon_plot_info$year_factor))
+(emmeans_graph <- 
+  ggplot(data =shannon_plot_info) +
+  geom_point(aes(y = exp(the.emmean), x = year_numeric, colour = island_side), size = 8) +
+  geom_errorbar(aes(ymin = exp(lower.CL), ymax = exp(upper.CL), x = year_numeric, colour = island_side), 
+                width = 0.2, size = 1.5) +
+  geom_segment(aes(y = 2.5, yend = 2.5, x = 2006, xend = 2010), linewidth = 4, alpha = 0.2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 2) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 2) +
+  scale_y_log10() +
+  facet_wrap(~habitat) +
+  theme_classic() +
+  labs(x = "Year", y = "Shannon-Weiner Index (H')\n") +
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+#        panel.background = element_blank(),
+        legend.text = element_text(size=20),
+        legend.title = element_text(size=20),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        axis.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = .5, face = "plain"),
+        axis.title.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.x = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain"),
+        strip.text.y = element_text(color = "grey20", size = 25, hjust = .5, vjust = 0, face = "plain") ) )
+  
+
 ```
 
 
@@ -791,7 +911,7 @@ total_turnover_plot_info$year_numeric <- as.numeric(levels(total_turnover_plot_i
   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 2) +
   facet_wrap(~habitat) +
   theme_classic() +
-  labs(x = "Year", y = "Estimated marginal mean total turnover\n") +
+  labs(x = "Year", y = "Total turnover\n") +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
 #        panel.background = element_blank(),
@@ -893,7 +1013,7 @@ appearance_turnover_plot_info$year_numeric <- as.numeric(levels(appearance_turno
   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 2) +
   facet_wrap(~habitat) +
   theme_classic() +
-  labs(x = "Year", y = "Estimated marginal mean appearance turnover\n") +
+  labs(x = "Year", y = "Appearances\n") +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
 #        panel.background = element_blank(),
@@ -993,7 +1113,7 @@ disappearance_turnover_plot_info$year_numeric <- as.numeric(levels(disappearance
   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 2) +
   facet_wrap(~habitat) +
   theme_classic() +
-  labs(x = "Year", y = "Estimated marginal mean disappearance turnover\n") +
+  labs(x = "Year", y = "Disappearances\n") +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
 #        panel.background = element_blank(),
@@ -1832,7 +1952,7 @@ richness_cv_emm <- emmip(richness_cv_mod,
 #   scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~habitat) +
-
+  scale_y_log10() +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
@@ -1879,7 +1999,7 @@ synchrony_cv_mod <- glmmTMB(cover_cv ~ loreau_synchrony*habitat*island_side + (1
 # model.sel(dredge(synchrony_cv_mod)) # top model by far is as specified
 r.squaredGLMM(synchrony_cv_mod) # 0.78, 0.79
 summary(synchrony_cv_mod)
-emmeans(synchrony_cv_mod, pairwise ~ island_side | habitat, var = "loreau_synchrony", at = list(loreau_synchrony = seq(0,1,0.05)))
+synchrony_cv_effects <- emmeans(synchrony_cv_mod, pairwise ~ island_side | habitat, var = "loreau_synchrony")
 synchrony_cv_emm <- emmip(synchrony_cv_mod,
                         habitat ~ loreau_synchrony | island_side,
                         at = list(loreau_synchrony = seq(0,1,0.05)), plotit = F, CIs = T)
@@ -1887,12 +2007,12 @@ synchrony_cv_emm <- emmip(synchrony_cv_mod,
 (loreau_stability_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
   geom_point(aes(x = loreau_synchrony, y = cover_cv, colour = island_side, shape = habitat), size = 2, alpha = 0.5) + 
- # geom_line(data = synchrony_cv_emm, aes(x = loreau_synchrony, y = exp(yvar), colour = island_side), size = 1) +
- # geom_ribbon(data = synchrony_cv_emm, aes(x = loreau_synchrony, ymin = LCL, ymax = UCL, fill = island_side),
- #             alpha = 0.3) +
+  geom_line(data = synchrony_cv_emm, aes(x = loreau_synchrony, y = exp(yvar), colour = island_side), size = 1) +
+  geom_ribbon(data = synchrony_cv_emm, aes(x = loreau_synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = island_side),
+             alpha = 0.3) +
    scale_shape_manual(values = habitat_shapes) +
-#  facet_wrap(~habitat) +
-   
+  facet_wrap(~habitat) +
+   scale_y_log10() +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
