@@ -1883,6 +1883,17 @@ pairs(~ cover_mean + cover_cv + cover_stability +
         shannon_mean + shannon_cv + shannon_stability + 
         loreau_synchrony +  portfolio_effect + VR, data = diversity_stability_quadrat)
 
+
+## FOR FILTERING MODEL EFFECTS LATER
+diversity_ranges <- diversity_stability_quadrat %>%
+  group_by(island_side, habitat) %>%
+  summarise(min_richness = min(richness_mean),
+            max_richness = max(richness_mean),
+            min_shannon = min(shannon_mean),
+            max_shannon = max(shannon_mean),
+            min_loreau = min(loreau_synchrony),
+            max_loreau = max(loreau_synchrony))
+
 ```
 
 ```{r cover and cv, fig.height = 8, fig.width = 10}
@@ -1938,17 +1949,21 @@ richness_cv_mod <- glmmTMB(cover_cv ~ richness_mean*habitat*island_side + (1|sit
 # model.sel(dredge(richness_cv_mod)) # top model is as specified, second best (delta = 10) doesn't include rich:hab:coast
 r.squaredGLMM(richness_cv_mod) # 0.61, 0.64
 summary(richness_cv_mod)
-emmeans(richness_cv_mod, pairwise ~ island_side | habitat, var = "richness_mean")
+emtrends(richness_cv_mod, pairwise ~ island_side | habitat, var = "richness_mean")
 richness_cv_emm <- emmip(richness_cv_mod,
                         habitat ~ richness_mean | island_side,
                         at = list(richness_mean = seq(0,5,0.1)), plotit = F, CIs = T)
+
+filtered_richness_effects <- richness_cv_emm %>%
+  left_join(diversity_ranges, by = c("island_side", "habitat")) %>%
+  filter(richness_mean >= min_richness & richness_mean <= max_richness)
 
 (richness_cv_plot = 
   ggplot() +
   geom_point(data = diversity_stability_quadrat,
              aes(x = richness_mean, y = cover_cv, colour = island_side, shape = habitat), size = 2, alpha = 0.5) + 
-  geom_line(data = richness_cv_emm, aes(x = richness_mean, y = exp(yvar), colour = island_side), size = 2) +
-  geom_ribbon(data = richness_cv_emm, aes(x = richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = island_side), alpha = 0.3) +
+  geom_line(data = filtered_richness_effects, aes(x = richness_mean, y = exp(yvar), colour = island_side), size = 2) +
+  geom_ribbon(data = filtered_richness_effects, aes(x = richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = island_side), alpha = 0.3) +
 #   scale_colour_manual(values = site_colours) +
   scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~habitat) +
@@ -1967,12 +1982,30 @@ richness_cv_emm <- emmip(richness_cv_mod,
         legend.box.background = element_rect(colour = "black"))  # add box around legend
          )
 
-(shannon_cv_plot_2 = 
-  ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = shannon_mean, y = cover_cv, colour = site, shape = habitat), size = 4, stroke = 1) + 
-   scale_colour_manual(values = site_colours) +
-   scale_shape_manual(values = habitat_shapes) +
+shannon_cv_mod <- glmmTMB(cover_cv ~ shannon_mean*habitat*island_side + (1|site/transect), family = Gamma(link = "log"),
+                          data = diversity_stability_quadrat, na.action = na.pass)
+# model.sel(dredge(shannon_cv_mod)) # top model is as specified, second best (delta = 10) doesn't include shann:hab:coast
+r.squaredGLMM(shannon_cv_mod) # 0.55, 0.59
+summary(shannon_cv_mod)
+emtrends(shannon_cv_mod, pairwise ~ island_side | habitat, var = "shannon_mean")
+shannon_cv_emm <- emmip(shannon_cv_mod,
+                        habitat ~ shannon_mean | island_side,
+                        at = list(shannon_mean = seq(0,1.25,0.05)), plotit = F, CIs = T)
+
+filtered_shannon_effects <- shannon_cv_emm %>%
+  left_join(diversity_ranges, by = c("island_side", "habitat")) %>%
+  filter(shannon_mean >= min_shannon & shannon_mean <= max_shannon) 
+
+(shannon_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_quadrat,
+             aes(x = shannon_mean, y = cover_cv, colour = island_side, shape = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_shannon_effects, aes(x = shannon_mean, y = exp(yvar), colour = island_side), size = 2) +
+  geom_ribbon(data = filtered_shannon_effects, aes(x = shannon_mean, ymin = exp(LCL), ymax = exp(UCL), fill = island_side), alpha = 0.3) +
+#   scale_colour_manual(values = site_colours) +
+  scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~habitat) +
+  scale_y_log10() +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
@@ -1986,8 +2019,6 @@ richness_cv_emm <- emmip(richness_cv_mod,
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black"))  # add box around legend
          )
-
-# lter_2 obscures a lot of the trends
 
 
 ```
@@ -2004,11 +2035,16 @@ synchrony_cv_emm <- emmip(synchrony_cv_mod,
                         habitat ~ loreau_synchrony | island_side,
                         at = list(loreau_synchrony = seq(0,1,0.05)), plotit = F, CIs = T)
 
+
+filtered_synchrony_effects <- synchrony_cv_emm %>%
+  left_join(diversity_ranges, by = c("island_side", "habitat")) %>%
+  filter(loreau_synchrony >= min_loreau & loreau_synchrony <= max_loreau) 
+
 (loreau_stability_plot_quad = 
   ggplot(data = diversity_stability_quadrat) +
   geom_point(aes(x = loreau_synchrony, y = cover_cv, colour = island_side, shape = habitat), size = 2, alpha = 0.5) + 
-  geom_line(data = synchrony_cv_emm, aes(x = loreau_synchrony, y = exp(yvar), colour = island_side), size = 1) +
-  geom_ribbon(data = synchrony_cv_emm, aes(x = loreau_synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = island_side),
+  geom_line(data = filtered_synchrony_effects, aes(x = loreau_synchrony, y = exp(yvar), colour = island_side), size = 1) +
+  geom_ribbon(data = filtered_synchrony_effects, aes(x = loreau_synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = island_side),
              alpha = 0.3) +
    scale_shape_manual(values = habitat_shapes) +
   facet_wrap(~habitat) +
