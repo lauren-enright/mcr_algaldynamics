@@ -2108,12 +2108,32 @@ filtered_synchrony_effects <- synchrony_cv_emm %>%
 ```
 
 ```{r diversity portfolio effects and synchrony quadrat level,  fig.height = 8, fig.width = 10}
-(loreau_diversity_plot_quad = 
-  ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = shannon_mean, y = loreau_synchrony, colour = site, shape = habitat), size = 4, stroke = 1) + 
-   scale_colour_manual(values = site_colours) +
+diversity_stability_quadrat$loreau_synchrony_trans <- sv_trans(diversity_stability_quadrat$loreau_synchrony, diversity_stability_quadrat) # for modelling on beta
+synchrony_shann_mod <- glmmTMB(loreau_synchrony_trans ~ shannon_mean*habitat*island_side + (1|island_side/site/transect), 
+                             family = beta_family(),
+                          data = diversity_stability_quadrat, na.action = na.pass)
+# model.sel(dredge(synchrony_shann_mod)) # top model is as specified
+summary(synchrony_shann_mod)
+synchrony_shann_effects <- emtrends(synchrony_shann_mod, pairwise ~ island_side | habitat, var = "shannon_mean")
+synchrony_shann_emm <- emmip(synchrony_shann_mod,
+                        habitat ~ shannon_mean | island_side,
+                        at = list(shannon_mean = seq(0,1.25,0.05)), plotit = F, CIs = T)
+
+
+filtered_synchrony_div_effects <- synchrony_shann_emm %>%
+  left_join(diversity_ranges, by = c("island_side", "habitat")) %>%
+  filter(shannon_mean >= min_shannon & shannon_mean <= max_shannon) 
+
+(loreau_diversity_plot_quad <-
+  ggplot() +
+  geom_point(data = diversity_stability_quadrat,
+             aes(x = shannon_mean, y = loreau_synchrony, colour = island_side, shape = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_div_effects, aes(x = shannon_mean, y = inv_logit(yvar), colour = island_side), size = 1) +
+  geom_ribbon(data = filtered_synchrony_div_effects, aes(x = shannon_mean, ymin = inv_logit(LCL), ymax = inv_logit(UCL),
+                                                         fill = island_side),
+             alpha = 0.3) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~site) +
+  facet_wrap(~habitat) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -2131,12 +2151,31 @@ filtered_synchrony_effects <- synchrony_cv_emm %>%
 
 
 
-(portfolio_diversity_plot_quad = 
-  ggplot(data = diversity_stability_quadrat) +
-  geom_point(aes(x = shannon_mean, y = portfolio_effect, colour = site, shape = habitat), size = 4, stroke = 2) + 
-   scale_colour_manual(values = site_colours) +
+synchrony_rich_mod <- glmmTMB(loreau_synchrony_trans ~ richness_mean*habitat*island_side + (1|island_side/site/transect), 
+                             family = beta_family(),
+                          data = diversity_stability_quadrat, na.action = na.pass)
+# model.sel(dredge(synchrony_rich_mod)) # top model is as specified
+summary(synchrony_rich_mod)
+synchrony_rich_effects <- emtrends(synchrony_rich_mod, pairwise ~ island_side | habitat, var = "richness_mean")
+synchrony_rich_emm <- emmip(synchrony_rich_mod,
+                        habitat ~ richness_mean | island_side,
+                        at = list(richness_mean = seq(0,5,0.1)), plotit = F, CIs = T)
+
+
+filtered_synchrony_rich_effects <- synchrony_rich_emm %>%
+  left_join(diversity_ranges, by = c("island_side", "habitat")) %>%
+  filter(richness_mean >= min_richness & richness_mean <= max_richness) 
+
+(loreau_richness_plot_quad <-
+  ggplot() +
+  geom_point(data = diversity_stability_quadrat,
+             aes(x = richness_mean, y = loreau_synchrony, colour = island_side, shape = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_rich_effects, aes(x = richness_mean, y = inv_logit(yvar), colour = island_side), size = 1) +
+  geom_ribbon(data = filtered_synchrony_rich_effects, aes(x = richness_mean, ymin = inv_logit(LCL), ymax = inv_logit(UCL),
+                                                         fill = island_side),
+             alpha = 0.3) +
    scale_shape_manual(values = habitat_shapes) +
-  facet_wrap(~site) +
+  facet_wrap(~habitat) +
    
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -2151,6 +2190,7 @@ filtered_synchrony_effects <- synchrony_cv_emm %>%
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black"))  # add box around legend
          )
+
 ```
 
 ```{r diversity models quad level}
@@ -2167,7 +2207,7 @@ model.sel(synchrony_dredge) # best model is as specified
 summary(synchrony_mod_universal)
 r.squaredGLMM(synchrony_mod_universal) # 0.800, 0.802
 
-diversity_stability_quadrat$loreau_synchrony_trans <- sv_trans(diversity_stability_quadrat$loreau_synchrony, diversity_stability_quadrat) # for modelling on beta
+
 synchrony_diversity_universal <- glmmTMB(loreau_synchrony_trans ~shannon_mean*site + shannon_mean*habitat + site*habitat + (1|transect/location), family = beta_family(), data = diversity_stability_quadrat, na.action = na.pass)
 model.sel(dredge(synchrony_diversity_universal)) # best model as specified
 summary(synchrony_diversity_universal)
