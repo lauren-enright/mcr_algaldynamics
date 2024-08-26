@@ -73,23 +73,23 @@ habitat_shapes <- c("fringing" = 16,
 
 
 #pivot long 
-long_data <- pivot_longer(
-  data = data,
-  cols = 8:77,
-  names_to = "taxa",
-  values_to = "percent_cover") 
-
-
- transect_level <- long_data %>%
-   dplyr::group_by(year, island_side, site, habitat, transect, taxa) %>%
-   dplyr::summarise(mean_cover = mean(percent_cover), 
-             SE = sd(percent_cover)/sqrt(n()))
- 
-site_level <- long_data %>%
-  dplyr::group_by(year, island_side, site, habitat, site_habitat, taxa) %>%
-  dplyr::summarise(mean_site_cover = mean(percent_cover), 
-            site_se = sd(percent_cover)/sqrt(n()))
-
+# long_data <- pivot_longer(
+#   data = data,
+#   cols = 8:77,
+#   names_to = "taxa",
+#   values_to = "percent_cover") 
+# 
+# 
+#  transect_level <- long_data %>%
+#    dplyr::group_by(year, island_side, site, habitat, transect, taxa) %>%
+#    dplyr::summarise(mean_cover = mean(percent_cover), 
+#              SE = sd(percent_cover)/sqrt(n()))
+#  
+# site_level <- long_data %>%
+#   dplyr::group_by(year, island_side, site, habitat, site_habitat, taxa) %>%
+#   dplyr::summarise(mean_site_cover = mean(percent_cover), 
+#             site_se = sd(percent_cover)/sqrt(n()))
+# 
 # subset based on habitat
 fringing <- subset(data, habitat == "fringing")
 backreef <- subset(data, habitat == "backreef")
@@ -245,21 +245,28 @@ sv_trans = function(prop, N, s = 0.000005){
 bray_time_series$dissimilarity_trans <- sv_trans(bray_time_series$dissimilarity, bray_time_series)
 
 
-# bray_mod_universal <- glmmTMB(dissimilarity_trans ~ time*habitat*island_side + (1 | island_side/site/transect/location),
-#                               na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series) #
-# summary(bray_mod_universal) # a fair bit of variance w/i quads/transects
-# 
-# bray_mod_reduced <- glmmTMB(dissimilarity_trans ~ time*habitat + time*island_side + (1 | island_side/site/transect/location),
-#                               na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series)
+bray_mod_universal <- glmmTMB(dissimilarity_trans ~ time*habitat*island_side + (1 | island_side/site/transect/location),
+                              na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series) #
+# model.sel(dredge(bray_mod_universal)) # top model as specified
+summary(bray_mod_universal) # a fair bit of variance w/i quads/transects
+hist(residuals(bray_mod_universal))
+plot(predict(bray_mod_universal) ~ residuals(bray_mod_universal)) # looks like reflection of logit curve
 
+emtrends(bray_mod_universal, pairwise ~ habitat |island_side, "time")
+bray_trends_emm <- emmip(bray_mod_universal, habitat ~ time | island_side, at = list(time = seq(1,16,1)), plotit = F, CIs = T)
+inv_logit <- function(x) {
+  exp(x)/(1+exp(x))
+}
 ```
 
 ```{r dissimilarity over time plot, fig.height=15, fig.width=15}
- ggplot(bray_time_series,
-        aes(x = time, y = dissimilarity, colour = island_side) )+
+ ggplot()+
+   geom_point(data = bray_time_series, aes(x = time, y = dissimilarity, colour = island_side), alpha = 0.01 ) +
+   geom_line(data = bray_trends_emm, aes(x = time, y = inv_logit(yvar), colour = island_side), linewidth = 2) +
+   geom_ribbon(data = bray_trends_emm, aes(x = time, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = island_side), alpha = 0.3) +
    facet_wrap(~habitat) + 
-   geom_point() +
-   scale_colour_manual(values = island_side_colours) +
+
+ #  scale_colour_manual(values = island_side_colours) +
    stat_smooth(se = T, linewidth = 2) +
    labs(y = "Dissimilarity\n") +
    theme_bw() + 
@@ -285,12 +292,12 @@ bray_time_series$dissimilarity_trans <- sv_trans(bray_time_series$dissimilarity,
 
 ```
 
-```{r fringing nmds set up}
-# identifying species w/ > 10% cover for plotting later
+```{r hab level nmds set up}
 
+#### WARNING: THIS CHUNK TAKES ~2 DAYS TO RUN! SUGGESTEDF TO USE PROVIDED CSV FILES WITH ORDINATION DATA ######
 
 #### FRINGING
-# NOTE: Used ChatGPT to generate these next few lines of code but it looked good so I went with it
+
 # fringing_columns_to_keep <- apply(fringing_species_matrix, 2, function(x) any(x >= 0.1))
 # fringing_abundant_species_matrix <- as.data.frame(fringing_species_matrix)[ , fringing_columns_to_keep]
 # fringing_abundant_species_names <- colnames(fringing_abundant_species_matrix)
@@ -300,9 +307,9 @@ bray_time_series$dissimilarity_trans <- sv_trans(bray_time_series$dissimilarity,
 # # for mean centroid:
 # fringing_subset_meta$island_side_year <- paste(fringing_subset_meta$year, "-", fringing_subset_meta$island_side_habitat, sep = "")
 # 
-# # takes several hours to run - do so at your own peril
+
 # set.seed(1032) 
-# # ord3 <- metaMDS(fringing_braymat, dist	= "bray", k = 3, trymax = 100) 
+# # fringing_ord3 <- metaMDS(fringing_braymat, dist	= "bray", k = 3, trymax = 100) 
 # fringing_ord3 # stress = 0.018
 # 
 # 
@@ -328,7 +335,7 @@ fringing.species.scores <- read.csv(here::here("data", "fringing_species_scores.
 fringing.site.scores <- read.csv(here::here("data", "fringing_site_scores.csv"), stringsAsFactors = F) 
 # fringing.cent <- read.csv(here::here("data", "fringing_mean_centroid.csv"), stringsAsFactors = F) 
 
-fringing.cent <- aggregate(cbind(NMDS1, NMDS2) ~ island_side_year, data = fringing.site.scores, FUN = mean) 
+# fringing.cent <- aggregate(cbind(NMDS1, NMDS2) ~ island_side_year, data = fringing.site.scores, FUN = mean) 
 # fringing.cent.meta <- fringing_subset_meta %>%
 #    dplyr::group_by(year, island_side, island_side_habitat, island_side_year, site, habitat, transect, quadrat) %>%
 #    dplyr::summarise(year = unique(year), 
@@ -342,44 +349,44 @@ fringing.cent <- aggregate(cbind(NMDS1, NMDS2) ~ island_side_year, data = fringi
 # fringing.cent <- merge(fringing.cent, fringing_subset_meta[,-which(names(fringing_subset_meta) %in% c("stratum"))],  by = "island_side_year")
 
 # subset only the species w/ > 10% cover
-fringing.abundant.species.scores <- fringing.species.scores[fringing.species.scores$species %in% fringing_abundant_species_names,]
+# fringing.abundant.species.scores <- fringing.species.scores[fringing.species.scores$species %in% fringing_abundant_species_names,]
 
 
 
 #############
 # BACKREEF #
 ############
-backreef_columns_to_keep <- apply(backreef_species_matrix, 2, function(x) any(x >= 0.1))
-backreef_abundant_species_matrix <- as.data.frame(backreef_species_matrix)[ , backreef_columns_to_keep]
-backreef_abundant_species_names <- colnames(backreef_abundant_species_matrix)
-
-backreef_subset_meta <- backreef_subset[ , which(names(backreef_subset) %in% meta_cols)]
-
-# for mean centroid:
-backreef_subset_meta$island_side_year <- paste(backreef_subset_meta$year, "-", backreef_subset_meta$island_side_habitat, sep = "")
-
-# takes several hours to run - do so at your own peril
-set.seed(1032) 
-# ord3 <- metaMDS(backreef_braymat, dist	= "bray", k = 3, trymax = 100) 
-backreef_ord3 # stress = 0.018
-
-
-sppscores(backreef_ord3) <- backreef_species_matrix # add back in species scores
-backreef.species.scores <- as.data.frame(scores(backreef_ord3, "species")) # some NaN for absent species
-backreef.species.scores <- na.omit(backreef.species.scores)
-backreef.species.scores$species <- rownames(backreef.species.scores) 
-
-
-backreef.site.scores <- as.data.frame(vegan::scores(backreef_ord3, "sites"))  # extract the site scores and convert to a data.frame
-# add back in metadata
-backreef.site.scores$stratum <- rownames(backreef.site.scores)
-backreef.site.scores <- merge(backreef_subset_meta, backreef.site.scores, by = "stratum")
-
-
-
-
-write_csv(site.scores, here("data", "backreef_site_scores.csv"))
-write_csv(species.scores, here("data", "backreef_species_scores.csv"))
+# backreef_columns_to_keep <- apply(backreef_species_matrix, 2, function(x) any(x >= 0.1))
+# backreef_abundant_species_matrix <- as.data.frame(backreef_species_matrix)[ , backreef_columns_to_keep]
+# backreef_abundant_species_names <- colnames(backreef_abundant_species_matrix)
+# 
+# backreef_subset_meta <- backreef_subset[ , which(names(backreef_subset) %in% meta_cols)]
+# 
+# # for mean centroid:
+# backreef_subset_meta$island_side_year <- paste(backreef_subset_meta$year, "-", backreef_subset_meta$island_side_habitat, sep = "")
+# 
+# # takes several hours to run - do so at your own peril
+# set.seed(1032) 
+# backreef_ord3 <- metaMDS(backreef_braymat, dist	= "bray", k = 3, trymax = 100) 
+# backreef_ord3 # 
+# 
+# 
+# sppscores(backreef_ord3) <- backreef_species_matrix # add back in species scores
+# backreef.species.scores <- as.data.frame(scores(backreef_ord3, "species")) # some NaN for absent species
+# backreef.species.scores <- na.omit(backreef.species.scores)
+# backreef.species.scores$species <- rownames(backreef.species.scores) 
+# 
+# 
+# backreef.site.scores <- as.data.frame(vegan::scores(backreef_ord3, "sites"))  # extract the site scores and convert to a data.frame
+# # add back in metadata
+# backreef.site.scores$stratum <- rownames(backreef.site.scores)
+# backreef.site.scores <- merge(backreef_subset_meta, backreef.site.scores, by = "stratum")
+# 
+# 
+# 
+# 
+# write_csv(backreef.site.scores, here("data", "backreef_site_scores.csv"))
+# write_csv(backreef.species.scores, here("data", "backreef_species_scores.csv"))
 
 
 backreef.species.scores <- read.csv(here::here("data", "backreef_species_scores.csv"), stringsAsFactors = F) 
@@ -410,37 +417,37 @@ backreef.abundant.species.scores <- backreef.species.scores[backreef.species.sco
 # OUTER10
 #######
 
-outer10_columns_to_keep <- apply(outer10_species_matrix, 2, function(x) any(x >= 0.1))
-outer10_abundant_species_matrix <- as.data.frame(outer10_species_matrix)[ , outer10_columns_to_keep]
-outer10_abundant_species_names <- colnames(outer10_abundant_species_matrix)
+# outer10_columns_to_keep <- apply(outer10_species_matrix, 2, function(x) any(x >= 0.1))
+# outer10_abundant_species_matrix <- as.data.frame(outer10_species_matrix)[ , outer10_columns_to_keep]
+# outer10_abundant_species_names <- colnames(outer10_abundant_species_matrix)
+# 
+# outer10_subset_meta <- outer10_subset[ , which(names(outer10_subset) %in% meta_cols)]
+# 
+# # for mean centroid:
+# outer10_subset_meta$island_side_year <- paste(outer10_subset_meta$year, "-", outer10_subset_meta$island_side_habitat, sep = "")
+# 
 
-outer10_subset_meta <- outer10_subset[ , which(names(outer10_subset) %in% meta_cols)]
-
-# for mean centroid:
-outer10_subset_meta$island_side_year <- paste(outer10_subset_meta$year, "-", outer10_subset_meta$island_side_habitat, sep = "")
-
-# takes several hours to run - do so at your own peril
-set.seed(1032) 
-# ord3 <- metaMDS(outer10_braymat, dist	= "bray", k = 3, trymax = 100) 
-outer10_ord3 # stress = 0.018
-
-
-sppscores(outer10_ord3) <- outer10_species_matrix # add back in species scores
-outer10.species.scores <- as.data.frame(scores(outer10_ord3, "species")) # some NaN for absent species
-outer10.species.scores <- na.omit(outer10.species.scores)
-outer10.species.scores$species <- rownames(outer10.species.scores) 
-
-
-outer10.site.scores <- as.data.frame(vegan::scores(outer10_ord3, "sites"))  # extract the site scores and convert to a data.frame
-# add back in metadata
-outer10.site.scores$stratum <- rownames(outer10.site.scores)
-outer10.site.scores <- merge(outer10_subset_meta, outer10.site.scores, by = "stratum")
-
-
-
-
-write_csv(site.scores, here("data", "outer10_site_scores.csv"))
-write_csv(species.scores, here("data", "outer10_species_scores.csv"))
+# set.seed(1032) 
+# outer10_ord3 <- metaMDS(outer10_braymat, dist	= "bray", k = 3, trymax = 100) 
+# outer10_ord3 # 
+# 
+# 
+# sppscores(outer10_ord3) <- outer10_species_matrix # add back in species scores
+# outer10.species.scores <- as.data.frame(scores(outer10_ord3, "species")) # some NaN for absent species
+# outer10.species.scores <- na.omit(outer10.species.scores)
+# outer10.species.scores$species <- rownames(outer10.species.scores) 
+# 
+# 
+# outer10.site.scores <- as.data.frame(vegan::scores(outer10_ord3, "sites"))  # extract the site scores and convert to a data.frame
+# # add back in metadata
+# outer10.site.scores$stratum <- rownames(outer10.site.scores)
+# outer10.site.scores <- merge(outer10_subset_meta, outer10.site.scores, by = "stratum")
+# 
+# 
+# 
+# 
+# write_csv(outer10.site.scores, here("data", "outer10_site_scores.csv"))
+# write_csv(outer10.species.scores, here("data", "outer10_species_scores.csv"))
 
 
 outer10.species.scores <- read.csv(here::here("data", "outer10_species_scores.csv"), stringsAsFactors = F) 
@@ -473,37 +480,37 @@ outer10.abundant.species.scores <- outer10.species.scores[outer10.species.scores
 # OUTER 17 ##
 #############
 
-outer17_columns_to_keep <- apply(outer17_species_matrix, 2, function(x) any(x >= 0.1))
-outer17_abundant_species_matrix <- as.data.frame(outer17_species_matrix)[ , outer17_columns_to_keep]
-outer17_abundant_species_names <- colnames(outer17_abundant_species_matrix)
+## outer17_columns_to_keep <- apply(outer17_species_matrix, 2, function(x) any(x >= 0.1))
+## outer17_abundant_species_matrix <- as.data.frame(outer17_species_matrix)[ , outer17_columns_to_keep]
+## outer17_abundant_species_names <- colnames(outer17_abundant_species_matrix)
+## 
+## outer17_subset_meta <- outer17_subset[ , which(names(outer17_subset) %in% meta_cols)]
+## 
+## # for mean centroid:
+## outer17_subset_meta$island_side_year <- paste(outer17_subset_meta$year, "-", outer17_subset_meta$island_side_habitat, sep = "")
+## 
 
-outer17_subset_meta <- outer17_subset[ , which(names(outer17_subset) %in% meta_cols)]
-
-# for mean centroid:
-outer17_subset_meta$island_side_year <- paste(outer17_subset_meta$year, "-", outer17_subset_meta$island_side_habitat, sep = "")
-
-# takes several hours to run - do so at your own peril
-set.seed(1032) 
-# ord3 <- metaMDS(outer17_braymat, dist	= "bray", k = 3, trymax = 100) 
-outer17_ord3 # stress = 0.018
-
-
-sppscores(outer17_ord3) <- outer17_species_matrix # add back in species scores
-outer17.species.scores <- as.data.frame(scores(outer17_ord3, "species")) # some NaN for absent species
-outer17.species.scores <- na.omit(outer17.species.scores)
-outer17.species.scores$species <- rownames(outer17.species.scores) 
-
-
-outer17.site.scores <- as.data.frame(vegan::scores(outer17_ord3, "sites"))  # extract the site scores and convert to a data.frame
-# add back in metadata
-outer17.site.scores$stratum <- rownames(outer17.site.scores)
-outer17.site.scores <- merge(outer17_subset_meta, outer17.site.scores, by = "stratum")
-
-
-
-
-write_csv(site.scores, here("data", "outer17_site_scores.csv"))
-write_csv(species.scores, here("data", "outer17_species_scores.csv"))
+## set.seed(1032) 
+## outer17_ord3 <- metaMDS(outer17_braymat, dist	= "bray", k = 3, trymax = 100) 
+## outer17_ord3 # 
+## 
+## 
+## sppscores(outer17_ord3) <- outer17_species_matrix # add back in species scores
+## outer17.species.scores <- as.data.frame(scores(outer17_ord3, "species")) # some NaN for absent species
+## outer17.species.scores <- na.omit(outer17.species.scores)
+## outer17.species.scores$species <- rownames(outer17.species.scores) 
+## 
+## 
+## outer17.site.scores <- as.data.frame(vegan::scores(outer17_ord3, "sites"))  # extract the site scores and convert to a data.frame
+## # add back in metadata
+## outer17.site.scores$stratum <- rownames(outer17.site.scores)
+## outer17.site.scores <- merge(outer17_subset_meta, outer17.site.scores, by = "stratum")
+## 
+## 
+## 
+## 
+## write_csv(outer17.site.scores, here("data", "outer17_site_scores.csv"))
+## write_csv(outer17.species.scores, here("data", "outer17_species_scores.csv"))
 
 
 outer17.species.scores <- read.csv(here::here("data", "outer17_species_scores.csv"), stringsAsFactors = F) 
@@ -567,27 +574,52 @@ ggplot() +
 
 ```
 
-```{r full bray curtis set up, eval = FALSE}
-### I DON'T THINK ANY COMPUTER CAN RUN THIS
-species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
-species_matrix <- species_matrix/100 # convert from percent to proportion
-rownames(species_matrix) <- paste(data$year,"-", data$location, sep = "")
-rows_to_remove <- rowSums(species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
-species_matrix <- species_matrix[!rows_to_remove,] 
-data_subset <- data[!rows_to_remove,] # make sure rows are also removed from dataframe
-data_subset$stratum <- paste(data_subset$year,"-", data_subset$location, sep = "") # for merging with bray matrix later
-brayfull <- vegdist(species_matrix, "bray") # create bray dissimilarity matrix
-# View(brayfull)
-braymat <- as.matrix(brayfull) # conver to matrix object
-# convert to pairwise comparison
-comp <- braymat[lower.tri(braymat)] # extract lower triangle
-row_indices <- row(braymat)[lower.tri(braymat)] # extract row indices for first quad in comparison
-col_indices <- col(braymat)[lower.tri(braymat)] # 
-loc1 <- rownames(braymat)[row_indices]
-loc2 <- colnames(braymat)[col_indices]
-pairwise_df <- data.frame(loc1 = loc1, loc2 = loc2, dissimilarity = comp)
-# pairwise_df$year1 <- sub("(.*)-.*", "\\1", pairwise_df$loc1)
-year1 <- strsplit(pairwise_df$loc1, "-")[[1]]
+```{r full ordination}
+### TAKES ~1 wk to run 
+# full_species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
+# full_species_matrix <- full_species_matrix/100 # convert from percent to proportion
+# rownames(full_species_matrix) <- paste(data$year,"-", data$location, sep = "")
+# full_rows_to_remove <- rowSums(full_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+# full_species_matrix <- full_species_matrix[!full_rows_to_remove,] 
+# full_species_matrix <- asin(sqrt(full_species_matrix)) # arcsin squareroot transform
+# full_subset <- data[!full_rows_to_remove,] # make sure rows are also removed from dataframe
+# full_subset$stratum <- paste(full_subset$year,"-", full_subset$location, sep = "") # for merging with bray matrix later
+# brayfull <- vegdist(full_species_matrix, "bray") # create bray dissimilarity matrix
+# # View(brayfull)
+# full_braymat <- as.matrix(brayfull) # conver to matrix object
+# 
+# full_columns_to_keep <- apply(full_species_matrix, 2, function(x) any(x >= 0.1))
+# full_abundant_species_matrix <- as.data.frame(full_species_matrix)[ , full_columns_to_keep]
+# full_abundant_species_names <- colnames(full_abundant_species_matrix)
+# 
+# full_subset_meta <- full_subset[ , which(names(full_subset) %in% meta_cols)]
+# 
+# # for mean centroid:
+# full_subset_meta$island_side_year <- paste(full_subset_meta$year, "-", full_subset_meta$island_side_habitat, sep = "")
+# 
+# # takes several hours to run - do so at your own peril
+# set.seed(1032) 
+# full_ord3 <- metaMDS(full_braymat, dist	= "bray", k = 3, trymax = 100) 
+# full_ord3 # 
+# 
+
+# sppscores(full_ord3) <- full_species_matrix # add back in species scores
+# full.species.scores <- as.data.frame(scores(full_ord3, "species")) # some NaN for absent species
+# full.species.scores <- na.omit(full.species.scores)
+# full.species.scores$species <- rownames(full.species.scores) 
+# 
+# 
+# full.site.scores <- as.data.frame(vegan::scores(full_ord3, "sites"))  # extract the site scores and convert to a data.frame
+# # add back in metadata
+# full.site.scores$stratum <- rownames(full.site.scores)
+# full.site.scores <- merge(full_subset_meta, full.site.scores, by = "stratum")
+# 
+# 
+# 
+# 
+# write_csv(full.site.scores, here("data", "full_site_scores.csv"))
+# write_csv(full.species.scores, here("data", "full_species_scores.csv"))
+
 
 
 
