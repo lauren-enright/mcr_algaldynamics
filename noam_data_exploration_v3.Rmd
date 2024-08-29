@@ -30,10 +30,15 @@ library(ecofolio) # possible other method for examining portfolio effects
 ```
 
 ```{r import and format data}
+# coefficient of variation
+CV<-function(x){
+  return(sd(x,na.rm=T)/mean(x,na.rm=T))
+}
+
 # starting with all data now because of 0 algae transects/quadrats
 data <- read.csv(here::here("data", "allbenthicdata_cleaned_colnames.csv"), stringsAsFactors = F) 
 
-not_algae <- c("ascidian", "bare_space", "coral", "coral_rubble", "corallimorpharia", "heteractis_sp", "millepora_platyphylla", "no_data", "sand", "sacrophyton_sp", "shell_debris", "soft_coral", "sponge", "tridacna_sp", "zooxanthellae", "row_sums")
+not_algae <- c("ascidian", "bare_space", "coral", "coral_rubble", "corallimorpharia", "heteractis_sp", "millepora_platyphylla", "no_data", "sand", "sarcophyton_sp", "shell_debris", "soft_coral", "sponge", "tridacna_sp", "zooxanthellae", "row_sums")
 
 data <- data[ , -which(names(data) %in% not_algae)]
 
@@ -50,13 +55,13 @@ data$island_side_habitat <- paste(data$island_side, data$habitat)
 str(data)
 
 
-meta_cols <- c(colnames(data[1:7] ), "island_side", "island_side_habitat", "stratum")
+meta_cols <- c("year", "location", "site", "habitat", "site_habitat", "transect", "quadrat", "island_side", "island_side_habitat", "stratum")
 species_cols <- colnames(data)[!colnames(data) %in% meta_cols]
 
 #pivot long 
 long_data <- pivot_longer(
   data = data,
-  cols = 8:77,
+  cols = 8:76,
   names_to = "taxa",
   values_to = "percent_cover") 
 
@@ -355,7 +360,7 @@ for(i in 1:length(unique(alpha_diversity_quad$location)) ){ # for each  quadrat
   newData <- subset(alpha_diversity_quad, location == levels(alpha_diversity_quad$location)[i]) 
   
   # fit gls for current time series
-  loop_mod <- gls(logRich ~ year, correlation =corAR1(form=~year), 
+  loop_mod <- gls(richness ~ year, correlation =corAR1(form=~year), 
                   control=glsControl(msVerbose=T), data = newData)
   
   # populate appropriate row and column with the relevant coeffcients from gls
@@ -681,7 +686,7 @@ richness_plot_info$year_numeric <- as.numeric(levels(richness_plot_info$year_fac
   scale_y_log10() +
   facet_wrap(~habitat) +
   theme_classic() +
-  labs(x = "Year", y = "Estimated marginal mean richness\n") +
+  labs(x = "Year", y = "Richness\n") +
   theme(panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),
 #        panel.background = element_blank(),
@@ -702,28 +707,28 @@ richness_plot_info$year_numeric <- as.numeric(levels(richness_plot_info$year_fac
 # Anova(top_rich_mod)
 
 # Julianna's model structure
-j_rich_mod <- glmmTMB(richness ~ year + habitat + (1|site/transect),
-               family = poisson,
-               data = alpha_diversity_quad)
-summary(j_rich_mod)
-plot(allEffects(j_rich_mod))
-
-grid <- expand_grid(year = unique(alpha_diversity_quad$year),
-                       habitat = unique(alpha_diversity_quad$habitat),
-                       site = unique(alpha_diversity_quad$site),
-                       island_side = unique(alpha_diversity_quad$island_side),
-                       transect = unique(alpha_diversity_quad$transect))
-grid$Preds <- predict(j_rich_mod, newdata = grid)
-
-grid %>% 
-  # get transect means
-  group_by(year, habitat, island_side) %>% 
-  summarize(Pred_mean_richness = mean(Preds),
-            SD_richness = sd(Preds)) %>% 
-  ggplot(aes(x = year, y = Pred_mean_richness, group = habitat, color = habitat)) +
-  geom_line() +
-  theme_bw() +
-  facet_wrap(~island_side)
+# j_rich_mod <- glmmTMB(richness ~ year + habitat + (1|site/transect),
+#                family = poisson,
+#                data = alpha_diversity_quad)
+# summary(j_rich_mod)
+# plot(allEffects(j_rich_mod))
+# 
+# grid <- expand_grid(year = unique(alpha_diversity_quad$year),
+#                        habitat = unique(alpha_diversity_quad$habitat),
+#                        site = unique(alpha_diversity_quad$site),
+#                        island_side = unique(alpha_diversity_quad$island_side),
+#                        transect = unique(alpha_diversity_quad$transect))
+# grid$Preds <- predict(j_rich_mod, newdata = grid)
+# 
+# grid %>% 
+#   # get transect means
+#   group_by(year, habitat, island_side) %>% 
+#   summarize(Pred_mean_richness = mean(Preds),
+#             SD_richness = sd(Preds)) %>% 
+#   ggplot(aes(x = year, y = Pred_mean_richness, group = habitat, color = habitat)) +
+#   geom_line() +
+#   theme_bw() +
+#   facet_wrap(~island_side)
 
 # Given that this is largely looking at slopes for temporal trends in adiv, I prefer the gls
 ```
@@ -738,7 +743,7 @@ shannon_mod <- glmmTMB(
 
 summary(shannon_mod) # looks like strong autocorrelation, which makes sense to me
 Anova(shannon_mod)
-plot(allEffects(shannon_mod_2))
+
 mod_emm <- emmeans(shannon_mod, ~ habitat * island_side * year_factor) # if we want to compare habitats year to year
 shannon_plot_info <- plot(mod_emm, plotit = FALSE)
 shannon_plot_info$year_numeric <- as.numeric(levels(shannon_plot_info$year_factor))
@@ -1167,7 +1172,7 @@ plot(allEffects(disappearance_turnover_mod1))
 #     )
 ```
 
-```{r mean rank shift, fig.height = 24, fig.width=16}
+```{r mean rank shift, fig.height = 24, fig.width=16, eval = FALSE}
 # rank shift 
 
 rank_shift<-
@@ -1224,7 +1229,7 @@ rank_shift_means <-
 ```
 
 
-```{r rate of change, fig.height=15, fig.width=15}
+```{r rate of change, fig.height=15, fig.width=15, eval = FALSE}
 # rate change
 long_data_sub$percent_cover_transformed <- wisconsin(long_data_sub$percent_cover) # wisconsin transform abundance data
 
@@ -1348,7 +1353,7 @@ ggplot(data = rate_change_table_untransformed) +
 
 ```
 
-```{r rate change vis method 2, fig.height=15, fig.width=15}
+```{r rate change vis method 2, fig.height=15, fig.width=15, eval = FALSE}
 rate_change_untransformed<-
   rate_change_interval(
   df = long_data_sub,
@@ -1477,10 +1482,7 @@ for(i in 1:length(unique(unique(wide_transect_level$stratum))) ){ # for each  tr
 ```
 
 ```{r CV, fig.height = 8, fig.width = 10}
-# coefficient of variation
-CV<-function(x){
-  return(sd(x,na.rm=T)/mean(x,na.rm=T))
-}
+
 
 alpha_diversity$cover <- rowSums(wide_transect_level[ , -which(names(wide_transect_level) %in% meta_cols)])/100
 alpha_diversity$stratum <- paste(alpha_diversity$site, "-", alpha_diversity$habitat, "-", alpha_diversity$transect)
