@@ -1,0 +1,280 @@
+---
+title: "Fish_Stuff"
+author: "Callie Stephenson"
+date: "2024-03-28"
+output: html_document
+---
+```{r packages, message=FALSE, echo=FALSE}
+library(dplyr)
+library(readr)
+library(here)
+library(fishualize)
+library(ggplot2)
+library(vegan)
+library(mclust)
+library(gridExtra)
+library(glue)
+library(patchwork) 
+library(scales)
+```
+
+```{r data, message=FALSE, echo=FALSE}
+#algae <- read.csv(here("data", "algaeonly_cleaned.csv"))
+fish_fun <- read.csv(here("data", "biomass_functional_summary.csv"))
+herb <- read.csv(here("data", "biomass_herb_summary.csv"))
+alpha <- read.csv(here("data", "algae_alpha_diversity.csv")) %>% 
+  filter(Habitat != "Outer 17")
+```
+
+Noam Algae Code:
+```{r}
+data <- read.csv(here::here("data", "allbenthicdata_cleaned_colnames.csv"), stringsAsFactors = F) 
+
+not_algae <- c("ascidian", "bare_space", "coral", "coral_rubble", "corallimorpharia", "heteractis_sp", "millepora_platyphylla", "no_data", "sand", "sacrophyton_sp", "shell_debris", "soft_coral", "sponge", "tridacna_sp", "zooxanthellae", "row_sums")
+
+algae <- data[ , -which(names(data) %in% not_algae)]
+```
+
+```{r}
+data <- read.csv(here::here("data", "algaeonly_cleaned.csv"), stringsAsFactors = F) # replacements don't work when strings are factors
+meta_cols <- colnames(data[1:7]) 
+species_cols <- colnames(data[8:77])
+
+wide_site_level <- data %>%
+  dplyr::group_by(Year, Site, Habitat, Site_habitat) %>%
+  summarize(across(all_of(species_cols), mean, na.rm = TRUE))
+
+wide_site_level_merge <- wide_site_level[wide_site_level$Habitat != "Outer 17", ]
+```
+
+ 
+```{r plot colors from Noam}
+#copied from Noam
+site_colours <- c("LTER 1" = "cornflowerblue",
+               "LTER 2" = "darkblue",
+               "LTER 3" = "yellowgreen",
+               "LTER 4" = "forestgreen",
+               "LTER 5" = "mediumorchid",
+               "LTER 6" = "orange")
+island_side_colours <- c("North" = "darkblue",
+                         "East" = "mediumorchid",
+                         "West" = "orange")
+habitat_linetypes <- c("Fringing" = "solid",
+                       "Backreef" = "longdash",
+                       "Outer 10" = "twodash",
+                       "Outer 17" = "dotted")
+habitat_shapes <- c("Fringing" = 16,
+                     "Backreef" = 17,
+                     "Outer 10" = 1,
+                     "Outer 17" = 2)
+```
+
+
+
+# Ordination of Algal Communities with Fish Community as Drivers:
+
+Transform the data and remove rows that are 100% coral cover
+
+```{r}
+species.data.transform = wisconsin(sqrt(wide_site_level_merge[c(5:74)]))
+non_zero_rows <- rowSums(species.data.transform == 0) != ncol(species.data.transform)
+species.data.use <- species.data.transform[non_zero_rows, ]
+```
+
+
+```{r}
+pcoa = capscale(species.data.use ~ 1, dist = "bray")
+pcoa
+summary <- summary(pcoa)
+summary$cont
+```
+
+```{r}
+par(mfrow = c(1,2))
+plot(pcoa, type = 'n', xlim = c(-1.5, 1.5))
+text(pcoa, "species", col = 'blue', cex = 0.5)
+plot(pcoa, type = 'n', xlim = c(-1.5, 1.5))
+#text(pcoa, "location", col = 'blue', cex = 0.5)
+points(pcoa, col = 'black', bg = 'grey', pch = 21)
+```
+
+
+```{r}
+# Step 1: Ensure the 5th column is a vector
+colors <- as.factor(wide_site_level_merge[non_zero_rows, 4][[1]])
+
+# Step 2: Create the color palette based on the factor levels
+color_palette <- rainbow(length(levels(colors)))
+
+# Step 3: Plot the PCoA with colored points
+par(mfrow = c(1,3))
+
+# First plot: species plot (same as before)
+plot(pcoa, type = 'n', xlim = c(-1.5, 1.5))
+text(pcoa, "species", col = 'blue', cex = 1)
+
+# Second plot: location plot with colored points
+plot(pcoa, type = 'n', xlim = c(-1.5, 1.5))
+points(pcoa, bg = color_palette[colors], pch = 21)
+
+# Optionally, add a legend
+plot(1, type = 'n', xlab = '', ylab = '', xaxt = 'n', yaxt = 'n')
+legend("center", legend = levels(colors), col = color_palette, pch = 21, pt.bg = color_palette)
+```
+
+## Just Herbivore Biomass:
+```{r}
+herb_merge <- herb %>% 
+  mutate(Site = paste0("LTER ",Site))
+herb_algal_merge <- left_join(wide_site_level_merge, herb_merge[,c("Year", "Site", "Habitat", "Herbivore.Biomass")], 
+                              by = join_by(Year, Site, Habitat)) %>% 
+  filter(Year != "2023")
+
+species.data.transform = wisconsin(sqrt(herb_algal_merge[c(5:74)]))
+non_zero_rows <- rowSums(species.data.transform == 0) != ncol(species.data.transform)
+species.data.use <- species.data.transform[non_zero_rows, ]
+merged_clean_filtered <- herb_algal_merge[non_zero_rows, ]
+```
+
+```{r}
+herb_algal_constrained_ord = capscale(species.data.use ~ Herbivore.Biomass, dist = "bray", data = merged_clean_filtered)
+```
+
+```{r}
+herb_algal_constrained_ord
+```
+
+```{r}
+par(mfrow = c(1, 3))  # 1 row, 3 columns
+
+# Plot 1: Species driving the community composition
+plot(herb_algal_constrained_ord, display = "species", main = "Species Driving Community Composition", type = "n")
+text(herb_algal_constrained_ord, display = "species", col = "blue", cex = 1)
+
+# Plot 2: Communities (sites) plotted
+plot(herb_algal_constrained_ord, display = "sites", main = "Communities", type = "n")
+points(herb_algal_constrained_ord, display = "sites", col = color_palette[colors], pch = 21)  # Sites colored by the same scheme
+
+# Plot 3: Constrained ordination axes (environmental variables)
+plot(herb_algal_constrained_ord, display = "sites", type = 'n', main = "Relationship with Herbivore Biomass")
+points(herb_algal_constrained_ord, display = "sites", col = 'grey')
+text(herb_algal_constrained_ord, display = 'bp', col = 'blue')
+```
+
+### PERMANOVA
+
+```{r}
+herb_perm <- adonis2(species.data.use ~ Herbivore.Biomass + Year + Site + Habitat, data = merged_clean_filtered, dist = 'bray', by = 'margin')
+herb_perm
+```
+
+##### stratified? 
+```{r}
+library(permute)
+merged_clean_filtered$Site <- as.factor(merged_clean_filtered$Site)
+merged_clean_filtered$Habitat <- as.factor(merged_clean_filtered$Habitat)
+
+# Set up the permutation design
+perm_design <- how(
+  blocks = merged_clean_filtered$Year,  # stratify by Year
+  plots = Plots(strata = merged_clean_filtered$Site),  # stratify by Site within Year
+  within = Within(type = "free"),  # free permutations within each Site
+  nperm = 999  # number of permutations
+)
+
+# Apply the permutation design in adonis2
+herb_perm <- adonis2(
+  species.data.use ~ Herbivore.Biomass + Year + Site + Habitat, 
+  data = merged_clean_filtered, 
+  dist = 'bray', 
+  by = 'margin', 
+  permutations = perm_design
+)
+
+herb_perm
+```
+
+
+## The whole fish community:
+```{r}
+fish_fun1 <- fish_fun
+fish_fun1[is.na(fish_fun1)] <- 0
+fish_fun1 <- fish_fun1 %>% 
+  mutate(Site = paste0("LTER ",Site))
+merged <- left_join(wide_site_level_merge, fish_fun1, by = join_by(Year, Site, Habitat))
+merged_clean <- merged[complete.cases(merged[c("Browser", "Brusher", "Cropper", "Concealed.Cropper", "Excavator", "Scraper")]), ]
+
+species.data.transform = wisconsin(sqrt(merged_clean[c(6:75)]))
+non_zero_rows <- rowSums(species.data.transform == 0) != ncol(species.data.transform)
+species.data.use <- species.data.transform[non_zero_rows, ]
+merged_clean_filtered <- merged_clean[non_zero_rows, ]
+```
+
+
+```{r}
+cont = capscale(species.data.use ~ Browser + Brusher + Cropper + Concealed.Cropper + Excavator + Scraper, dist = "bray", data = merged_clean_filtered)
+```
+
+```{r}
+plot(cont)
+```
+
+```{r}
+summary(cont)$cont
+```
+
+```{r}
+par(mfrow = c(1, 3))  # 1 row, 3 columns
+
+# Plot 1: Species driving the community composition
+plot(cont, display = "species", main = "Species Driving Community Composition", type = "n")
+text(cont, display = "species", col = "blue", cex = 1)
+
+# Plot 2: Communities (sites) plotted
+plot(cont, display = "sites", main = "Communities", type = "n")
+points(cont, display = "sites", col = color_palette[colors], pch = 21)  # Sites colored by the same scheme
+
+# Plot 3: Constrained ordination axes (environmental variables)
+plot(cont, display = "bp", main = "Constrained Ordination Axes", cex = 1)
+```
+
+```{r}
+anova(cont)
+anova(cont, by = "margin")
+```
+
+
+# Mantel 
+I have no idea what I'm doing here
+```{r}
+library(vegan)
+dist.algae <- dist(scale(x = merged_clean_filtered[,c(5:74)], scale = T, center = T), method = "euclidean")
+dist.fish <- dist(scale(x = merged_clean_filtered[,c(75:88)], scale = T, center = T), method = "euclidean")
+response_by_explan <- mantel(dist.algae, dist.fish, method = "spearman", permutations = 900, na.rm = TRUE)
+response_by_explan
+```
+
+### Part 3: Model-Based Clustering
+
+
+#BECAUSE I LIKE WORKING IN MARKDOWN AND PRINTING IN SCRIPTS:
+
+```{r}
+herb_beta <- ggplot(merged_div, aes(x = year)) +
+  geom_line(aes(y = centroid_dist_habyear_mean, color = "Centroid Distance")) +
+  geom_line(aes(y = Herbivore.Biomass /103388.3, color = "Herbivore Biomass")) + # Rescale Herbivore.Biomass
+  facet_grid(site ~ habitat) +
+  scale_y_continuous(
+    name = "Mean Centroid Distance",
+    sec.axis = sec_axis(~ . * 103388.3, name = "Herbivore Biomass") # Rescale back for labeling
+  ) +
+  scale_color_manual(values = c("Centroid Distance" = "darkgreen", "Herbivore Biomass" = "darkblue")) +
+  labs(x = "Year", color = "Legend", title = "Trends in Algal Beta Dispersion and Herbivore Biomass" # Add the plot title here
+  ) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+
+
+
