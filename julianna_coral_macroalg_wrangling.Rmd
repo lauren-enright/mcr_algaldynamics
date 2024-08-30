@@ -61,15 +61,16 @@ macroalgae %>%
   full_join(sand_coral) %>% 
   rename(coral_cover = coral,
          sand_cover = sand) %>% 
-  mutate(macroalgae_cover = rowSums(macroalgae[startAlg:endAlg]), # percent cover of algae
+  mutate(hard_cover = 100-sand_cover) %>% 
+  mutate(macroalgae_cover = rowSums(macroalgae[startAlg:endAlg]), # percent cover of macroalgae
          macroalgae_cover_hard = case_when(
            sand_cover == 100 ~ NA, # since we can't divide by a zero
-           TRUE ~ (macroalgae_cover/(100-sand_cover))*100 
+           TRUE ~ (macroalgae_cover/hard_cover)*100 
            ),
          # also for corals
          coral_cover_hard = case_when(
            sand_cover == 100 ~ NA, # since we can't divide by a zero
-           TRUE ~ (coral_cover/(100-sand_cover))*100 
+           TRUE ~ (coral_cover/hard_cover)*100 
            )
          ) %>% # percent cover of hard substrate
    # make a year-habitat column for betadisper
@@ -77,7 +78,7 @@ macroalgae %>%
          island_side_hab_year = paste0(island_side, "_", hab_year)) %>% 
   select(year, location, site, habitat, island_side, site_habitat, 
          hab_year, island_side_hab_year, transect, quadrat, macroalgae_cover, 
-         macroalgae_cover_hard, sand_cover, coral_cover, coral_cover_hard)  -> sppMeta
+         macroalgae_cover_hard, sand_cover, hard_cover, coral_cover, coral_cover_hard)  -> sppMeta
 ```
 
 ## Calculate diversity metrics
@@ -86,7 +87,10 @@ macroalgae %>%
 sppMeta %>% 
   # these functions use the vegan package
   mutate(macroalgae_richness = specnumber(sppMat),
-         macroalgae_shannon = diversity(sppMat, "shannon")) -> macroAlgDiv
+         macroalgae_shannon = diversity(sppMat, "shannon"),
+         macroalgae_richness_hard = macroalgae_richness/hard_cover,
+         macroalgae_shannon_hard = macroalgae_shannon/hard_cover
+         ) -> macroAlgDiv
 ```
 
 # Calculate algal beta diversity 
@@ -359,6 +363,9 @@ quadData %>%
             coral_cover_se = sd(coral_cover)/sqrt(N),
             coral_cover_hard_mean = mean(coral_cover_hard, na.rm = TRUE),
             coral_cover_hard_se = sd(coral_cover_hard, na.rm = TRUE)/sqrt(N),
+            hard_cover_mean = mean(hard_cover),
+            hard_cover_se = sd(hard_cover)/sqrt(N),
+            
             macroalgae_cover_mean = mean(macroalgae_cover),
             macroalgae_cover_se = sd(macroalgae_cover)/sqrt(N),
             macroalgae_cover_hard_mean = mean(macroalgae_cover_hard, na.rm = TRUE),
@@ -367,6 +374,11 @@ quadData %>%
             macroalgae_richness_se = sd(macroalgae_richness)/sqrt(N),
             macroalgae_shannon_mean = mean(macroalgae_shannon),
             macroalgae_shannon_se = sd(macroalgae_shannon)/sqrt(N),
+            # of hard cover
+            macroalgae_richness_hard_mean = mean(macroalgae_richness_hard, na.rm = TRUE),
+            macroalgae_richness_hard_se = sd(macroalgae_richness_hard, na.rm = TRUE)/sqrt(N),
+            macroalgae_shannon_hard_mean = mean(macroalgae_shannon_hard, na.rm = TRUE),
+            macroalgae_shannon_hard_se = sd(macroalgae_shannon_hard, na.rm = TRUE)/sqrt(N),
             macroalgae_centroid_dist_habyear_mean = mean(macroalgae_centroid_dist_habyear_mean, na.rm = TRUE)
             ) -> siteData
 
@@ -403,6 +415,9 @@ quadData %>%
             coral_cover_hard_se = sd(coral_cover_hard, na.rm = TRUE)/sqrt(N),
             coral_cover_cv = CV(coral_cover),
             coral_cover_hard_cv = CV(coral_cover_hard),
+            hard_cover_mean = mean(hard_cover),
+            hard_cover_se = sd(hard_cover)/sqrt(N),
+            hard_cover_cv = CV(hard_cover),
             
             # macroalgae cover
             macroalgae_cover_mean = mean(macroalgae_cover),
@@ -417,6 +432,13 @@ quadData %>%
             macroalgae_richness_se = sd(macroalgae_richness)/sqrt(N),
             macroalgae_shannon_mean = mean(macroalgae_shannon),
             macroalgae_shannon_se = sd(macroalgae_shannon)/sqrt(N),
+            
+            # of hard
+            macroalgae_richness_hard_mean = mean(macroalgae_richness_hard, na.rm = TRUE),
+            macroalgae_richness_hard_se = sd(macroalgae_richness_hard, na.rm = TRUE)/sqrt(N),
+            macroalgae_shannon_hard_mean = mean(macroalgae_shannon_hard, na.rm = TRUE),
+            macroalgae_shannon_hard_se = sd(macroalgae_shannon_hard, na.rm = TRUE)/sqrt(N),
+            
             macroalgae_centroid_dist_habyear_mean = mean(macroalgae_centroid_dist_habyear_mean, na.rm = TRUE)
             )  -> alltimeCV
 ```

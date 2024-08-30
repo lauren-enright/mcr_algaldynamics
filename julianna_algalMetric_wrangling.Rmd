@@ -63,13 +63,14 @@ algae %>%
          algae_cover_hard = case_when(
            sand == 100 ~ NA, # since we can't divide by a zero
            TRUE ~ (algae_cover/(100-sand))*100 
-           )) %>% # percent cover of hard substrate
+           ),
+         hard_cover = 100-sand) %>% # percent cover of hard substrate
    # make a year-habitat column for betadisper
   mutate(hab_year = paste0(habitat, "_", year),
          island_side_hab_year = paste0(island_side, "_", hab_year)) %>% 
   select(year, location, site, habitat, island_side, site_habitat, 
          hab_year, island_side_hab_year, transect, quadrat, algae_cover, 
-         algae_cover_hard)  -> sppMeta
+         algae_cover_hard, hard_cover, sand)  -> sppMeta
 ```
 
 ## Calculate diversity metrics
@@ -332,6 +333,9 @@ algDiv %>%
   # follow a cleaner naming convention to match Noam's
   rename(algae_richness = Richness,
          algae_shannon = Shannon) %>% 
+  # get algal metrics relative to hard
+  mutate(algae_richness_hard = algae_richness/hard_cover,
+         algae_shannon_hard = algae_shannon/hard_cover) %>% 
   # get just the columns we need
   select(-site_habitat, -hab_year, -island_side_hab_year) -> quadData
 
@@ -357,7 +361,14 @@ quadData %>%
             algae_richness_se = sd(algae_richness)/sqrt(N),
             algae_shannon_mean = mean(algae_shannon),
             algae_shannon_se = sd(algae_shannon)/sqrt(N),
-            centroid_dist_habyear_mean = mean(hab_yr_distcentroid, na.rm = TRUE)
+            centroid_dist_habyear_mean = mean(hab_yr_distcentroid, na.rm = TRUE),
+            # add hard metrics
+            algae_richness_hard_mean = mean(algae_richness_hard, na.rm = TRUE),
+            algae_richness_hard_se = sd(algae_richness_hard, na.rm = TRUE)/sqrt(N),
+            algae_shannon_hard_mean = mean(algae_shannon_hard, na.rm = TRUE),
+            algae_shannon_se = sd(algae_shannon_hard, na.rm = TRUE)/sqrt(N),
+            hard_cover_mean = mean(hard_cover, na.rm = TRUE),
+            hard_cover_se = sd(hard_cover, na.rm = TRUE)/sqrt(N)
             ) -> siteData
 
 ```
@@ -399,6 +410,13 @@ quadData %>%
     algae_cover_hard_mean = mean(algae_cover_hard, na.rm = TRUE),
     algae_cover_hard_se = sd(algae_cover_hard, na.rm = TRUE)/sqrt(n()),
     algae_cover_hard_cv = CV(algae_cover_hard),
+    # including diversity
+    algae_richness_hard_mean = mean(algae_richness_hard, na.rm = TRUE),
+    algae_richness_hard_se = sd(algae_richness_hard, na.rm = TRUE)/sqrt(n()),
+    algae_shannon_hard_mean = mean(algae_shannon_hard, na.rm = TRUE),
+    algae_shannon_se = sd(algae_shannon_hard, na.rm = TRUE)/sqrt(n()),
+    hard_cover_mean = mean(hard_cover, na.rm = TRUE),
+    hard_cover_se = sd(hard_cover, na.rm = TRUE)/sqrt(n())
     ) -> alltimeCV
 ```
 
