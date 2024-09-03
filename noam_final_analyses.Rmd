@@ -1,0 +1,410 @@
+---
+title: "noam_final_analyses"
+author: "Noam Altman-Kurosaki"
+date: "2024-08-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+library(here)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(vegan)
+library(glmmTMB)
+library(car)
+library(effects)
+library(DHARMa)
+library(stringr)
+library(MuMIn)
+library(codyn)
+library(nlme)
+library(mgcv)
+library(emmeans)
+library(ecofolio) # possible other method for examining portfolio effects 
+```
+
+```{r import and format data}
+# coefficient of variation
+CV<-function(x){
+  return(sd(x,na.rm=T)/mean(x,na.rm=T))
+}
+
+# for figures
+island_side_colours <- c("north" = "darkblue",
+                         "east" = "mediumorchid",
+                         "west" = "orange")
+habitat_colours <- c("fringing" = "#D81B60",
+                     "backreef" = "#FFC107",
+                     "outer_10" = "#1E88E5",
+                     "outer_17" = "#004D40")
+
+
+# starting with all data now because of 0 algae transects/quadrats
+data <- read.csv(here::here("data", "allbenthicdata_cleaned_colnames.csv"), stringsAsFactors = F) 
+
+not_algae <- c("ascidian", "bare_space", "coral", "coral_rubble", "corallimorpharia", "heteractis_sp", "millepora_platyphylla", "no_data", "sand", "sarcophyton_sp", "shell_debris", "soft_coral", "sponge", "tridacna_sp", "zooxanthellae", "row_sums")
+
+
+data <- data[ , -which(names(data) %in% not_algae)]
+
+# adding island side - adapted from Julianna's code
+data <- data %>% mutate(island_side = case_when(site == "lter_1" ~ "north",
+                                 site == "lter_2" ~ "north",
+                                 site == "lter_3" ~ "east",
+                                 site == "lter_4" ~ "east",
+                                 site == "lter_5" ~ "west",
+                                 site == "lter_6" ~ "west"))
+data$island_side_habitat <- paste(data$island_side, data$habitat)
+
+macroalgae <- data %>% 
+  select(-algal_turf, -crustose_corallines, -cyanophyta, -damselfish_turf, -lithophyllum_kotschyanum,
+         -neogoniolithon_brassica_florida, -sporolithon_sp)
+
+sand_coral <- read_csv(here("data", "allbenthicdata_cleaned_colnames.csv")) %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, sand, coral)
+
+
+# get ranges to calculate over (this is just for indexing purposes in the next bit of code)
+startAlg <- grep("acanthophora_spicifera", colnames(macroalgae))
+endAlg <- grep("valonia_ventricosa", colnames(macroalgae))
+
+
+macroalgae %>% 
+  # bring in sand data
+  full_join(sand_coral) %>% 
+  rename(coral_cover = coral,
+         sand_cover = sand) %>% 
+  mutate(hard_cover = 100-sand_cover) %>% 
+  mutate(macroalgae_cover = rowSums(macroalgae[startAlg:endAlg]), # percent cover of macroalgae
+         
+         macroalgae_cover_hard = case_when(
+           sand_cover == 100 ~ NA, # since we can't divide by a zero
+           TRUE ~ (macroalgae_cover/hard_cover)*100 
+           ),
+         # also for corals
+         coral_cover_hard = case_when(
+           sand_cover == 100 ~ NA, # since we can't divide by a zero
+           TRUE ~ (coral_cover/hard_cover)*100 
+           )
+         ) %>% # percent cover of hard substrate
+   # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year),
+         site_hab_year = paste0(site, "_", hab_year)) %>% 
+  select(year, location, site, habitat, island_side, site_habitat, island_side_habitat,
+         hab_year, site_hab_year, transect, quadrat, macroalgae_cover, 
+         macroalgae_cover_hard, sand_cover, hard_cover, coral_cover, coral_cover_hard)  -> meta_df
+
+meta_df$all_algae_cover <- rowSums(data[startAlg:endAlg]) # percent cover of all algae
+meta_df$all_algae_cover_hard <- case_when(
+           meta_df$sand_cover == 100 ~ NA, # since we can't divide by a zero
+           TRUE ~ (meta_df$all_algae_cover/meta_df$hard_cover)*100   
+         )
+
+data <- merge(meta_df, data )
+macroalgae <- merge(meta_df, macroalgae)
+
+
+meta_cols <- colnames(meta_df)
+
+full_species_cols <- colnames(data)[!colnames(data) %in% meta_cols]
+macro_species_cols <- colnames(macroalgae)[!colnames(macroalgae) %in% meta_cols]
+
+
+# summarize at site level
+site_full <- data %>%
+  dplyr::group_by(year, island_side, site, habitat, site_habitat, hab_year, site_hab_year) %>%
+  dplyr::summarize(across(all_of(
+    c("macroalgae_cover", "macroalgae_cover_hard", "sand_cover", "hard_cover", "coral_cover",
+      "coral_cover_hard","all_algae_cover", "all_algae_cover_hard", full_species_cols)), mean, na.rm = TRUE))
+
+
+# summarize at species level
+site_macro <- macroalgae %>%
+  dplyr::group_by(year, island_side, site, habitat, site_habitat, hab_year, site_hab_year) %>%
+  dplyr::summarize(across(all_of(
+    c("macroalgae_cover", "macroalgae_cover_hard", "sand_cover", "hard_cover", "coral_cover",
+      "coral_cover_hard","all_algae_cover", "all_algae_cover_hard", macro_species_cols)), mean, na.rm = TRUE))
+
+
+# extract site level meta_df for future merges
+site_meta_df <- site_full[,which(names(site_full) %in% meta_cols)]
+
+#pivot long 
+long_data <- pivot_longer(
+  data = data,
+  cols = grep("acanthophora_spicifera", colnames(data)):grep("valonia_ventricosa", colnames(data)),
+  names_to = "taxa",
+  values_to = "percent_cover") 
+
+macro_long_data <- pivot_longer(
+  data = macroalgae,
+  cols = grep("acanthophora_spicifera", colnames(macroalgae)):grep("valonia_ventricosa", colnames(macroalgae)),
+  names_to = "taxa",
+  values_to = "percent_cover") 
+ 
+site_long_data <- pivot_longer(
+  data = site_full,
+  cols = grep("acanthophora_spicifera", colnames(site_full)):grep("valonia_ventricosa", colnames(site_full)),
+  names_to = "taxa",
+  values_to = "percent_cover") 
+
+site_long_macro <- pivot_longer(
+  data = site_macro,
+  cols = grep("acanthophora_spicifera", colnames(site_macro)):grep("valonia_ventricosa", colnames(site_macro)),
+  names_to = "taxa",
+  values_to = "percent_cover") 
+
+
+```
+
+```{r read and merge secondary datasets}
+wave <- read.csv(here::here("data", "algae_wave_dynamics.csv"), stringsAsFactors = F)
+nutrients <- read.csv(here::here("data", "lter_nuts.csv"), stringsAsFactors = F)
+temp <- read.csv(here::here("data", "temp_sum.csv"), stringsAsFactors = F)
+
+
+```
+
+
+```{r all algae alpha diversity quadrat level}
+alpha_diversity_quad <-
+  data.frame(
+    year = data$year,
+    location = data$location,
+    shannon = diversity(data[ , -which(names(data) %in% meta_cols)], "shannon"),
+    richness = rowSums(data[ , -which(names(data) %in% meta_cols)] > 0)
+  )
+
+alpha_diversity_quad <- merge(meta_df, alpha_diversity_quad, by = c("location", "year") )
+
+full_richness_mod <- glmmTMB(richness ~ year*habitat + (1|site/location) + offset(log(hard_cover)), family = poisson,
+                             data = alpha_diversity_quad[!is.na(alpha_diversity_quad$macroalgae_cover_hard),]) 
+summary(full_richness_mod)
+hist(residuals(full_richness_mod)) # slightly skewed but not terrible
+
+# striping/patterining expected because of discrete response var. otherwise fine
+plot(residuals(full_richness_mod) ~ fitted(full_richness_mod)) 
+
+emtrends(full_richness_mod, pairwise ~  habitat, var = "year")
+full_richness_emm <- emmip(full_richness_mod,habitat ~ year,
+                        at = list(year = seq(2007,2023, 1)), plotit = F, CIs = T)
+
+(base_richness_plot <- 
+  ggplot() +
+  geom_point(data = alpha_diversity_quad,
+             aes(x = year, y = richness/(hard_cover/100), colour = habitat), size = 2, alpha = 0.05) + 
+  geom_line(data = full_richness_emm, aes(x = year, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = full_richness_emm, aes(x = year, ymin = exp(LCL), ymax = exp(UCL), fill = habitat), alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  scale_y_log10() +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) ) # add box around legend
+
+```
+
+```{r macroalgae diversity quadrat level}
+alpha_diversity_quad_macro <-
+  data.frame(
+    year = macroalgae$year,
+    location = macroalgae$location,
+    shannon = diversity(macroalgae[ , -which(names(macroalgae) %in% meta_cols)], "shannon"),
+    richness = rowSums(macroalgae[ , -which(names(macroalgae) %in% meta_cols)] > 0)
+  )
+
+alpha_diversity_quad_macro <- merge(meta_df, alpha_diversity_quad_macro, by = c("location", "year"))
+
+```
+
+
+```{r all algae alpha diversity site level}
+alpha_diversity_site <-
+  data.frame(
+    year = site_full$year,
+    site_hab_year = site_full$site_hab_year,
+    shannon = diversity(site_full[ , -which(names(site_full) %in% meta_cols)], "shannon"),
+    richness = rowSums(site_full[ , -which(names(site_full) %in% meta_cols)] > 0)
+  )
+
+alpha_diversity_site <- merge(site_meta_df, alpha_diversity_site, by= c("year", "site_hab_year"))
+
+site_full_richness_mod <- glmmTMB(richness ~ year*habitat + (1|site) + offset(log(hard_cover)), family = poisson,
+                             data = alpha_diversity_site) 
+# Warning in (function (start, objective, gradient = NULL, hessian = NULL,  : NA/NaN function evaluation
+# This warning occurs when the optimizer visits a region of parameter space that is invalid. It is not a problem as long as the optimizer has left that region of parameter space upon convergence, which is indicated by an absence of the model convergence warnings described above.
+summary(site_full_richness_mod)
+hist(residuals(site_full_richness_mod)) # similar slight skew to before
+
+# striping/patterining expected because of discrete response var. otherwise fine
+plot(residuals(site_full_richness_mod) ~ fitted(site_full_richness_mod)) # slightly heteroskedastic
+
+
+emtrends(site_full_richness_mod, pairwise ~  habitat, var = "year") # habitat trends don't differ from each other
+site_full_richness_emm <- emmip(site_full_richness_mod,habitat ~ year,
+                        at = list(year = seq(2007,2023, 1)), plotit = F, CIs = T)
+
+(site_base_richness_plot <- 
+  ggplot() +
+  geom_point(data = alpha_diversity_site,
+             aes(x = year, y = richness/(hard_cover/100), colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = site_full_richness_emm, aes(x = year, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = site_full_richness_emm, aes(x = year, ymin = exp(LCL), ymax = exp(UCL), fill = habitat), alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  scale_y_log10() +
+    labs(x = "Year", y = "Richness") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) ) # add box around legend
+
+
+site_full_shannon_mod <- glmmTMB(log(shannon/(hard_cover/100) +1 ) ~ year*habitat + (1|site),
+                             data = alpha_diversity_site) 
+# sites with shannon div = 0 so log+1 transformed
+summary(site_full_shannon_mod)
+hist(residuals(site_full_shannon_mod)) # looks good
+
+# slight patterning but generally fine
+plot(residuals(site_full_shannon_mod) ~ fitted(site_full_shannon_mod)) 
+
+
+emtrends(site_full_shannon_mod, pairwise ~  habitat, var = "year") # backreef and fringing differ
+site_full_shannon_emm <- emmip(site_full_shannon_mod,habitat ~ year,
+                        at = list(year = seq(2007,2023, 1)), plotit = F, CIs = T)
+
+(site_base_shannon_plot <- 
+  ggplot() +
+  geom_point(data = alpha_diversity_site,
+             aes(x = year, y = shannon/(hard_cover/100), colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = site_full_shannon_emm, aes(x = year, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = site_full_shannon_emm, aes(x = year, ymin = exp(LCL), ymax = exp(UCL), fill = habitat), alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  scale_y_log10() +
+    labs(x = "Year", y = "shannon") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) ) # add box around legend
+
+```
+
+```{r macroalgae alpha diversity site level}
+alpha_diversity_site_macro <-
+  data.frame(
+    year = site_macro$year,
+    site_hab_year = site_macro$site_hab_year,
+    shannon = diversity(site_macro[ , -which(names(site_macro) %in% meta_cols)], "shannon"),
+    richness = rowSums(site_macro[ , -which(names(site_macro) %in% meta_cols)] > 0)
+  )
+
+alpha_diversity_site_macro <- merge(site_meta_df, alpha_diversity_site_macro, by= c("year", "site_hab_year"))
+
+site_macro_richness_mod <- glmmTMB(richness ~ year*habitat + (1|site) + offset(log(hard_cover)), family = poisson,
+                             data = alpha_diversity_site_macro) 
+# Warning in (function (start, objective, gradient = NULL, hessian = NULL,  : NA/NaN function evaluation
+# This warning occurs when the optimizer visits a region of parameter space that is invalid. It is not a problem as long as the optimizer has left that region of parameter space upon convergence, which is indicated by an absence of the model convergence warnings described above.
+summary(site_macro_richness_mod)
+hist(residuals(site_macro_richness_mod)) # slightly more skew
+
+# striping/patterining expected because of discrete response var. otherwise fine
+plot(residuals(site_macro_richness_mod) ~ fitted(site_macro_richness_mod))
+
+
+emtrends(site_macro_richness_mod, pairwise ~  habitat, var = "year") # habitat trends don't differ from each other
+site_macro_richness_emm <- emmip(site_macro_richness_mod,habitat ~ year,
+                        at = list(year = seq(2007,2023, 1)), plotit = F, CIs = T)
+
+(site_base_richness_plot <- 
+  ggplot() +
+  geom_point(data = alpha_diversity_site_macro,
+             aes(x = year, y = richness/(hard_cover/100), colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = site_macro_richness_emm, aes(x = year, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = site_macro_richness_emm, aes(x = year, ymin = exp(LCL), ymax = exp(UCL), fill = habitat), alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  scale_y_log10() +
+    labs(x = "Year", y = "Richness") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) ) # add box around legend
+
+
+site_macro_shannon_mod <- glmmTMB(log(shannon/(hard_cover/100) +1 ) ~ year*habitat + (1|site),
+                             data = alpha_diversity_site) 
+# sites with shannon div = 0 so log+1 transformed
+summary(site_macro_shannon_mod)
+hist(residuals(site_macro_shannon_mod)) # looks good
+
+# slight patterning but generally fine
+plot(residuals(site_macro_shannon_mod) ~ fitted(site_macro_shannon_mod)) 
+
+
+emtrends(site_macro_shannon_mod, pairwise ~  habitat, var = "year") # backreef and fringing differ
+site_macro_shannon_emm <- emmip(site_macro_shannon_mod,habitat ~ year,
+                        at = list(year = seq(2007,2023, 1)), plotit = F, CIs = T)
+
+(site_base_shannon_plot <- 
+  ggplot() +
+ # geom_point(data = alpha_diversity_site,
+ #            aes(x = year, y = shannon/(hard_cover/100), colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = site_macro_shannon_emm, aes(x = year, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = site_macro_shannon_emm, aes(x = year, ymin = exp(LCL), ymax = exp(UCL), fill = habitat), alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+#  scale_y_log10() +
+    labs(x = "Year", y = "shannon") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) ) # add box around legend
+
+```
