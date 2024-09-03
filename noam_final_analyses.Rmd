@@ -196,11 +196,12 @@ full_richness_emm <- emmip(full_richness_mod,habitat ~ year,
 (base_richness_plot <- 
   ggplot() +
   geom_point(data = alpha_diversity_quad,
-             aes(x = year, y = richness/(hard_cover/100), colour = habitat), size = 2, alpha = 0.05) + 
+             aes(x = year, y = richness, colour = habitat), size = 2, alpha = 0.05) + 
   geom_line(data = full_richness_emm, aes(x = year, y = exp(yvar), colour = habitat), size = 2) +
   geom_ribbon(data = full_richness_emm, aes(x = year, ymin = exp(LCL), ymax = exp(UCL), fill = habitat), alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
+  labs(y = "Richness") +
   scale_y_log10() +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
@@ -354,7 +355,7 @@ site_macro_richness_emm <- emmip(site_macro_richness_mod,habitat ~ year,
   geom_ribbon(data = site_macro_richness_emm, aes(x = year, ymin = exp(LCL), ymax = exp(UCL), fill = habitat), alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  scale_y_log10() +
+  scale_y_log10(lim = c(0.1,20)) +
     labs(x = "Year", y = "Richness") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
