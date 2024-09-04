@@ -1064,7 +1064,9 @@ ggplot()+
    geom_ribbon(data = betadisper_site_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
    scale_colour_manual(values = habitat_colours) +
    scale_fill_manual(values = habitat_colours) +
-
+   geom_segment(aes(y = 0.6, yend = 0.6, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
    labs(y = "Beta dispersion\n", x = "Year") +
    theme_bw() + 
    theme(panel.grid.major = element_blank(), 
@@ -1092,7 +1094,47 @@ full_site_macro_betadisper <- vegan::betadisper(full_site_macro_bray, full.site.
 full_subset_site_macro$betadispersion <- full_site_macro_betadisper$distances[match(full_subset_site_macro$stratum, names(full_site_macro_betadisper$distances))]
 full_subset_site_macro$betadispersion_trans <- sv_trans(full_subset_site_macro$betadispersion, full_subset_site_macro)
 
+betadisper_site_macro_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = full_subset_site_macro)
+summary(betadisper_site_macro_mod) # similar site variance - inv_logit(0.01) = 0.5
+hist(residuals(betadisper_site_macro_mod)) # pretty good
+plot(residuals(betadisper_site_macro_mod) ~ fitted(betadisper_site_macro_mod)) # slight heteroskedasticity and negative trend
+Anova(betadisper_site_macro_mod)
+#               Chisq Df Pr(>Chisq)    
+# year         36.591  1  1.457e-09 ***
+# habitat      46.029  3  5.590e-10 ***
+# year:habitat 31.232  3  7.597e-07 ***
 
+emtrends(betadisper_site_macro_mod, pairwise ~ habitat , "year") # backreef distinct from all other habitats
+betadisper_site_macro_emm <- emmip(betadisper_site_macro_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = site_full, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_site_macro_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_site_macro_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 0.75, yend = 0.75, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
 
 ```
 
