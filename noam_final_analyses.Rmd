@@ -567,6 +567,546 @@ hist(residuals(outer17_all_shannon_top_mod)) # pretty good
 plot(residuals(outer17_all_shannon_top_mod) ~ fitted(outer17_all_shannon_top_mod)) # looks fine
 ```
 
+```{r synchrony diversity stability setup site level, fig.height = 8, fig.width= 8}
+
+lm_synchrony_site <- codyn::synchrony(df = site_long_data,
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "percent_cover",
+                                   metric = "Loreau",
+                                   replicate.var = "site_habitat") 
+colnames(lm_synchrony_site) = c("site_habitat", "loreau_synchrony") # rename cols for merge later
+
+lm_synchrony_site_macro <- codyn::synchrony(df = site_long_macro,
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "percent_cover",
+                                   metric = "Loreau",
+                                   replicate.var = "site_habitat") 
+colnames(lm_synchrony_site_macro) = c("site_habitat", "loreau_synchrony") # rename cols for merge later
+
+diversity_cv_site <- alpha_diversity_site %>%
+  dplyr::group_by(site, habitat, island_side, site_habitat) %>%
+  dplyr::summarise(
+            algae_richness_mean = mean(richness), 
+            algae_richness_cv = CV(richness),
+            algae_richness_stability = 1/CV(richness),
+            algae_shannon_mean = mean(shannon), 
+            algae_shannon_cv = CV(shannon),
+            algae_shannon_stability = 1/CV(shannon), 
+            algae_cover_mean = mean(all_algae_cover_hard),
+            algae_cover_cv = CV(all_algae_cover_hard),
+            algae_cover_stability = 1/CV(all_algae_cover_hard)) 
+# an extra outer_10 was introduced for every site for some reason that is all NAs
+# remove NAs and merge with synchrony
+diversity_stability_site <- merge(lm_synchrony_site, na.omit(diversity_cv_site), by = "site_habitat")
+
+diversity_cv_site_macro <- alpha_diversity_site_macro %>%
+  dplyr::group_by(site, habitat, island_side, site_habitat) %>%
+  dplyr::summarise(
+            algae_richness_mean = mean(richness), 
+            algae_richness_cv = CV(richness),
+            algae_richness_stability = 1/CV(richness),
+            algae_shannon_mean = mean(shannon), 
+            algae_shannon_cv = CV(shannon),
+            algae_shannon_stability = 1/CV(shannon), 
+            algae_cover_mean = mean(macroalgae_cover_hard),
+            algae_cover_cv = CV(macroalgae_cover_hard),
+            algae_cover_stability = 1/CV(macroalgae_cover_hard)) 
+# an extra outer_10 was introduced for every site for some reason that is all NAs
+# remove NAs and merge with synchrony
+diversity_stability_site_macro <- merge(lm_synchrony_site_macro, na.omit(diversity_cv_site_macro), by = "site_habitat")
+
+
+
+# for plotting later
+diversity_ranges_site <- diversity_stability_site %>%
+  group_by(habitat) %>%
+  summarise(min_richness = min(algae_richness_mean),
+            max_richness = max(algae_richness_mean),
+            min_shannon = min(algae_shannon_mean),
+            max_shannon = max(algae_shannon_mean),
+            min_loreau = min(loreau_synchrony),
+            max_loreau = max(loreau_synchrony))
+
+diversity_ranges_site_macro <- diversity_stability_site_macro %>%
+  group_by(habitat) %>%
+  summarise(min_richness = min(algae_richness_mean),
+            max_richness = max(algae_richness_mean),
+            min_shannon = min(algae_shannon_mean),
+            max_shannon = max(algae_shannon_mean),
+            min_loreau = min(loreau_synchrony),
+            max_loreau = max(loreau_synchrony))
+
+```
+
+```{r site all diversity stability synchrony, fig.height = 8, fig.width=8}
+richness_cv_site <- glmmTMB(algae_cover_cv ~ algae_richness_mean*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site)
+r.squaredGLMM(richness_cv_site) # 0.49
+summary(richness_cv_site)
+hist(residuals(richness_cv_site)) # symmetrical
+plot(residuals(richness_cv_site) ~ fitted(richness_cv_site)) # slightly heteroskedastic
+Anova(richness_cv_site)
+#                               Chisq Df Pr(>Chisq)   
+# algae_richness_mean          5.9078  1   0.015074 * 
+# habitat                     14.5560  3   0.002238 **
+# algae_richness_mean:habitat  3.8220  3   0.281336   
+
+emtrends(richness_cv_site, pairwise ~ habitat, var = "algae_richness_mean") # no significant differences
+richness_cv_emm_site <- emmip(richness_cv_site,
+                        habitat ~ algae_richness_mean,
+                        at = list(algae_richness_mean = seq(0,10,0.1)), plotit = F, CIs = T)
+
+filtered_richness_effects_site <- richness_cv_emm_site %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(algae_richness_mean >= min_richness & algae_richness_mean <= max_richness)
+
+
+(richness_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site,
+             aes(x = algae_richness_mean, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_richness_effects_site, aes(x = algae_richness_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_richness_effects_site, aes(x = algae_richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+
+## REPEAT WITH SHANNON
+shannon_cv_site <- glmmTMB(algae_cover_cv ~ algae_shannon_mean*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site)
+r.squaredGLMM(shannon_cv_site) # 0.42
+summary(shannon_cv_site)
+hist(residuals(shannon_cv_site)) # symmetrical
+plot(residuals(shannon_cv_site) ~ fitted(shannon_cv_site)) # slightly heteroskedastic
+Anova(shannon_cv_site)
+#                              Chisq Df Pr(>Chisq)   
+# algae_shannon_mean          1.5291  1   0.216254   
+# habitat                    12.1017  3   0.007043 **
+# algae_shannon_mean:habitat  2.8675  3   0.412512   
+
+emtrends(shannon_cv_site, pairwise ~ habitat, var = "algae_shannon_mean") # no significant differences
+shannon_cv_emm_site <- emmip(shannon_cv_site,
+                        habitat ~ algae_shannon_mean,
+                        at = list(algae_shannon_mean = seq(0,10,0.1)), plotit = F, CIs = T)
+
+filtered_shannon_effects_site <- shannon_cv_emm_site %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(algae_shannon_mean >= min_shannon & algae_shannon_mean <= max_shannon)
+
+
+(shannon_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site,
+             aes(x = algae_shannon_mean, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_shannon_effects_site, aes(x = algae_shannon_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_shannon_effects_site, aes(x = algae_shannon_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+synchrony_cv_site <- glmmTMB(algae_cover_cv ~ loreau_synchrony*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site)
+r.squaredGLMM(synchrony_cv_site) # 0.76
+summary(synchrony_cv_site)
+hist(residuals(synchrony_cv_site)) # symmetrical
+plot(residuals(synchrony_cv_site) ~ fitted(synchrony_cv_site)) # slightly heteroskedastic
+Anova(synchrony_cv_site)
+#                           Chisq Df Pr(>Chisq)    
+# loreau_synchrony         45.857  1  1.272e-11 ***
+# habitat                  14.018  3    0.00288 ** 
+# loreau_synchrony:habitat  2.456  3    0.48330    
+
+emtrends(synchrony_cv_site, pairwise ~ habitat, var = "loreau_synchrony") # no differences between habitats
+synchrony_cv_emm_site <- emmip(synchrony_cv_site,
+                        habitat ~ loreau_synchrony,
+                        at = list(loreau_synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_synchrony_cv_effects_site <- synchrony_cv_emm_site %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(loreau_synchrony >= min_loreau & loreau_synchrony <= max_loreau)
+
+(synchrony_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site,
+             aes(x = loreau_synchrony, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_cv_effects_site, aes(x = loreau_synchrony, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_cv_effects_site, aes(x = loreau_synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+synchrony_richness_site <- glmmTMB(loreau_synchrony  ~ algae_richness_mean*habitat, family = beta_family(link = "logit"),
+                          data = diversity_stability_site)
+# r.squaredLR(synchrony_richness_site)
+summary(synchrony_richness_site)
+hist(residuals(synchrony_richness_site)) # symmetrical
+plot(residuals(synchrony_richness_site) ~ fitted(synchrony_richness_site)) # slightly heteroskedastic
+Anova(synchrony_richness_site)
+# 
+#                               Chisq Df Pr(>Chisq)    
+# algae_richness_mean         12.6670  1  0.0003722 ***
+# habitat                      5.0218  3  0.1702104    
+# algae_richness_mean:habitat  6.0890  3  0.1073579    
+
+emtrends(synchrony_richness_site, pairwise ~ habitat, var = "algae_richness_mean") # no differences between habitats
+synchrony_richness_emm_site <- emmip(synchrony_richness_site,
+                        habitat ~ algae_richness_mean,
+                        at = list(algae_richness_mean = seq(0,10,0.1)), plotit = F, CIs = T)
+
+filtered_synchrony_richness_effects_site <- synchrony_richness_emm_site %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(algae_richness_mean >= min_richness & algae_richness_mean <= max_richness)
+
+(synchrony_richness_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site,
+             aes(x = algae_richness_mean, y = loreau_synchrony, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_richness_effects_site, aes(x = algae_richness_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_richness_effects_site, aes(x = algae_richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+
+synchrony_shannon_site <- glmmTMB(loreau_synchrony  ~ algae_shannon_mean*habitat, family = beta_family(link = "logit"),
+                          data = diversity_stability_site)
+# r.squaredLR(synchrony_shannon_site)
+summary(synchrony_shannon_site)
+hist(residuals(synchrony_shannon_site)) # symmetrical
+plot(residuals(synchrony_shannon_site) ~ fitted(synchrony_shannon_site)) # slightly heteroskedastic
+Anova(synchrony_shannon_site)
+# 
+#                              Chisq Df Pr(>Chisq)   
+# algae_shannon_mean         10.5506  1   0.001161 **
+# habitat                     4.9410  3   0.176171   
+# algae_shannon_mean:habitat  6.1573  3   0.104205   
+
+emtrends(synchrony_shannon_site, pairwise ~ habitat, var = "algae_shannon_mean") # no differences between habitats
+synchrony_shannon_emm_site <- emmip(synchrony_shannon_site,
+                        habitat ~ algae_shannon_mean,
+                        at = list(algae_shannon_mean = seq(0,1.5,0.01)), plotit = F, CIs = T)
+
+filtered_synchrony_shannon_effects_site <- synchrony_shannon_emm_site %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(algae_shannon_mean >= min_shannon & algae_shannon_mean <= max_shannon)
+
+(synchrony_shannon_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site,
+             aes(x = algae_shannon_mean, y = loreau_synchrony, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_shannon_effects_site, aes(x = algae_shannon_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_shannon_effects_site, aes(x = algae_shannon_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+```
+
+```{r site macroalgae diversity stability synchrony, fig.height = 8, fig.width=8}
+richness_cv_site_macro <- glmmTMB(algae_cover_cv ~ algae_richness_mean*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site_macro)
+r.squaredGLMM(richness_cv_site_macro) # 0.65
+summary(richness_cv_site_macro)
+hist(residuals(richness_cv_site_macro)) # symmetrical
+plot(residuals(richness_cv_site_macro) ~ fitted(richness_cv_site_macro)) # not bad
+Anova(richness_cv_site_macro)
+#                               Chisq Df Pr(>Chisq)   
+# algae_richness_mean         15.772  1  7.144e-05 ***
+# habitat                     21.689  3  7.572e-05 ***
+# algae_richness_mean:habitat 12.244  3   0.006591 ** 
+
+emtrends(richness_cv_site_macro, pairwise ~ habitat, var = "algae_richness_mean") # backreef differs from two forereef sites
+richness_cv_emm_site_macro <- emmip(richness_cv_site_macro,
+                        habitat ~ algae_richness_mean,
+                        at = list(algae_richness_mean = seq(0,10,0.1)), plotit = F, CIs = T)
+
+filtered_richness_effects_site_macro <- richness_cv_emm_site_macro %>%
+  left_join(diversity_ranges_site_macro, by = c("habitat")) %>%
+  filter(algae_richness_mean >= min_richness & algae_richness_mean <= max_richness)
+
+
+(richness_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site_macro,
+             aes(x = algae_richness_mean, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_richness_effects_site_macro, aes(x = algae_richness_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_richness_effects_site_macro, aes(x = algae_richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+
+## REPEAT WITH SHANNON
+shannon_cv_site_macro <- glmmTMB(algae_cover_cv ~ algae_shannon_mean*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site_macro)
+r.squaredGLMM(shannon_cv_site_macro) # 0.37
+summary(shannon_cv_site_macro)
+hist(residuals(shannon_cv_site_macro)) # a little chunky
+plot(residuals(shannon_cv_site_macro) ~ fitted(shannon_cv_site_macro)) # pretty good
+Anova(shannon_cv_site_macro)
+#                             Chisq Df Pr(>Chisq)  
+# algae_shannon_mean         1.1533  1    0.28287  
+# habitat                    7.9691  3    0.04666 *
+# algae_shannon_mean:habitat 4.1867  3    0.24199  
+
+emtrends(shannon_cv_site_macro, pairwise ~ habitat, var = "algae_shannon_mean") # no significant differences
+shannon_cv_emm_site_macro <- emmip(shannon_cv_site_macro,
+                        habitat ~ algae_shannon_mean,
+                        at = list(algae_shannon_mean = seq(0,2,0.01)), plotit = F, CIs = T)
+
+filtered_shannon_effects_site_macro <- shannon_cv_emm_site_macro %>%
+  left_join(diversity_ranges_site_macro, by = c("habitat")) %>%
+  filter(algae_shannon_mean >= min_shannon & algae_shannon_mean <= max_shannon)
+
+
+(shannon_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site_macro,
+             aes(x = algae_shannon_mean, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_shannon_effects_site_macro, aes(x = algae_shannon_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_shannon_effects_site_macro, aes(x = algae_shannon_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+synchrony_cv_site_macro <- glmmTMB(algae_cover_cv ~ loreau_synchrony*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site_macro)
+r.squaredGLMM(synchrony_cv_site_macro) # 0.71
+summary(synchrony_cv_site_macro)
+hist(residuals(synchrony_cv_site_macro)) # symmetrical
+plot(residuals(synchrony_cv_site_macro) ~ fitted(synchrony_cv_site_macro)) # slightly heteroskedastic
+Anova(synchrony_cv_site_macro)
+#                           Chisq Df Pr(>Chisq)    
+# loreau_synchrony         22.575  1  2.021e-06 ***
+# habitat                  11.611  3   0.008841 ** 
+# loreau_synchrony:habitat 11.389  3   0.009799 **  
+
+emtrends(synchrony_cv_site_macro, pairwise ~ habitat, var = "loreau_synchrony") # backreef different from outer17
+synchrony_cv_emm_site_macro <- emmip(synchrony_cv_site_macro,
+                        habitat ~ loreau_synchrony,
+                        at = list(loreau_synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_synchrony_cv_effects_site_macro <- synchrony_cv_emm_site_macro %>%
+  left_join(diversity_ranges_site_macro, by = c("habitat")) %>%
+  filter(loreau_synchrony >= min_loreau & loreau_synchrony <= max_loreau)
+
+(synchrony_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site_macro,
+             aes(x = loreau_synchrony, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_cv_effects_site_macro, aes(x = loreau_synchrony, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_cv_effects_site_macro, aes(x = loreau_synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+synchrony_richness_site_macro <- glmmTMB(loreau_synchrony  ~ algae_richness_mean*habitat, family = beta_family(link = "logit"),
+                          data = diversity_stability_site_macro)
+# r.squaredGLMM(synchrony_richness_site_macro)
+summary(synchrony_richness_site_macro)
+hist(residuals(synchrony_richness_site_macro)) # kind of chunky
+plot(residuals(synchrony_richness_site_macro) ~ fitted(synchrony_richness_site_macro)) # slightly heteroskedastic
+Anova(synchrony_richness_site_macro)
+# 
+#                               Chisq Df Pr(>Chisq)    
+# algae_richness_mean         0.2299  1    0.63161  
+# habitat                     5.4261  3    0.14312  
+# algae_richness_mean:habitat 9.1650  3    0.02718 *
+
+emtrends(synchrony_richness_site_macro, pairwise ~ habitat, var = "algae_richness_mean") # backreef almost diff from fing and outer17
+synchrony_richness_emm_site_macro <- emmip(synchrony_richness_site_macro,
+                        habitat ~ algae_richness_mean,
+                        at = list(algae_richness_mean = seq(0,10,0.1)), plotit = F, CIs = T)
+
+filtered_synchrony_richness_effects_site_macro <- synchrony_richness_emm_site_macro %>%
+  left_join(diversity_ranges_site_macro, by = c("habitat")) %>%
+  filter(algae_richness_mean >= min_richness & algae_richness_mean <= max_richness)
+
+(synchrony_richness_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site_macro,
+             aes(x = algae_richness_mean, y = loreau_synchrony, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_richness_effects_site_macro, aes(x = algae_richness_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_richness_effects_site_macro, aes(x = algae_richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+
+synchrony_shannon_site_macro <- glmmTMB(loreau_synchrony  ~ algae_shannon_mean*habitat, family = beta_family(link = "logit"),
+                          data = diversity_stability_site_macro)
+summary(synchrony_shannon_site_macro)
+hist(residuals(synchrony_shannon_site_macro)) # a little chunky
+plot(residuals(synchrony_shannon_site_macro) ~ fitted(synchrony_shannon_site_macro)) # slightly heteroskedastic
+Anova(synchrony_shannon_site_macro)
+# 
+#                              Chisq Df Pr(>Chisq)   
+# algae_richness_mean         0.2299  1    0.63161  
+# habitat                     5.4261  3    0.14312  
+# algae_richness_mean:habitat 9.1650  3    0.02718 *
+
+emtrends(synchrony_shannon_site_macro, pairwise ~ habitat, var = "algae_shannon_mean") # no differences between habitats
+synchrony_shannon_emm_site_macro <- emmip(synchrony_shannon_site_macro,
+                        habitat ~ algae_shannon_mean,
+                        at = list(algae_shannon_mean = seq(0,1.5,0.01)), plotit = F, CIs = T)
+
+filtered_synchrony_shannon_effects_site_macro <- synchrony_shannon_emm_site_macro %>%
+  left_join(diversity_ranges_site_macro, by = c("habitat")) %>%
+  filter(algae_shannon_mean >= min_shannon & algae_shannon_mean <= max_shannon)
+
+(synchrony_shannon_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site_macro,
+             aes(x = algae_shannon_mean, y = loreau_synchrony, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_shannon_effects_site_macro, aes(x = algae_shannon_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_shannon_effects_site_macro, aes(x = algae_shannon_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+```
+
 
 ```{r all algae alpha diversity quadrat level}
 
