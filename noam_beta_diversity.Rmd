@@ -452,7 +452,44 @@ ggplot()+
          legend.box.background = element_rect(colour = "black") )# make legend horizontal
 ```
 
+```{r dissimilarity compared to baseline all, fig.height=15, fig.width = 15}
+bray_time_series_site_baseline <- subset(bray_time_series_site, year2 == 2007)
+bray_mod_site_baseline <- glmmTMB(dissimilarity_trans ~ time*habitat + (1 | site),
+                              na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series_site_baseline)
+hist(residuals(bray_mod_site_baseline)) # long tails but not bad
+plot(residuals(bray_mod_site_baseline) ~ fitted(bray_mod_site_baseline) ) # heteroskedastic
 
+emtrends(bray_mod_site_baseline, pairwise ~ habitat , "time") # fringing slope significantly different from all others
+bray_trends_emm_site_baseline <- emmip(bray_mod_site_baseline, habitat ~ time , at = list(time = seq(1,16,1)), plotit = F, CIs = T)
+
+
+ggplot()+
+   geom_point(data = bray_time_series_site_baseline, aes(x = time, y = dissimilarity, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = bray_trends_emm_site_baseline, aes(x = time, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = bray_trends_emm_site_baseline, aes(x = time, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+
+   labs(y = "Dissimilarity\n") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+```
 
 ```{r site macroalgae level bray curtis setup}
 fringing_site_macro_species_matrix <- as.matrix(fringing_site_macro[ , -which(names(fringing_site_macro) %in% meta_cols)])
@@ -696,9 +733,6 @@ bray_time_series_site_macro <- left_join(unique(site_meta_df[ , c("site", "site_
 
 
 # model
-
-
-
 # transformed dissimilarities
 bray_time_series_site_macro$dissimilarity_trans <- sv_trans(bray_time_series_site_macro$dissimilarity, bray_time_series_site_macro)
 
@@ -740,6 +774,45 @@ ggplot()+
          legend.box.background = element_rect(colour = "black") )# make legend horizontal
 ```
 
+```{r dissimilarity compared to baseline macro, fig.height=15, fig.width = 15}
+bray_time_series_site_macro_baseline <- subset(bray_time_series_site_macro, year2 == 2007)
+bray_mod_site_macro_baseline <- glmmTMB(dissimilarity_trans ~ time*habitat + (1 | site),
+                              na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series_site_macro_baseline)
+hist(residuals(bray_mod_site_macro_baseline)) # slight negative skew
+plot(residuals(bray_mod_site_macro_baseline) ~ fitted(bray_mod_site_macro_baseline) ) # strong negative trend
+
+emtrends(bray_mod_site_macro_baseline, pairwise ~ habitat , "time") # fringing slope significantly different from all others
+bray_trends_emm_site_macro_baseline <- emmip(bray_mod_site_macro_baseline, habitat ~ time , at = list(time = seq(1,16,1)), plotit = F, CIs = T)
+
+
+ggplot()+
+   geom_point(data = bray_time_series_site_macro_baseline, aes(x = time, y = dissimilarity, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = bray_trends_emm_site_macro_baseline, aes(x = time, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = bray_trends_emm_site_macro_baseline, aes(x = time, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+
+   labs(y = "Dissimilarity\n") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+```
+
 ```{r site level ordination all algae, fig.height=15, fig.width=15}
 
 # get names of quads that remained after removing rare species
@@ -752,7 +825,7 @@ rownames(full_site_species_matrix) <- paste(site_full$year,"-", site_full$site_h
 
 full_site_species_matrix <- full_site_species_matrix[rownames(full_site_species_matrix) %in% relevant_sites,] # subset so only quads that didn't contain rare species are represented
 full_site_species_matrix <- asin(sqrt(full_site_species_matrix)) # arcsin squareroot transform
-site_full$stratum <- paste(site_full$year,"-", site_full$location, sep = "") # for merging with bray matrix later
+site_full$stratum <- paste(site_full$year,"-", site_full$site_habitat, sep = "") # for merging with bray matrix later
 full_subset <- site_full[site_full$stratum %in% relevant_sites,] # make sure rows are also removed from dataframe
 
 
@@ -848,13 +921,13 @@ ggplot() +
 relevant_site_macros <- c(rownames(fringing_site_macro_species_matrix_transformed), rownames(backreef_site_macro_species_matrix_transformed),
                     rownames(outer10_site_macro_species_matrix_transformed), rownames(outer17_site_macro_species_matrix_transformed))
 
-full_site_macro_species_matrix <- as.matrix(site_macro[ , -which(names(site_macro) %in% meta_cols)])
+full_site_macro_species_matrix <- as.matrix(site_macro[ , -which(names(site_macro) %in% colnames(site_meta_df))])
 full_site_macro_species_matrix <- full_site_macro_species_matrix/site_macro$hard_cover # convert from percent to proportion of hard cover
 rownames(full_site_macro_species_matrix) <- paste(site_macro$year,"-", site_macro$site_habitat, sep = "")
 
 full_site_macro_species_matrix <- full_site_macro_species_matrix[rownames(full_site_macro_species_matrix) %in% relevant_site_macros,] # subset so only quads that didn't contain rare species are represented
 full_site_macro_species_matrix <- asin(sqrt(full_site_macro_species_matrix)) # arcsin squareroot transform
-site_macro$stratum <- paste(site_macro$year,"-", site_macro$location, sep = "") # for merging with bray matrix later
+site_macro$stratum <- paste(site_macro$year,"-", site_macro$site_habitat, sep = "") # for merging with bray matrix later
 full_subset_site_macro <- site_macro[site_macro$stratum %in% relevant_site_macros,] # make sure rows are also removed from dataframe
 
 
@@ -899,16 +972,15 @@ full.cent_site_macro <- aggregate(cbind(NMDS1, NMDS2) ~ hab_year, data = full.si
 full.cent_site_macro <- merge(full.cent_site_macro, full_site_macro_meta_condensed, by = "hab_year")
 
 # read in disturbances
-disturbances <- read.csv(here("data", "disturbance_list.csv"))
 full.cent_site_macro <- merge(full.cent_site_macro, disturbances, by = "year") # add disturbances to path
 
 ggplot() + 
-  geom_point(data= full.site.scores_site_macro, aes(x=NMDS1,y=NMDS2, colour = habitat), alpha = 0.05) + # add the point markers
-  geom_text_repel(data= full.abundant.species.scores_site_macro,aes(x=NMDS1,y=NMDS2, label = species), size = 4, alpha = 0.5) +  # add the species labels
+  geom_point(data= full.site.scores_site_macro, aes(x=NMDS1,y=NMDS2, colour = habitat), alpha = 0.2) + # add the point markers
+  geom_text_repel(data= full.abundant.species.scores_site_macro,aes(x=NMDS1,y=NMDS2, label = species), size = 6, alpha = 0.7) +  # add the species labels
   
   geom_path(data = full.cent_site_macro, aes(x = NMDS1, y = NMDS2, group = habitat, colour = habitat),
-            arrow = arrow(length=unit(0.25,"cm"), ends="last", type = "closed"), size = 1) +
-  geom_point(data = full.cent_site_macro, aes(x = NMDS1, y = NMDS2, group = habitat, colour = habitat, shape = disturbance), size = 3, stroke = 1.4) +
+            arrow = arrow(length=unit(0.4,"cm"), ends="last", type = "closed"), size = 1) +
+  geom_point(data = full.cent_site_macro, aes(x = NMDS1, y = NMDS2, group = habitat, colour = habitat, shape = disturbance), size = 5, stroke = 1.4) +
   scale_shape_manual(values = c(
     "cots" = 8,
     "cyclone" = 13,
@@ -943,6 +1015,129 @@ ggplot() +
 
 
 ```
+
+```{r full site permanova}
+full_site_bray <- vegdist(full_site_species_matrix, "bray") 
+full_site_macro_bray <- vegdist(full_site_macro_species_matrix, "bray") 
+
+# adonis2(full_site_bray ~ year*habitat, data = site_full)
+#               Df SumOfSqs      R2       F Pr(>F)    
+# year           1    1.293 0.03257 18.4422  0.001 ***
+# habitat        3    9.952 0.25065 47.3113  0.001 ***
+# year:habitat   3    1.255 0.03161  5.9659  0.001 ***
+# Residual     388   27.204 0.68518                   
+# Total        395   39.704 1.00000                   
+# habitat accounts for most of the variation in algal communities
+
+# adonis2(full_site_macro_bray ~ year*habitat, data = full_subset_site_macro)
+#               Df SumOfSqs      R2       F Pr(>F)    
+# year           1    6.209 0.04528 24.8046  0.001 ***
+# habitat        3   28.410 0.20719 37.8323  0.001 ***
+# year:habitat   3    5.882 0.04290  7.8332  0.001 ***
+# Residual     386   96.622 0.70464                   
+# Total        393  137.124 1.00000               
+# same when just looking at macroalgal communities, but still greater residual variance
+
+```
+
+```{r beta dispersion all algae, fig.height=15, fig.width=15}
+full_site_betadisper <- vegan::betadisper(full_site_bray, full.site.scores_site$hab_year)
+site_full$betadispersion <- full_site_betadisper$distances[match(site_full$stratum, names(full_site_betadisper$distances))]
+site_full$betadispersion_trans <- sv_trans(site_full$betadispersion, site_full)
+
+betadisper_site_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = site_full)
+summary(betadisper_site_mod) # fair bit of within site variance - inv_logit(0.04) = 0.5
+hist(residuals(betadisper_site_mod)) # pretty good
+plot(residuals(betadisper_site_mod) ~ fitted(betadisper_site_mod)) # slight heteroskedasticity
+Anova(betadisper_site_mod)
+#                Chisq Df Pr(>Chisq)    
+# year         12.9561  1  0.0003189 ***
+# habitat      27.2191  3  5.296e-06 ***
+# year:habitat  6.8472  3  0.0769311 .  
+
+emtrends(betadisper_site_mod, pairwise ~ habitat , "year") # fringing slope significantly different from outer17
+betadisper_site_emm <- emmip(betadisper_site_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = site_full, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_site_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_site_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 0.6, yend = 0.6, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+
+```
+
+```{r beta dispersion macoralgae, fig.height=15, fig.width=15}
+full_site_macro_betadisper <- vegan::betadisper(full_site_macro_bray, full.site.scores_site_macro$hab_year)
+full_subset_site_macro$betadispersion <- full_site_macro_betadisper$distances[match(full_subset_site_macro$stratum, names(full_site_macro_betadisper$distances))]
+full_subset_site_macro$betadispersion_trans <- sv_trans(full_subset_site_macro$betadispersion, full_subset_site_macro)
+
+betadisper_site_macro_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = full_subset_site_macro)
+summary(betadisper_site_macro_mod) # similar site variance - inv_logit(0.01) = 0.5
+hist(residuals(betadisper_site_macro_mod)) # pretty good
+plot(residuals(betadisper_site_macro_mod) ~ fitted(betadisper_site_macro_mod)) # slight heteroskedasticity and negative trend
+Anova(betadisper_site_macro_mod)
+#               Chisq Df Pr(>Chisq)    
+# year         36.591  1  1.457e-09 ***
+# habitat      46.029  3  5.590e-10 ***
+# year:habitat 31.232  3  7.597e-07 ***
+
+emtrends(betadisper_site_macro_mod, pairwise ~ habitat , "year") # backreef distinct from all other habitats
+betadisper_site_macro_emm <- emmip(betadisper_site_macro_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = site_full, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_site_macro_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_site_macro_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 0.75, yend = 0.75, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+
+```
+
 
 ----------------- QUADRAT BELOW
 ```{r fringing bray curtis}
