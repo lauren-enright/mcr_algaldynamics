@@ -419,7 +419,7 @@ bray_mod_site <- glmmTMB(dissimilarity_trans ~ time*habitat + (1 | site),
 summary(bray_mod_site) 
 hist(residuals(bray_mod_site)) # slight skew but not awful
 plot(residuals(bray_mod_site) ~ fitted(bray_mod_site)) # some heteroskedasticity but not bad
-
+Anova(bray_mod_site)
 emtrends(bray_mod_site, pairwise ~ habitat , "time") # no sig differences
 bray_trends_emm_site <- emmip(bray_mod_site, habitat ~ time , at = list(time = seq(1,16,1)), plotit = F, CIs = T)
 
@@ -458,8 +458,12 @@ bray_mod_site_baseline <- glmmTMB(dissimilarity_trans ~ time*habitat + (1 | site
                               na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series_site_baseline)
 hist(residuals(bray_mod_site_baseline)) # long tails but not bad
 plot(residuals(bray_mod_site_baseline) ~ fitted(bray_mod_site_baseline) ) # heteroskedastic
-
-emtrends(bray_mod_site_baseline, pairwise ~ habitat , "time") # fringing slope significantly different from all others
+Anova(bray_mod_site_baseline)
+#                Chisq Df Pr(>Chisq)   
+# time          1.9842  1   0.158944   
+# habitat      12.3261  3   0.006346 **
+# time:habitat  0.7516  3   0.860994   
+emtrends(bray_mod_site_baseline, pairwise ~ habitat , "time") # no sig differences
 bray_trends_emm_site_baseline <- emmip(bray_mod_site_baseline, habitat ~ time , at = list(time = seq(1,16,1)), plotit = F, CIs = T)
 
 
@@ -780,7 +784,12 @@ bray_mod_site_macro_baseline <- glmmTMB(dissimilarity_trans ~ time*habitat + (1 
                               na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series_site_macro_baseline)
 hist(residuals(bray_mod_site_macro_baseline)) # slight negative skew
 plot(residuals(bray_mod_site_macro_baseline) ~ fitted(bray_mod_site_macro_baseline) ) # strong negative trend
-
+Anova(bray_mod_site_macro_baseline)
+Response: dissimilarity_trans
+#                Chisq Df Pr(>Chisq)    
+# time          0.7391  1    0.38994    
+# habitat      56.1360  3  3.929e-12 ***
+# time:habitat 14.4254  3    0.00238 ** 
 emtrends(bray_mod_site_macro_baseline, pairwise ~ habitat , "time") # fringing slope significantly different from all others
 bray_trends_emm_site_macro_baseline <- emmip(bray_mod_site_macro_baseline, habitat ~ time , at = list(time = seq(1,16,1)), plotit = F, CIs = T)
 
@@ -830,7 +839,7 @@ full_subset <- site_full[site_full$stratum %in% relevant_sites,] # make sure row
 
 
 
-full_columns_to_keep <- apply(full_site_species_matrix, 2, function(x) any(x >= asin(sqrt(0.1) )))
+full_columns_to_keep <- apply(full_site_species_matrix, 2, function(x) any(x >= asin(sqrt(0.05) )))
 full_abundant_site_species_matrix <- as.data.frame(full_site_species_matrix)[ , full_columns_to_keep]
 full_abundant_site_species_names <- colnames(full_abundant_site_species_matrix)
 
@@ -875,10 +884,10 @@ full.cent_site <- merge(full.cent_site, disturbances, by = "year") # add disturb
 library(ggrepel)
 ggplot() + 
   geom_point(data= full.site.scores_site, aes(x=NMDS1,y=NMDS2, colour = habitat), alpha = 0.05) + # add the point markers
-  geom_text_repel(data= full.abundant.species.scores_site,aes(x=NMDS1,y=NMDS2, label = species), size = 4, alpha = 0.5) +  # add the species labels
+  geom_text_repel(data= full.abundant.species.scores_site,aes(x=NMDS1,y=NMDS2, label = species), size = 6, alpha = 0.7) +  # add the species labels
   
   geom_path(data = full.cent_site, aes(x = NMDS1, y = NMDS2, group = habitat, colour = habitat),
-            arrow = arrow(length=unit(0.25,"cm"), ends="last", type = "closed"), size = 1) +
+            arrow = arrow(length=unit(0.4,"cm"), ends="last", type = "closed"), size = 1) +
   geom_point(data = full.cent_site, aes(x = NMDS1, y = NMDS2, group = habitat, colour = habitat, shape = disturbance), size = 3, stroke = 1.4) +
   scale_shape_manual(values = c(
     "cots" = 8,
@@ -932,7 +941,7 @@ full_subset_site_macro <- site_macro[site_macro$stratum %in% relevant_site_macro
 
 
 
-full_columns_to_keep <- apply(full_site_macro_species_matrix, 2, function(x) any(x >= asin(sqrt(0.1) )))
+full_columns_to_keep <- apply(full_site_macro_species_matrix, 2, function(x) any(x >= asin(sqrt(0.05) )))
 full_abundant_site_macro_species_matrix <- as.data.frame(full_site_macro_species_matrix)[ , full_columns_to_keep]
 full_abundant_site_macro_species_names <- colnames(full_abundant_site_macro_species_matrix)
 
@@ -1140,9 +1149,9 @@ ggplot()+
 
 
 ----------------- QUADRAT BELOW
-```{r fringing bray curtis}
+```{r quad bray curtis setup}
 fringing_species_matrix <- as.matrix(fringing[ , -which(names(fringing) %in% meta_cols)])
-fringing_species_matrix <- fringing_species_matrix/100 # convert from percent to proportion
+fringing_species_matrix <- fringing_species_matrix/fringing$hard_cover # convert from percent to proportion
 rownames(fringing_species_matrix) <- paste(fringing$year,"-", fringing$location, sep = "")
 
 
@@ -1150,10 +1159,11 @@ rownames(fringing_species_matrix) <- paste(fringing$year,"-", fringing$location,
 fringing_species_presence <- colSums(fringing_species_matrix > 0) # Presence absence matrix
 fringing_species_percentage <- (fringing_species_presence/nrow(fringing_species_matrix)) # proportion of rows where a species is present
 fringing_common_species <- names(fringing_species_percentage[fringing_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
-fringing_species_matrix <- fringing_species_matrix[,colnames(fringing_species_matrix) %in% fringing_common_species] # filter original species matrix
+# fringing_species_matrix <- fringing_species_matrix[,colnames(fringing_species_matrix) %in% fringing_common_species] # filter original species matrix
 
 fringing_rows_to_remove <- rowSums(fringing_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
 fringing_species_matrix <- fringing_species_matrix[!fringing_rows_to_remove,] 
+fringing_species_matrix <- na.omit(fringing_species_matrix)
 
 fringing_species_matrix_untransformed <- fringing_species_matrix
 fringing_species_matrix_transformed <- asin(sqrt(fringing_species_matrix)) # arcsin squareroot transform
@@ -1193,11 +1203,9 @@ fringing_untransformed_pairwise_df$time <- abs(fringing_untransformed_pairwise_d
 fringing_untransformed_pairwise_df$location_1 <- sub(".*-(.*)", "\\1", fringing_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
 fringing_untransformed_pairwise_df$location_2 <- sub(".*-(.*)", "\\1", fringing_untransformed_pairwise_df$loc2) # repeat for second quad
 
-```
-
-```{r backreef bray curtis}
+## backreef
 backreef_species_matrix <- as.matrix(backreef[ , -which(names(backreef) %in% meta_cols)])
-backreef_species_matrix <- backreef_species_matrix/100 # convert from percent to proportion
+backreef_species_matrix <- backreef_species_matrix/backreef$hard_cover # convert from percent to proportion
 rownames(backreef_species_matrix) <- paste(backreef$year,"-", backreef$location, sep = "")
 
 
@@ -1205,10 +1213,11 @@ rownames(backreef_species_matrix) <- paste(backreef$year,"-", backreef$location,
 backreef_species_presence <- colSums(backreef_species_matrix > 0) # Presence absence matrix
 backreef_species_percentage <- (backreef_species_presence/nrow(backreef_species_matrix)) # proportion of rows where a species is present
 backreef_common_species <- names(backreef_species_percentage[backreef_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
-backreef_species_matrix <- backreef_species_matrix[,colnames(backreef_species_matrix) %in% backreef_common_species] # filter original species matrix
+# backreef_species_matrix <- backreef_species_matrix[,colnames(backreef_species_matrix) %in% backreef_common_species] # filter original species matrix
 
 backreef_rows_to_remove <- rowSums(backreef_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
 backreef_species_matrix <- backreef_species_matrix[!backreef_rows_to_remove,] 
+backreef_species_matrix <- na.omit(backreef_species_matrix)
 
 backreef_species_matrix_untransformed <- backreef_species_matrix
 backreef_species_matrix_transformed <- asin(sqrt(backreef_species_matrix)) # arcsin squareroot transform
@@ -1246,11 +1255,9 @@ backreef_untransformed_pairwise_df$location_1 <- sub(".*-(.*)", "\\1", backreef_
 backreef_untransformed_pairwise_df$location_2 <- sub(".*-(.*)", "\\1", backreef_untransformed_pairwise_df$loc2) # repeat for second quad
 
 
-```
-
-```{r outer10 bray curtis}
+## Outer 10
 outer10_species_matrix <- as.matrix(outer10[ , -which(names(outer10) %in% meta_cols)])
-outer10_species_matrix <- outer10_species_matrix/100 # convert from percent to proportion
+outer10_species_matrix <- outer10_species_matrix/outer10$hard_cover # convert from percent to proportion
 rownames(outer10_species_matrix) <- paste(outer10$year,"-", outer10$location, sep = "")
 
 
@@ -1258,10 +1265,11 @@ rownames(outer10_species_matrix) <- paste(outer10$year,"-", outer10$location, se
 outer10_species_presence <- colSums(outer10_species_matrix > 0) # Presence absence matrix
 outer10_species_percentage <- (outer10_species_presence/nrow(outer10_species_matrix)) # proportion of rows where a species is present
 outer10_common_species <- names(outer10_species_percentage[outer10_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
-outer10_species_matrix <- outer10_species_matrix[,colnames(outer10_species_matrix) %in% outer10_common_species] # filter original species matrix
+# outer10_species_matrix <- outer10_species_matrix[,colnames(outer10_species_matrix) %in% outer10_common_species] # filter original species matrix
 
 outer10_rows_to_remove <- rowSums(outer10_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
 outer10_species_matrix <- outer10_species_matrix[!outer10_rows_to_remove,] 
+outer10_species_matrix <- na.omit(outer10_species_matrix)
 
 outer10_species_matrix_untransformed <- outer10_species_matrix
 outer10_species_matrix_transformed <- asin(sqrt(outer10_species_matrix)) # arcsin squareroot transform
@@ -1298,11 +1306,9 @@ outer10_untransformed_pairwise_df$time <- abs(outer10_untransformed_pairwise_df$
 outer10_untransformed_pairwise_df$location_1 <- sub(".*-(.*)", "\\1", outer10_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
 outer10_untransformed_pairwise_df$location_2 <- sub(".*-(.*)", "\\1", outer10_untransformed_pairwise_df$loc2) # repeat for second quad
 
-```
-
-```{r outer17 bray curtis}
+## OUTER 17
 outer17_species_matrix <- as.matrix(outer17[ , -which(names(outer17) %in% meta_cols)])
-outer17_species_matrix <- outer17_species_matrix/100 # convert from percent to proportion
+outer17_species_matrix <- outer17_species_matrix/outer17$hard_cover # convert from percent to proportion
 rownames(outer17_species_matrix) <- paste(outer17$year,"-", outer17$location, sep = "")
 
 
@@ -1310,10 +1316,11 @@ rownames(outer17_species_matrix) <- paste(outer17$year,"-", outer17$location, se
 outer17_species_presence <- colSums(outer17_species_matrix > 0) # Presence absence matrix
 outer17_species_percentage <- (outer17_species_presence/nrow(outer17_species_matrix)) # proportion of rows where a species is present
 outer17_common_species <- names(outer17_species_percentage[outer17_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
-outer17_species_matrix <- outer17_species_matrix[,colnames(outer17_species_matrix) %in% outer17_common_species] # filter original species matrix
+# outer17_species_matrix <- outer17_species_matrix[,colnames(outer17_species_matrix) %in% outer17_common_species] # filter original species matrix
 
 outer17_rows_to_remove <- rowSums(outer17_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
 outer17_species_matrix <- outer17_species_matrix[!outer17_rows_to_remove,] 
+outer17_species_matrix <- na.omit(outer17_species_matrix)
 
 outer17_species_matrix_untransformed <- outer17_species_matrix
 outer17_species_matrix_transformed <- asin(sqrt(outer17_species_matrix)) # arcsin squareroot transform
@@ -1491,6 +1498,133 @@ ggplot()+
 
 
 ```
+
+```{r quad level beta dispersion, fig.height = 8, fig.width = 12}
+full_species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
+full_species_matrix <- full_species_matrix/data$hard_cover # convert from percent to proportion
+rownames(full_species_matrix) <- paste(data$year,"-", data$location, sep = "")
+full_rows_to_remove <- rowSums(full_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+full_species_matrix <- full_species_matrix[!full_rows_to_remove,] 
+full_species_matrix <- na.omit(full_species_matrix)
+full_species_matrix <- asin(sqrt(full_species_matrix)) # arcsin squareroot transform
+data$stratum <- paste(data$year,"-", data$location, sep = "") # for merging with bray matrix later
+# full_subset <- data[data$stratum %in% rownames(full_species_matrix),] # make sure rows are also removed from dataframe
+# 
+# brayfull <- vegdist(full_species_matrix, "bray") # create bray dissimilarity matrix
+# # full_quad_betadisper <- vegan::betadisper(brayfull, full_subset$hab_year)
+# full_subset$betadispersion <- full_quad_betadisper$distances[match(full_subset$stratum, names(full_quad_betadisper$distances))]
+# full_subset$betadispersion_trans <- sv_trans(full_subset$betadispersion, full_subset)
+# 
+# write_csv(full_subset, here("data", "quad_level_all_species_with_betadisper.csv"))
+
+full_subset <- read.csv(here("data", "quad_level_all_species_with_betadisper.csv")) # read back in data from csv so you don't have to re-run
+
+betadisper_quad_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = full_subset)
+summary(betadisper_quad_mod) # fair bit of within site variance - inv_logit(0.02) = 0.5
+hist(residuals(betadisper_quad_mod)) # positive skew
+plot(residuals(betadisper_quad_mod) ~ fitted(betadisper_quad_mod)) # slight heteroskedasticity
+Anova(betadisper_quad_mod)
+#                Chisq Df Pr(>Chisq)    
+# year           0.3156  1     0.5743    
+# habitat      333.7035  3     <2e-16 ***
+# year:habitat 720.3054  3     <2e-16 ***
+
+emtrends(betadisper_quad_mod, pairwise ~ habitat , "year") # all different
+betadisper_quad_emm <- emmip(betadisper_quad_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = full_subset, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_quad_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_quad_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+
+
+macro_species_matrix <- as.matrix(macroalgae[ , -which(names(macroalgae) %in% meta_cols)])
+macro_species_matrix <- macro_species_matrix/macroalgae$hard_cover # convert from percent to proportion
+rownames(macro_species_matrix) <- paste(macroalgae$year,"-", macroalgae$location, sep = "")
+macro_rows_to_remove <- rowSums(macro_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+macro_species_matrix <- macro_species_matrix[!macro_rows_to_remove,] 
+macro_species_matrix <- na.omit(macro_species_matrix)
+macro_species_matrix <- asin(sqrt(macro_species_matrix)) # arcsin squareroot transform
+macroalgae$stratum <- paste(macroalgae$year,"-", macroalgae$location, sep = "") # for merging with bray matrix later
+# macro_subset <- macroalgae[macroalgae$stratum %in% rownames(macro_species_matrix),] # make sure rows are also removed from macroalgaeframe
+# 
+# braymacro <- vegdist(macro_species_matrix, "bray") # create bray dissimilarity matrix
+# # macro_quad_betadisper <- vegan::betadisper(braymacro, macro_subset$hab_year)
+# macro_subset$betadispersion <- macro_quad_betadisper$distances[match(macro_subset$stratum, names(macro_quad_betadisper$distances))]
+# macro_subset$betadispersion_trans <- sv_trans(macro_subset$betadispersion, macro_subset)
+# write_csv(macro_subset, here("data", "quad_level_just_macroalgae_with_betadisper.csv"))
+macro_subset <- read.csv(here("data", "quad_level_just_macroalgae_with_betadisper.csv"))
+
+betadisper_macro_quad_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = macro_subset)
+summary(betadisper_macro_quad_mod) # fair bit of within site variance - inv_logit(0.02) = 0.5
+qqnorm(residuals(betadisper_macro_quad_mod)) # a little lumpy but not bad
+plot(residuals(betadisper_macro_quad_mod) ~ fitted(betadisper_macro_quad_mod)) # negative trend
+Anova(betadisper_macro_quad_mod)
+
+#                 Chisq Df Pr(>Chisq)    
+# year           97.391  1  < 2.2e-16 ***
+# habitat      1973.896  3  < 2.2e-16 ***
+# year:habitat  511.722  3  < 2.2e-16 ***
+
+
+emtrends(betadisper_macro_quad_mod, pairwise ~ habitat , "year") # backreef, outer10, and fringing don't differ
+betadisper_quad_macro_emm <- emmip(betadisper_macro_quad_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = macro_subset, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_quad_macro_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_quad_macro_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+```
+
+
 
 ```{r hab level nmds set up}
 
@@ -1904,17 +2038,8 @@ ggarrange(fringing_nmds_plot, backreef_nmds_plot, outer10_nmds_plot, outer17_nmd
 relevant_quads <- c(rownames(fringing_species_matrix_untransformed), rownames(backreef_species_matrix_untransformed),
                     rownames(outer10_species_matrix_untransformed), rownames(outer17_species_matrix_untransformed))
 
-full_species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
-full_species_matrix <- full_species_matrix/100 # convert from percent to proportion
-rownames(full_species_matrix) <- paste(data$year,"-", data$location, sep = "")
 
-full_species_matrix <- full_species_matrix[rownames(full_species_matrix) %in% relevant_quads,] # subset so only quads that didn't contain rare species are represented
-full_species_matrix <- asin(sqrt(full_species_matrix)) # arcsin squareroot transform
-data$stratum <- paste(data$year,"-", data$location, sep = "") # for merging with bray matrix later
-full_subset <- data[data$stratum %in% relevant_quads,] # make sure rows are also removed from dataframe
 
-brayfull <- vegdist(full_species_matrix, "bray") # create bray dissimilarity matrix
-# View(brayfull)
 full_braymat <- as.matrix(brayfull) # conver to matrix object
 
 full_columns_to_keep <- apply(full_species_matrix, 2, function(x) any(x >= asin(sqrt(0.1) )))
