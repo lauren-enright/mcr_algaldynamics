@@ -33,6 +33,17 @@ CV<-function(x){
   return(sd(x,na.rm=T)/mean(x,na.rm=T))
 }
 
+inv_logit <- function(x){
+  exp(x)/(1+exp(x))
+}
+
+sv_trans <- function(prop, s = 0.000005){
+  (prop*(length(prop) - 1) + s)/length(prop)
+  # where prop is the vector of the proportional value you're transforming, 
+  # N is the sample size, which is specified by taking the number of rows/observations from a given dataframe,
+  # and s is a small offset 
+}
+
 # for figures
 island_side_colours <- c("north" = "darkblue",
                          "east" = "mediumorchid",
@@ -204,6 +215,7 @@ alpha_diversity_site_macro <-
   )
 
 alpha_diversity_site_macro <- merge(site_meta_df, alpha_diversity_site_macro, by= c("year", "site_hab_year"))
+alpha_diversity_site_macro$richness_area <- alpha_diversity_site_macro$richness/(alpha_diversity_site_macro$hard_cover/100)
 
 ```
 
@@ -482,43 +494,45 @@ site_macro_shannon_emm <- emmip(site_macro_shannon_mod,habitat ~ year,
 
 ## FRINGING - exclude wave power
 fringing_all_site <- na.omit(subset(alpha_diversity_site, habitat == "fringing")) # only use rows that contain all factors
+# 
+# fringing_all_richness_mod_universal <- glmmTMB(richness ~ year + mean_n + mean_temp_c +  herbivore_evenness +
+# offset(log(hard_cover)) #+ (1|site), family = poisson, data = fringing_all_site, na.action = na.pass) 
+# fringing_all_richness_dredge <- dredge(fringing_all_richness_mod_universal) 
+# model.sel(fringing_all_richness_dredge) # top model just includes year
+# fringing_all_richness_top_mod <- glmmTMB(richness ~ year + offset(log(hard_cover)) + (1|site), family = poisson, data = # fringing_all_site, na.action = na.pass)
+# summary(fringing_all_richness_top_mod)
+# hist(residuals(fringing_all_richness_top_mod)) # slight skew but not bad
+# plot(residuals(fringing_all_richness_top_mod) ~ fitted(fringing_all_richness_top_mod)) # looks fine
 
-fringing_all_richness_mod_universal <- glmmTMB(richness ~ year + coral_cover_hard + mean_n + mean_temp_c +  herbivore_evenness + offset(log(hard_cover)) + (1|site), family = poisson, data = fringing_all_site, na.action = na.pass) # universal model has convergence issues
-fringing_all_richness_dredge <- dredge(fringing_all_richness_mod_universal) # most models have convergence issues
-model.sel(fringing_all_richness_dredge) # top model just includes year
-fringing_all_richness_top_mod <- glmmTMB(richness ~ year + offset(log(hard_cover)) + (1|site), family = poisson, data = fringing_all_site, na.action = na.pass)
-summary(fringing_all_richness_top_mod)
-hist(residuals(fringing_all_richness_top_mod)) # slight skew but not bad
-plot(residuals(fringing_all_richness_top_mod) ~ fitted(fringing_all_richness_top_mod)) # looks fine
-
-fringing_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + coral_cover_hard + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = fringing_all_site, na.action = na.pass)
+fringing_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = fringing_all_site, na.action = na.pass)
 fringing_all_shannon_dredge <- dredge(fringing_all_shannon_mod_universal) 
-model.sel(fringing_all_shannon_dredge) # tie for the top model - best includes year and coral cover or just nitrogen
-fringing_all_shannon_top_mod1 <- glmmTMB(log(shannon + 1) ~ year + coral_cover_hard + (1|site), data = fringing_all_site, na.action = na.pass)
-fringing_all_shannon_top_mod2 <- glmmTMB(log(shannon + 1) ~ mean_n + mean_temp_c + (1|site), data = fringing_all_site, na.action = na.pass)
-hist(residuals(fringing_all_shannon_top_mod1)) # slightly bimodal
-hist(residuals(fringing_all_shannon_top_mod2)) # also uniform - neither are great
-plot(residuals(fringing_all_shannon_top_mod1) ~ fitted(fringing_all_shannon_top_mod1)) # slight patterning
-plot(residuals(fringing_all_shannon_top_mod2) ~ fitted(fringing_all_shannon_top_mod2)) # similar here
+model.sel(fringing_all_shannon_dredge) # tie for the top model just nitrogen
+fringing_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ mean_n + (1|site), data = fringing_all_site, na.action = na.pass)
+
+qqnorm(residuals(fringing_all_shannon_top_mod))# not bad
+qqline(residuals(fringing_all_shannon_top_mod))
+plot(residuals(fringing_all_shannon_top_mod) ~ fitted(fringing_all_shannon_top_mod)) # slight patterning
+
 
 
 ## Backreef - includes all 
-backreef_all_site <- na.omit(subset(alpha_diversity_site, habitat == "backreef")) # only use rows that contain all factors
+# backreef_all_site <- na.omit(subset(alpha_diversity_site, habitat == "backreef")) # only use rows that contain all factors
+# 
+# backreef_all_richness_mod_universal <- glmmTMB(richness ~ year + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + # offset(log(hard_cover)) + (1|site), family = poisson, data = backreef_all_site, na.action = na.pass) # universal model has # convergence issues
+# backreef_all_richness_dredge <- dredge(backreef_all_richness_mod_universal) # most models have convergence issues
+# model.sel(backreef_all_richness_dredge) # top model includes year and coral 
+# backreef_all_richness_top_mod <- glmmTMB(richness ~ year  + offset(log(hard_cover)) + (1|site), family = poisson, data = # backreef_all_site, na.action = na.pass)
+# summary(backreef_all_richness_top_mod)
+# hist(residuals(backreef_all_richness_top_mod)) # slight skew but not bad
+# plot(residuals(backreef_all_richness_top_mod) ~ fitted(backreef_all_richness_top_mod)) # looks fine
 
-backreef_all_richness_mod_universal <- glmmTMB(richness ~ year + coral_cover_hard + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + offset(log(hard_cover)) + (1|site), family = poisson, data = backreef_all_site, na.action = na.pass) # universal model has convergence issues
-backreef_all_richness_dredge <- dredge(backreef_all_richness_mod_universal) # most models have convergence issues
-model.sel(backreef_all_richness_dredge) # top model includes year and coral 
-backreef_all_richness_top_mod <- glmmTMB(richness ~ year + coral_cover_hard + offset(log(hard_cover)) + (1|site), family = poisson, data = backreef_all_site, na.action = na.pass)
-summary(backreef_all_richness_top_mod)
-hist(residuals(backreef_all_richness_top_mod)) # slight skew but not bad
-plot(residuals(backreef_all_richness_top_mod) ~ fitted(backreef_all_richness_top_mod)) # looks fine
-
-backreef_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + coral_cover_hard + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = backreef_all_site, na.action = na.pass)
+backreef_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = backreef_all_site, na.action = na.pass)
 backreef_all_shannon_dredge <- dredge(backreef_all_shannon_mod_universal) 
-model.sel(backreef_all_shannon_dredge) #  best includes just coral cover 
-backreef_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  coral_cover_hard + (1|site), data = backreef_all_site, na.action = na.pass)
-hist(residuals(backreef_all_shannon_top_mod)) # pretty good
+model.sel(backreef_all_shannon_dredge) #  best includes just year, next best also includes herbivore evenness
+backreef_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  year + (1|site), data = backreef_all_site, na.action = na.pass)
+qqnorm(residuals(backreef_all_shannon_top_mod)) #  a little wonky on the tail but not bad
 plot(residuals(backreef_all_shannon_top_mod) ~ fitted(backreef_all_shannon_top_mod)) # looks fine
+summary(backreef_all_shannon_top_mod)
 
 
 ## outer10 - no nitrogen 
@@ -528,21 +542,19 @@ outer10_all_site <- outer10_all_site[,-which(names(outer10_all_site) %in% c("mea
 # remove other na rows
 outer10_all_site <- na.omit(outer10_all_site)
 
-outer10_all_richness_mod_universal <- glmmTMB(richness ~ year + coral_cover_hard + wave_power_adcp  + mean_temp_c +  herbivore_evenness + offset(log(hard_cover)) + (1|site), family = poisson, data = outer10_all_site, na.action = na.pass) # universal model has convergence issues
-outer10_all_richness_dredge <- dredge(outer10_all_richness_mod_universal) # most models have convergence issues
-model.sel(outer10_all_richness_dredge) # top model includes just intercept... next best is coral 
-outer10_all_richness_top_mod <- glmmTMB(richness ~ coral_cover_hard + offset(log(hard_cover)) + (1|site), family = poisson, data = outer10_all_site, na.action = na.pass)
-summary(outer10_all_richness_top_mod)
-hist(residuals(outer10_all_richness_top_mod)) #  not bad
-plot(residuals(outer10_all_richness_top_mod) ~ fitted(outer10_all_richness_top_mod)) # looks fine
+# outer10_all_richness_mod_universal <- glmmTMB(richness ~ year  + wave_power_adcp  + mean_temp_c +  herbivore_evenness + # offset(log(hard_cover)) + (1|site), family = poisson, data = outer10_all_site, na.action = na.pass) # universal model has convergence # issues
+# outer10_all_richness_dredge <- dredge(outer10_all_richness_mod_universal) # most models have convergence issues
+# model.sel(outer10_all_richness_dredge) 
 
-outer10_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + coral_cover_hard + wave_power_adcp  + mean_temp_c +  herbivore_evenness + (1|site), data = outer10_all_site, na.action = na.pass)
-outer10_all_shannon_dredge <- dredge(outer10_all_shannon_mod_universal) # some convergence issues
-model.sel(outer10_all_shannon_dredge) #  best includes just herbivore evenness - first time there's been a decent gap in AICc
+
+# 
+outer10_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c +  herbivore_evenness + (1|site), data = outer10_all_site, na.action = na.pass)
+outer10_all_shannon_dredge <- dredge(outer10_all_shannon_mod_universal) 
+model.sel(outer10_all_shannon_dredge) #  best includes just herbivore evenness 
 outer10_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  herbivore_evenness + (1|site), data = outer10_all_site, na.action = na.pass)
-hist(residuals(outer10_all_shannon_top_mod)) # pretty good
+qqnorm(residuals(outer10_all_shannon_top_mod)) # pretty good
 plot(residuals(outer10_all_shannon_top_mod) ~ fitted(outer10_all_shannon_top_mod)) # looks fine
-
+summary(outer10_all_shannon_top_mod)
 
 ## outer17 - no nitrogen or herbivores
 outer17_all_site <- subset(alpha_diversity_site, habitat == "outer_17") # only use rows that contain all factors
@@ -551,22 +563,960 @@ outer17_all_site <- outer17_all_site[,-which(names(outer17_all_site) %in% c("mea
 # remove other na rows
 outer17_all_site <- na.omit(outer17_all_site)
 
-outer17_all_richness_mod_universal <- glmmTMB(richness ~ year + coral_cover_hard + wave_power_adcp  + mean_temp_c +  offset(log(hard_cover)) + (1|site), family = poisson, data = outer17_all_site, na.action = na.pass) # universal model has convergence issues
-outer17_all_richness_dredge <- dredge(outer17_all_richness_mod_universal) # most models have convergence issues
-model.sel(outer17_all_richness_dredge) # top model includes just intercept... next best is coral 
-outer17_all_richness_top_mod <- glmmTMB(richness ~ coral_cover_hard + offset(log(hard_cover)) + (1|site), family = poisson, data = outer17_all_site, na.action = na.pass)
-summary(outer17_all_richness_top_mod)
-hist(residuals(outer17_all_richness_top_mod)) #  not bad
-plot(residuals(outer17_all_richness_top_mod) ~ fitted(outer17_all_richness_top_mod)) # looks fine
+# outer17_all_richness_mod_universal <- glmmTMB(richness ~ year  + wave_power_adcp  + mean_temp_c +  offset(log(hard_cover)) + # (1|site), family = poisson, data = outer17_all_site, na.action = na.pass) # universal model has convergence issues
+# outer17_all_richness_dredge <- dredge(outer17_all_richness_mod_universal) # most models have convergence issues
+# model.sel(outer17_all_richness_dredge) # top model includes just intercept... 
 
-outer17_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + coral_cover_hard + wave_power_adcp  + mean_temp_c + (1|site), data = outer17_all_site, na.action = na.pass)
+
+outer17_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c + (1|site), data = outer17_all_site, na.action = na.pass)
 outer17_all_shannon_dredge <- dredge(outer17_all_shannon_mod_universal) # some convergence issues
-model.sel(outer17_all_shannon_dredge) #  best includes just year
+model.sel(outer17_all_shannon_dredge) #  best includes just year. next best also includes temperature and is almost equivalent AICc
 outer17_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  year + (1|site), data = outer17_all_site, na.action = na.pass)
-hist(residuals(outer17_all_shannon_top_mod)) # pretty good
+qqnorm(residuals(outer17_all_shannon_top_mod)) # pretty good
 plot(residuals(outer17_all_shannon_top_mod) ~ fitted(outer17_all_shannon_top_mod)) # looks fine
+summary(outer17_all_shannon_top_mod)
+
 ```
 
+```{r stepwise models site level macroalgae}
+
+## FRINGING - exclude wave power
+fringing_macro_site <- na.omit(subset(alpha_diversity_site_macro, habitat == "fringing")) # only use rows that contain all factors
+
+
+fringing_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = fringing_macro_site, na.action = na.pass)
+fringing_macro_shannon_dredge <- dredge(fringing_macro_shannon_mod_universal) 
+model.sel(fringing_macro_shannon_dredge) # top model just year, next best includes temp
+fringing_macro_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ year + (1|site), data = fringing_macro_site, na.action = na.pass)
+qqnorm(residuals(fringing_macro_shannon_top_mod))# not bad
+plot(residuals(fringing_macro_shannon_top_mod) ~ fitted(fringing_macro_shannon_top_mod)) # slight negative trend
+
+
+## Backreef - includes all 
+backreef_macro_site <- na.omit(subset(alpha_diversity_site_macro, habitat == "backreef")) # only use rows that contain all factors
+
+backreef_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = backreef_macro_site, na.action = na.pass)
+backreef_macro_shannon_dredge <- dredge(backreef_macro_shannon_mod_universal) 
+model.sel(backreef_macro_shannon_dredge) #  best includes just wave power but estimate is tiny
+backreef_macro_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  wave_power_adcp + (1|site), data = backreef_macro_site, na.action = na.pass)
+qqnorm(residuals(backreef_macro_shannon_top_mod)) #  a little wonky but not bad
+plot(residuals(backreef_macro_shannon_top_mod) ~ fitted(backreef_macro_shannon_top_mod)) # looks fine
+summary(backreef_macro_shannon_top_mod)
+Anova(backreef_macro_shannon_top_mod) # lol X2 = 2.56, P = 0.1
+
+
+## outer10 - no nitrogen 
+outer10_macro_site <- subset(alpha_diversity_site_macro, habitat == "outer_10") # only use rows that contain all factors
+# remove nitrogent columns
+outer10_macro_site<- outer10_macro_site[,-which(names(outer10_macro_site) %in% c("mean_n", "n_cv"))]
+# remove other na rows
+outer10_macro_site <- na.omit(outer10_macro_site)
+
+
+outer10_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c +  herbivore_evenness + (1|site), data = outer10_macro_site, na.action = na.pass)
+outer10_macro_shannon_dredge <- dredge(outer10_macro_shannon_mod_universal) 
+model.sel(outer10_macro_shannon_dredge) #  best includes wave power and year 
+outer10_macro_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ year  + (1|site), data = outer10_macro_site, na.action = na.pass)
+qqnorm(residuals(outer10_macro_shannon_top_mod)) # pretty good, tails maybe off
+plot(residuals(outer10_macro_shannon_top_mod) ~ fitted(outer10_macro_shannon_top_mod)) # looks fine
+summary(outer10_macro_shannon_top_mod) # NaN?
+
+## outer17 - no nitrogen or herbivores
+outer17_macro_site<- subset(alpha_diversity_site_macro, habitat == "outer_17") # only use rows that contain all factors
+# remove nitrogent columns
+outer17_macro_site<- outer17_macro_site[,-which(names(outer17_macro_site) %in% c("mean_n", "n_cv", "herbivore_biomass", "herbivore_evenness", "herbivore_richness", "herbivore_shannon"))]
+# remove other na rows
+outer17_macro_site <- na.omit(outer17_macro_site)
+
+outer17_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c + (1|site), data = outer17_macro_site, na.action = na.pass)
+outer17_macro_shannon_dredge <- dredge(outer17_macro_shannon_mod_universal) # some convergence issues
+model.sel(outer17_macro_shannon_dredge) #  best includes all terms!
+qqnorm(residuals(outer17_macro_shannon_mod_universal)) # a little hump shaped
+plot(residuals(outer17_macro_shannon_mod_universal) ~ fitted(outer17_macro_shannon_mod_universal)) # looks fine
+summary(outer17_macro_shannon_mod_universal) # also NaNs...
+
+```
+
+```{r synchrony diversity stability setup site level, fig.height = 8, fig.width= 8}
+
+lm_synchrony_site <- codyn::synchrony(df = site_long_data,
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "percent_cover",
+                                   metric = "Loreau",
+                                   replicate.var = "site_habitat") 
+colnames(lm_synchrony_site) = c("site_habitat", "loreau_synchrony") # rename cols for merge later
+
+lm_synchrony_site_macro <- codyn::synchrony(df = site_long_macro,
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "percent_cover",
+                                   metric = "Loreau",
+                                   replicate.var = "site_habitat") 
+colnames(lm_synchrony_site_macro) = c("site_habitat", "loreau_synchrony") # rename cols for merge later
+
+diversity_cv_site <- alpha_diversity_site %>%
+  dplyr::group_by(site, habitat, island_side, site_habitat) %>%
+  dplyr::summarise(
+            algae_richness_mean = mean(richness), 
+            algae_richness_cv = CV(richness),
+            algae_richness_stability = 1/CV(richness),
+            algae_shannon_mean = mean(shannon), 
+            algae_shannon_cv = CV(shannon),
+            algae_shannon_stability = 1/CV(shannon), 
+            algae_cover_mean = mean(all_algae_cover_hard),
+            algae_cover_cv = CV(all_algae_cover_hard),
+            algae_cover_stability = 1/CV(all_algae_cover_hard)) 
+# an extra outer_10 was introduced for every site for some reason that is all NAs
+# remove NAs and merge with synchrony
+diversity_stability_site <- merge(lm_synchrony_site, na.omit(diversity_cv_site), by = "site_habitat")
+
+diversity_cv_site_macro <- alpha_diversity_site_macro %>%
+  dplyr::group_by(site, habitat, island_side, site_habitat) %>%
+  dplyr::summarise(
+            algae_richness_mean = mean(richness), 
+            algae_richness_cv = CV(richness),
+            algae_richness_stability = 1/CV(richness),
+            algae_shannon_mean = mean(shannon), 
+            algae_shannon_cv = CV(shannon),
+            algae_shannon_stability = 1/CV(shannon), 
+            algae_cover_mean = mean(macroalgae_cover_hard),
+            algae_cover_cv = CV(macroalgae_cover_hard),
+            algae_cover_stability = 1/CV(macroalgae_cover_hard)) 
+# an extra outer_10 was introduced for every site for some reason that is all NAs
+# remove NAs and merge with synchrony
+diversity_stability_site_macro <- merge(lm_synchrony_site_macro, na.omit(diversity_cv_site_macro), by = "site_habitat")
+
+
+
+# for plotting later
+diversity_ranges_site <- diversity_stability_site %>%
+  group_by(habitat) %>%
+  summarise(min_richness = min(algae_richness_mean),
+            max_richness = max(algae_richness_mean),
+            min_shannon = min(algae_shannon_mean),
+            max_shannon = max(algae_shannon_mean),
+            min_loreau = min(loreau_synchrony),
+            max_loreau = max(loreau_synchrony))
+
+diversity_ranges_site_macro <- diversity_stability_site_macro %>%
+  group_by(habitat) %>%
+  summarise(min_richness = min(algae_richness_mean),
+            max_richness = max(algae_richness_mean),
+            min_shannon = min(algae_shannon_mean),
+            max_shannon = max(algae_shannon_mean),
+            min_loreau = min(loreau_synchrony),
+            max_loreau = max(loreau_synchrony))
+
+```
+
+```{r site all diversity stability synchrony, fig.height = 8, fig.width=8}
+richness_cv_site <- glmmTMB(algae_cover_cv ~ algae_richness_mean*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site)
+r.squaredGLMM(richness_cv_site) # 0.49
+summary(richness_cv_site)
+hist(residuals(richness_cv_site)) # symmetrical
+plot(residuals(richness_cv_site) ~ fitted(richness_cv_site)) # slightly heteroskedastic
+Anova(richness_cv_site)
+#                               Chisq Df Pr(>Chisq)   
+# algae_richness_mean          5.9078  1   0.015074 * 
+# habitat                     14.5560  3   0.002238 **
+# algae_richness_mean:habitat  3.8220  3   0.281336   
+
+emtrends(richness_cv_site, pairwise ~ habitat, var = "algae_richness_mean") # no significant differences
+richness_cv_emm_site <- emmip(richness_cv_site,
+                        habitat ~ algae_richness_mean,
+                        at = list(algae_richness_mean = seq(0,10,0.1)), plotit = F, CIs = T)
+
+filtered_richness_effects_site <- richness_cv_emm_site %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(algae_richness_mean >= min_richness & algae_richness_mean <= max_richness)
+
+
+(richness_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site,
+             aes(x = algae_richness_mean, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_richness_effects_site, aes(x = algae_richness_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_richness_effects_site, aes(x = algae_richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+
+## REPEAT WITH SHANNON
+shannon_cv_site <- glmmTMB(algae_cover_cv ~ algae_shannon_mean*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site)
+r.squaredGLMM(shannon_cv_site) # 0.42
+summary(shannon_cv_site)
+hist(residuals(shannon_cv_site)) # symmetrical
+plot(residuals(shannon_cv_site) ~ fitted(shannon_cv_site)) # slightly heteroskedastic
+Anova(shannon_cv_site)
+#                              Chisq Df Pr(>Chisq)   
+# algae_shannon_mean          1.5291  1   0.216254   
+# habitat                    12.1017  3   0.007043 **
+# algae_shannon_mean:habitat  2.8675  3   0.412512   
+
+emtrends(shannon_cv_site, pairwise ~ habitat, var = "algae_shannon_mean") # no significant differences
+shannon_cv_emm_site <- emmip(shannon_cv_site,
+                        habitat ~ algae_shannon_mean,
+                        at = list(algae_shannon_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_shannon_effects_site <- shannon_cv_emm_site %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(algae_shannon_mean >= min_shannon & algae_shannon_mean <= max_shannon)
+
+
+(shannon_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site,
+             aes(x = algae_shannon_mean, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_shannon_effects_site, aes(x = algae_shannon_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_shannon_effects_site, aes(x = algae_shannon_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+synchrony_cv_site <- glmmTMB(algae_cover_cv ~ loreau_synchrony*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site)
+r.squaredGLMM(synchrony_cv_site) # 0.76
+summary(synchrony_cv_site)
+hist(residuals(synchrony_cv_site)) # symmetrical
+plot(residuals(synchrony_cv_site) ~ fitted(synchrony_cv_site)) # slightly heteroskedastic
+Anova(synchrony_cv_site)
+#                           Chisq Df Pr(>Chisq)    
+# loreau_synchrony         45.857  1  1.272e-11 ***
+# habitat                  14.018  3    0.00288 ** 
+# loreau_synchrony:habitat  2.456  3    0.48330    
+
+emtrends(synchrony_cv_site, pairwise ~ habitat, var = "loreau_synchrony") # no differences between habitats
+synchrony_cv_emm_site <- emmip(synchrony_cv_site,
+                        habitat ~ loreau_synchrony,
+                        at = list(loreau_synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_synchrony_cv_effects_site <- synchrony_cv_emm_site %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(loreau_synchrony >= min_loreau & loreau_synchrony <= max_loreau)
+
+(synchrony_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site,
+             aes(x = loreau_synchrony, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_cv_effects_site, aes(x = loreau_synchrony, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_cv_effects_site, aes(x = loreau_synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+synchrony_richness_site <- glmmTMB(loreau_synchrony  ~ algae_richness_mean*habitat, family = beta_family(link = "logit"),
+                          data = diversity_stability_site)
+# r.squaredLR(synchrony_richness_site)
+summary(synchrony_richness_site)
+hist(residuals(synchrony_richness_site)) # symmetrical
+plot(residuals(synchrony_richness_site) ~ fitted(synchrony_richness_site)) # slightly heteroskedastic
+Anova(synchrony_richness_site)
+# 
+#                               Chisq Df Pr(>Chisq)    
+# algae_richness_mean         12.6670  1  0.0003722 ***
+# habitat                      5.0218  3  0.1702104    
+# algae_richness_mean:habitat  6.0890  3  0.1073579    
+
+emtrends(synchrony_richness_site, pairwise ~ habitat, var = "algae_richness_mean") # no differences between habitats
+synchrony_richness_emm_site <- emmip(synchrony_richness_site,
+                        habitat ~ algae_richness_mean,
+                        at = list(algae_richness_mean = seq(0,10,0.1)), plotit = F, CIs = T)
+
+filtered_synchrony_richness_effects_site <- synchrony_richness_emm_site %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(algae_richness_mean >= min_richness & algae_richness_mean <= max_richness)
+
+(synchrony_richness_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site,
+             aes(x = algae_richness_mean, y = loreau_synchrony, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_richness_effects_site, aes(x = algae_richness_mean, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_richness_effects_site, aes(x = algae_richness_mean, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+
+synchrony_shannon_site <- glmmTMB(loreau_synchrony  ~ algae_shannon_mean*habitat, family = beta_family(link = "logit"),
+                          data = diversity_stability_site)
+# r.squaredLR(synchrony_shannon_site)
+summary(synchrony_shannon_site)
+hist(residuals(synchrony_shannon_site)) # symmetrical
+plot(residuals(synchrony_shannon_site) ~ fitted(synchrony_shannon_site)) # slightly heteroskedastic
+Anova(synchrony_shannon_site)
+# 
+#                              Chisq Df Pr(>Chisq)   
+# algae_shannon_mean         10.5506  1   0.001161 **
+# habitat                     4.9410  3   0.176171   
+# algae_shannon_mean:habitat  6.1573  3   0.104205   
+
+emtrends(synchrony_shannon_site, pairwise ~ habitat, var = "algae_shannon_mean") # no differences between habitats
+synchrony_shannon_emm_site <- emmip(synchrony_shannon_site,
+                        habitat ~ algae_shannon_mean,
+                        at = list(algae_shannon_mean = seq(0,1.5,0.01)), plotit = F, CIs = T)
+
+filtered_synchrony_shannon_effects_site <- synchrony_shannon_emm_site %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(algae_shannon_mean >= min_shannon & algae_shannon_mean <= max_shannon)
+
+(synchrony_shannon_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site,
+             aes(x = algae_shannon_mean, y = loreau_synchrony, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_shannon_effects_site, aes(x = algae_shannon_mean, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_shannon_effects_site, aes(x = algae_shannon_mean, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+```
+
+```{r site macroalgae diversity stability synchrony, fig.height = 8, fig.width=8}
+richness_cv_site_macro <- glmmTMB(algae_cover_cv ~ algae_richness_mean*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site_macro)
+r.squaredGLMM(richness_cv_site_macro) # 0.65
+summary(richness_cv_site_macro)
+hist(residuals(richness_cv_site_macro)) # symmetrical
+plot(residuals(richness_cv_site_macro) ~ fitted(richness_cv_site_macro)) # not bad
+Anova(richness_cv_site_macro)
+#                               Chisq Df Pr(>Chisq)   
+# algae_richness_mean         15.772  1  7.144e-05 ***
+# habitat                     21.689  3  7.572e-05 ***
+# algae_richness_mean:habitat 12.244  3   0.006591 ** 
+
+emtrends(richness_cv_site_macro, pairwise ~ habitat, var = "algae_richness_mean") # backreef differs from two forereef sites
+richness_cv_emm_site_macro <- emmip(richness_cv_site_macro,
+                        habitat ~ algae_richness_mean,
+                        at = list(algae_richness_mean = seq(0,10,0.1)), plotit = F, CIs = T)
+
+filtered_richness_effects_site_macro <- richness_cv_emm_site_macro %>%
+  left_join(diversity_ranges_site_macro, by = c("habitat")) %>%
+  filter(algae_richness_mean >= min_richness & algae_richness_mean <= max_richness)
+
+
+(richness_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site_macro,
+             aes(x = algae_richness_mean, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_richness_effects_site_macro, aes(x = algae_richness_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_richness_effects_site_macro, aes(x = algae_richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+
+## REPEAT WITH SHANNON
+shannon_cv_site_macro <- glmmTMB(algae_cover_cv ~ algae_shannon_mean*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site_macro)
+r.squaredGLMM(shannon_cv_site_macro) # 0.37
+summary(shannon_cv_site_macro)
+hist(residuals(shannon_cv_site_macro)) # a little chunky
+plot(residuals(shannon_cv_site_macro) ~ fitted(shannon_cv_site_macro)) # pretty good
+Anova(shannon_cv_site_macro)
+#                             Chisq Df Pr(>Chisq)  
+# algae_shannon_mean         1.1533  1    0.28287  
+# habitat                    7.9691  3    0.04666 *
+# algae_shannon_mean:habitat 4.1867  3    0.24199  
+
+emtrends(shannon_cv_site_macro, pairwise ~ habitat, var = "algae_shannon_mean") # no significant differences
+shannon_cv_emm_site_macro <- emmip(shannon_cv_site_macro,
+                        habitat ~ algae_shannon_mean,
+                        at = list(algae_shannon_mean = seq(0,2,0.01)), plotit = F, CIs = T)
+
+filtered_shannon_effects_site_macro <- shannon_cv_emm_site_macro %>%
+  left_join(diversity_ranges_site_macro, by = c("habitat")) %>%
+  filter(algae_shannon_mean >= min_shannon & algae_shannon_mean <= max_shannon)
+
+
+(shannon_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site_macro,
+             aes(x = algae_shannon_mean, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_shannon_effects_site_macro, aes(x = algae_shannon_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_shannon_effects_site_macro, aes(x = algae_shannon_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+synchrony_cv_site_macro <- glmmTMB(algae_cover_cv ~ loreau_synchrony*habitat, family = Gamma(link = "log"),
+                          data = diversity_stability_site_macro)
+r.squaredGLMM(synchrony_cv_site_macro) # 0.71
+summary(synchrony_cv_site_macro)
+hist(residuals(synchrony_cv_site_macro)) # symmetrical
+plot(residuals(synchrony_cv_site_macro) ~ fitted(synchrony_cv_site_macro)) # slightly heteroskedastic
+Anova(synchrony_cv_site_macro)
+#                           Chisq Df Pr(>Chisq)    
+# loreau_synchrony         22.575  1  2.021e-06 ***
+# habitat                  11.611  3   0.008841 ** 
+# loreau_synchrony:habitat 11.389  3   0.009799 **  
+
+emtrends(synchrony_cv_site_macro, pairwise ~ habitat, var = "loreau_synchrony") # backreef and fringe different from outer17
+synchrony_cv_emm_site_macro <- emmip(synchrony_cv_site_macro,
+                        habitat ~ loreau_synchrony,
+                        at = list(loreau_synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_synchrony_cv_effects_site_macro <- synchrony_cv_emm_site_macro %>%
+  left_join(diversity_ranges_site_macro, by = c("habitat")) %>%
+  filter(loreau_synchrony >= min_loreau & loreau_synchrony <= max_loreau)
+
+(synchrony_cv_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site_macro,
+             aes(x = loreau_synchrony, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_cv_effects_site_macro, aes(x = loreau_synchrony, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_cv_effects_site_macro, aes(x = loreau_synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+synchrony_richness_site_macro <- glmmTMB(loreau_synchrony  ~ algae_richness_mean*habitat, family = beta_family(link = "logit"),
+                          data = diversity_stability_site_macro)
+# r.squaredGLMM(synchrony_richness_site_macro)
+summary(synchrony_richness_site_macro)
+hist(residuals(synchrony_richness_site_macro)) # kind of chunky
+plot(residuals(synchrony_richness_site_macro) ~ fitted(synchrony_richness_site_macro)) # slightly heteroskedastic
+Anova(synchrony_richness_site_macro)
+# 
+#                               Chisq Df Pr(>Chisq)    
+# algae_richness_mean         0.2299  1    0.63161  
+# habitat                     5.4261  3    0.14312  
+# algae_richness_mean:habitat 9.1650  3    0.02718 *
+
+emtrends(synchrony_richness_site_macro, pairwise ~ habitat, var = "algae_richness_mean") # backreef almost diff from fing and outer17
+synchrony_richness_emm_site_macro <- emmip(synchrony_richness_site_macro,
+                        habitat ~ algae_richness_mean,
+                        at = list(algae_richness_mean = seq(0,10,0.1)), plotit = F, CIs = T)
+
+filtered_synchrony_richness_effects_site_macro <- synchrony_richness_emm_site_macro %>%
+  left_join(diversity_ranges_site_macro, by = c("habitat")) %>%
+  filter(algae_richness_mean >= min_richness & algae_richness_mean <= max_richness)
+
+(synchrony_richness_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site_macro,
+             aes(x = algae_richness_mean, y = loreau_synchrony, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_richness_effects_site_macro, aes(x = algae_richness_mean, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_richness_effects_site_macro, aes(x = algae_richness_mean, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+
+synchrony_shannon_site_macro <- glmmTMB(loreau_synchrony  ~ algae_shannon_mean*habitat, family = beta_family(link = "logit"),
+                          data = diversity_stability_site_macro)
+summary(synchrony_shannon_site_macro)
+hist(residuals(synchrony_shannon_site_macro)) # a little chunky
+plot(residuals(synchrony_shannon_site_macro) ~ fitted(synchrony_shannon_site_macro)) # slightly heteroskedastic
+Anova(synchrony_shannon_site_macro)
+# 
+#                              Chisq Df Pr(>Chisq)   
+# algae_shannon_mean         0.6238  1     0.4296
+# habitat                    4.8196  3     0.1855
+# algae_shannon_mean:habitat 2.2517  3     0.5218
+
+emtrends(synchrony_shannon_site_macro, pairwise ~ habitat, var = "algae_shannon_mean") # no differences between habitats
+synchrony_shannon_emm_site_macro <- emmip(synchrony_shannon_site_macro,
+                        habitat ~ algae_shannon_mean,
+                        at = list(algae_shannon_mean = seq(0,1.5,0.01)), plotit = F, CIs = T)
+
+filtered_synchrony_shannon_effects_site_macro <- synchrony_shannon_emm_site_macro %>%
+  left_join(diversity_ranges_site_macro, by = c("habitat")) %>%
+  filter(algae_shannon_mean >= min_shannon & algae_shannon_mean <= max_shannon)
+
+(synchrony_shannon_plot = 
+  ggplot() +
+  geom_point(data = diversity_stability_site_macro,
+             aes(x = algae_shannon_mean, y = loreau_synchrony, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_shannon_effects_site_macro, aes(x = algae_shannon_mean, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_shannon_effects_site_macro, aes(x = algae_shannon_mean, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+```
+
+```{r site all turnover}
+total_turnover_site<-
+  turnover(
+  df = site_long_data,
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "site_habitat",
+  metric = "total"
+)
+total_turnover_site$site_hab_year <- paste0(total_turnover_site$site_habitat, "_", total_turnover_site$year) # for merge
+total_turnover_site <- merge(total_turnover_site, site_meta_df, by = c("year", "site_habitat", "site_hab_year") )
+
+total_turnover_site$turnover_trans <- sv_trans(total_turnover_site$total)
+
+total_turnover_mod_site <- glmmTMB(turnover_trans ~ year*habitat + (1 | site), family = beta_family(), data = total_turnover_site)
+summary(total_turnover_mod_site)
+hist(residuals(total_turnover_mod_site)) # a little stumpy nut not bad
+plot(residuals(total_turnover_mod_site) ~ fitted(total_turnover_mod_site)) # negative trend
+Anova(total_turnover_mod_site)
+emtrends(total_turnover_mod_site, pairwise ~ habitat, var = "year") # differences between backreef and fringing
+total_turnover_emm_site <- emmip(total_turnover_mod_site,
+                        habitat ~ year,
+                        at = list(year = seq(2008,2023,1)), plotit = F, CIs = T)
+
+(turnover_site_plot <- 
+  ggplot() +
+  geom_point(data = total_turnover_site,
+             aes(x = year, y = turnover_trans, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = total_turnover_emm_site, aes(x = year, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = total_turnover_emm_site, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL),
+                                                  fill = habitat), alpha = 0.3) +
+  geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+    labs(x = "Year", y = "Total turnover\n") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+```
+```{r site macro turnover}
+total_turnover_site_macro<-
+  turnover(
+  df = site_long_macro,
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "site_habitat",
+  metric = "total"
+)
+total_turnover_site_macro$site_hab_year <- paste0(total_turnover_site_macro$site_habitat, "_", total_turnover_site_macro$year) # for merge
+total_turnover_site_macro <- merge(total_turnover_site_macro, site_meta_df, by = c("year", "site_habitat", "site_hab_year") )
+
+total_turnover_site_macro$turnover_trans <- sv_trans(total_turnover_site_macro$total)
+
+total_turnover_mod_site_macro <- glmmTMB(turnover_trans ~ year*habitat + (1 | site), family = beta_family(), data = total_turnover_site_macro)
+summary(total_turnover_mod_site_macro)
+hist(residuals(total_turnover_mod_site_macro)) # slight negative skew
+plot(residuals(total_turnover_mod_site_macro) ~ fitted(total_turnover_mod_site_macro)) # negative trend
+Anova(total_turnover_mod_site_macro)
+#               Chisq Df Pr(>Chisq)    
+# year         73.936  1  < 2.2e-16 ***
+# habitat      19.201  3  0.0002485 ***
+# year:habitat 12.099  3  0.0070512 ** 
+emtrends(total_turnover_mod_site_macro, pairwise ~ habitat, var = "year") # differences between forereef sites and fringing
+total_turnover_emm_site_macro <- emmip(total_turnover_mod_site_macro,
+                        habitat ~ year,
+                        at = list(year = seq(2008,2023,1)), plotit = F, CIs = T)
+
+(turnover_site_macro_plot <- 
+  ggplot() +
+  geom_point(data = total_turnover_site_macro,
+             aes(x = year, y = turnover_trans, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = total_turnover_emm_site_macro, aes(x = year, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = total_turnover_emm_site_macro, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL),
+                                                  fill = habitat), alpha = 0.3) +
+  geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+    labs(x = "Year", y = "Total turnover\n") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+```
+
+
+```{r site all appearance}
+appearance_site<-
+  turnover(
+  df = site_long_data,
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "site_habitat",
+  metric = "appearance"
+)
+appearance_site$site_hab_year <- paste0(appearance_site$site_habitat, "_", appearance_site$year) # for merge
+appearance_site <- merge(appearance_site, site_meta_df, by = c("year", "site_habitat", "site_hab_year") )
+
+appearance_site$turnover_trans <- sv_trans(appearance_site$appearance)
+
+appearance_mod_site <- glmmTMB(turnover_trans ~ year*habitat , family = beta_family(), data = appearance_site)
+# convergence issue from inclusion of random effect
+summary(appearance_mod_site)
+hist(residuals(appearance_mod_site)) # a little stumpy nut not bad
+plot(residuals(appearance_mod_site) ~ fitted(appearance_mod_site)) # negative trend
+Anova(appearance_mod_site)
+#                Chisq Df Pr(>Chisq)    
+# year         58.4417  1  2.094e-14 ***
+# habitat       9.5344  3  0.0229685 *  
+# year:habitat 18.4862  3  0.0003491 ***
+emtrends(appearance_mod_site, pairwise ~ habitat, var = "year") # lagoons both diff from forereefs but not each other
+appearance_emm_site <- emmip(appearance_mod_site,
+                        habitat ~ year,
+                        at = list(year = seq(2008,2023,1)), plotit = F, CIs = T)
+
+(appearance_site_plot <- 
+  ggplot() +
+  geom_point(data = appearance_site,
+             aes(x = year, y = turnover_trans, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = appearance_emm_site, aes(x = year, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = appearance_emm_site, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL),
+                                                  fill = habitat), alpha = 0.3) +
+  geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+    labs(x = "Year", y = "Appearances\n") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+```
+```{r site macro disappearance}
+appearance_site_macro<-
+  turnover(
+  df = site_long_macro,
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "site_habitat",
+  metric = "appearance"
+)
+appearance_site_macro$site_hab_year <- paste0(appearance_site_macro$site_habitat, "_", appearance_site_macro$year) # for merge
+appearance_site_macro <- merge(appearance_site_macro, site_meta_df, by = c("year", "site_habitat", "site_hab_year") )
+
+appearance_site_macro$turnover_trans <- sv_trans(appearance_site_macro$appearance)
+
+appearance_mod_site_macro <- glmmTMB(turnover_trans ~ year*habitat, family = beta_family(), data = appearance_site_macro) # same convergence issue
+summary(appearance_mod_site_macro)
+hist(residuals(appearance_mod_site_macro)) # stumpy
+plot(residuals(appearance_mod_site_macro) ~ fitted(appearance_mod_site_macro)) # negative trend
+Anova(appearance_mod_site_macro)
+#               Chisq Df Pr(>Chisq)    
+# year         45.8213  1  1.296e-11 ***
+# habitat       5.8339  3   0.119979    
+# year:habitat 13.7486  3   0.003268 ** 
+emtrends(appearance_mod_site_macro, pairwise ~ habitat, var = "year") # fringing different from fore, backreef from outer10
+appearance_emm_site_macro <- emmip(appearance_mod_site_macro,
+                        habitat ~ year,
+                        at = list(year = seq(2008,2023,1)), plotit = F, CIs = T)
+
+(turnover_site_macro_plot <- 
+  ggplot() +
+  geom_point(data = appearance_site_macro,
+             aes(x = year, y = turnover_trans, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = appearance_emm_site_macro, aes(x = year, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = appearance_emm_site_macro, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL),
+                                                  fill = habitat), alpha = 0.3) +
+  geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+    labs(x = "Year", y = "Appearances\n") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+```
+
+
+
+```{r site all disappearance}
+disappearance_site<-
+  turnover(
+  df = site_long_data,
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "site_habitat",
+  metric = "disappearance"
+)
+disappearance_site$site_hab_year <- paste0(disappearance_site$site_habitat, "_", disappearance_site$year) # for merge
+disappearance_site <- merge(disappearance_site, site_meta_df, by = c("year", "site_habitat", "site_hab_year") )
+
+disappearance_site$turnover_trans <- sv_trans(disappearance_site$disappearance)
+
+disappearance_mod_site <- glmmTMB(turnover_trans ~ year*habitat + (1|site), family = beta_family(), data = disappearance_site)
+# no convergence issue
+summary(disappearance_mod_site)
+hist(residuals(disappearance_mod_site)) # positive skew
+plot(residuals(disappearance_mod_site) ~ fitted(disappearance_mod_site)) # negative trend
+Anova(disappearance_mod_site)
+#                Chisq Df Pr(>Chisq)    
+# year         10.402  1   0.001259 ** 
+# habitat      22.685  3  4.698e-05 ***
+# year:habitat 12.099  3   0.007053 ** 
+emtrends(disappearance_mod_site, pairwise ~ habitat, var = "year") # backrreef different from outer 10
+disappearance_emm_site <- emmip(disappearance_mod_site,
+                        habitat ~ year,
+                        at = list(year = seq(2008,2023,1)), plotit = F, CIs = T)
+
+(disappearance_site_plot <- 
+  ggplot() +
+  geom_point(data = disappearance_site,
+             aes(x = year, y = turnover_trans, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = disappearance_emm_site, aes(x = year, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = disappearance_emm_site, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL),
+                                                  fill = habitat), alpha = 0.3) +
+  geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+    labs(x = "Year", y = "Disappearances\n") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+```
+```{r site all turnover}
+disappearance_site_macro<-
+  turnover(
+  df = site_long_macro,
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "site_habitat",
+  metric = "disappearance"
+)
+disappearance_site_macro$site_hab_year <- paste0(disappearance_site_macro$site_habitat, "_", disappearance_site_macro$year) # for merge
+disappearance_site_macro <- merge(disappearance_site_macro, site_meta_df, by = c("year", "site_habitat", "site_hab_year") )
+
+disappearance_site_macro$turnover_trans <- sv_trans(disappearance_site_macro$disappearance)
+
+disappearance_mod_site_macro <- glmmTMB(turnover_trans ~ year*habitat + (1|site), family = beta_family(), data = disappearance_site_macro) # same here
+summary(disappearance_mod_site_macro)
+hist(residuals(disappearance_mod_site_macro)) # not bad
+plot(residuals(disappearance_mod_site_macro) ~ fitted(disappearance_mod_site_macro)) # negative trend
+Anova(disappearance_mod_site_macro)
+#               Chisq Df Pr(>Chisq)    
+#                Chisq Df Pr(>Chisq)    
+# year         33.3709  1  7.616e-09 ***
+# habitat      11.5079  3   0.009274 ** 
+# year:habitat  1.5899  3   0.661677    
+emtrends(disappearance_mod_site_macro, pairwise ~ habitat, var = "year") # no sig difference
+disappearance_emm_site_macro <- emmip(disappearance_mod_site_macro,
+                        habitat ~ year,
+                        at = list(year = seq(2008,2023,1)), plotit = F, CIs = T)
+
+(turnover_site_macro_plot <- 
+  ggplot() +
+  geom_point(data = disappearance_site_macro,
+             aes(x = year, y = turnover_trans, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = disappearance_emm_site_macro, aes(x = year, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = disappearance_emm_site_macro, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL),
+                                                  fill = habitat), alpha = 0.3) +
+  geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+    labs(x = "Year", y = "Disappearances\n") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+```
 
 ```{r all algae alpha diversity quadrat level}
 
