@@ -109,7 +109,8 @@ macroalgae %>%
          hab_year, site_hab_year, transect, quadrat, macroalgae_cover, 
          macroalgae_cover_hard, sand_cover, hard_cover, coral_cover, coral_cover_hard)  -> meta_df
 
-meta_df$all_algae_cover <- rowSums(data[startAlg:endAlg]) # percent cover of all algae
+meta_df$all_algae_cover <- rowSums(data[grep("acanthophora_spicifera", colnames(data)):
+                                        grep("valonia_ventricosa", colnames(data))]) # percent cover of all algae
 meta_df$all_algae_cover_hard <- case_when(
            meta_df$sand_cover == 100 ~ NA, # since we can't divide by a zero
            TRUE ~ (meta_df$all_algae_cover/meta_df$hard_cover)*100   
@@ -219,6 +220,119 @@ alpha_diversity_site_macro$richness_area <- alpha_diversity_site_macro$richness/
 
 ```
 
+```{r beta dispersion}
+full_site_species_matrix <- as.matrix(site_full[ , -which(names(site_full) %in% meta_cols)])
+full_site_species_matrix <- full_site_species_matrix/site_full$hard_cover # convert from percent to proportion of hard cover
+rownames(full_site_species_matrix) <- paste(site_full$year,"-", site_full$site_habitat, sep = "")
+
+
+full_site_species_matrix <- asin(sqrt(full_site_species_matrix)) # arcsin squareroot transform
+
+full_site_macro_species_matrix <- as.matrix(site_macro[ , -which(names(site_macro) %in% colnames(site_meta_df))])
+full_site_macro_species_matrix <- full_site_macro_species_matrix/site_macro$hard_cover # convert from percent to proportion of hard cover
+rownames(full_site_macro_species_matrix) <- paste(site_macro$year,"-", site_macro$site_habitat, sep = "")
+
+full_site_macro_species_matrix <- asin(sqrt(full_site_macro_species_matrix)) # arcsin squareroot transform
+
+
+full_site_bray <- vegdist(full_site_species_matrix, "bray") 
+full_site_macro_bray <- vegdist(full_site_macro_species_matrix, "bray") 
+
+
+full_site_betadisper <- vegan::betadisper(full_site_bray, site_full$hab_year)
+site_full$betadispersion <- full_site_betadisper$distances[match(site_full$stratum, names(full_site_betadisper$distances))]
+site_full$betadispersion_trans <- sv_trans(site_full$betadispersion, site_full)
+
+betadisper_site_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = site_full)
+summary(betadisper_site_mod) # fair bit of within site variance - inv_logit(0.04) = 0.5
+hist(residuals(betadisper_site_mod)) # pretty good
+plot(residuals(betadisper_site_mod) ~ fitted(betadisper_site_mod)) # slight heteroskedasticity
+Anova(betadisper_site_mod)
+#                Chisq Df Pr(>Chisq)    
+# year         12.9561  1  0.0003189 ***
+# habitat      27.2191  3  5.296e-06 ***
+# year:habitat  6.8472  3  0.0769311 .  
+
+emtrends(betadisper_site_mod, pairwise ~ habitat , "year") # fringing slope significantly different from outer17
+betadisper_site_emm <- emmip(betadisper_site_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = site_full, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_site_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_site_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 0.6, yend = 0.6, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+
+full_site_macro_betadisper <- vegan::betadisper(full_site_macro_bray, site_macro$hab_year)
+full_subset_site_macro$betadispersion <- full_site_macro_betadisper$distances[match(full_subset_site_macro$stratum, names(full_site_macro_betadisper$distances))]
+full_subset_site_macro$betadispersion_trans <- sv_trans(full_subset_site_macro$betadispersion, full_subset_site_macro)
+
+betadisper_site_macro_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = full_subset_site_macro)
+summary(betadisper_site_macro_mod) # similar site variance - inv_logit(0.01) = 0.5
+hist(residuals(betadisper_site_macro_mod)) # pretty good
+plot(residuals(betadisper_site_macro_mod) ~ fitted(betadisper_site_macro_mod)) # slight heteroskedasticity and negative trend
+Anova(betadisper_site_macro_mod)
+#               Chisq Df Pr(>Chisq)    
+# year         36.591  1  1.457e-09 ***
+# habitat      46.029  3  5.590e-10 ***
+# year:habitat 31.232  3  7.597e-07 ***
+
+emtrends(betadisper_site_macro_mod, pairwise ~ habitat , "year") # backreef distinct from all other habitats
+betadisper_site_macro_emm <- emmip(betadisper_site_macro_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = site_full, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_site_macro_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_site_macro_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 0.75, yend = 0.75, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+
+
+```
 
 ```{r read and merge secondary datasets, fig.height=15, fig.width=15}
 wave <- read.csv(here::here("data", "algae_wave_dynamics.csv"), stringsAsFactors = F)
@@ -490,7 +604,8 @@ site_macro_shannon_emm <- emmip(site_macro_shannon_mod,habitat ~ year,
         legend.box.background = element_rect(colour = "black")) ) # add box around legend
 
 ```
-```{r stepwise models site level}
+
+```{r stepwise models site level, fig.height = 8, fig.width=12}
 
 ## FRINGING - exclude wave power
 fringing_all_site <- na.omit(subset(alpha_diversity_site, habitat == "fringing")) # only use rows that contain all factors
@@ -512,8 +627,27 @@ fringing_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ mean_n + (1|site), da
 qqnorm(residuals(fringing_all_shannon_top_mod))# not bad
 qqline(residuals(fringing_all_shannon_top_mod))
 plot(residuals(fringing_all_shannon_top_mod) ~ fitted(fringing_all_shannon_top_mod)) # slight patterning
+summary(fringing_all_shannon_top_mod)
 
-
+fringing_emm <-as.data.frame(emmeans(fringing_all_shannon_top_mod, ~mean_n,
+                                     at = list(mean_n = seq(min(fringing_all_site$mean_n),
+                                                            max(fringing_all_site$mean_n),
+                                                            0.01)))) 
+emmip(fringing_all_shannon_top_mod, 1~ mean_n)
+ggplot()+
+  geom_point(data = fringing_all_site, aes(x = mean_n, y = shannon))+
+  geom_line(data = fringing_emm, aes(x = mean_n, y = emmean)) +
+  geom_ribbon(data = fringing_emm, aes(x = mean_n, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Mean N", y = "Fringing Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+  
 
 ## Backreef - includes all 
 # backreef_all_site <- na.omit(subset(alpha_diversity_site, habitat == "backreef")) # only use rows that contain all factors
@@ -555,6 +689,27 @@ outer10_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  herbivore_evenness + 
 qqnorm(residuals(outer10_all_shannon_top_mod)) # pretty good
 plot(residuals(outer10_all_shannon_top_mod) ~ fitted(outer10_all_shannon_top_mod)) # looks fine
 summary(outer10_all_shannon_top_mod)
+
+outer10_emm <-as.data.frame(emmeans(outer10_all_shannon_top_mod, ~herbivore_evenness,
+                                     at = list(herbivore_evenness = seq(min(outer10_all_site$herbivore_evenness),
+                                                            max(outer10_all_site$herbivore_evenness),
+                                                            0.05)))) 
+
+ggplot()+
+  geom_point(data = outer10_all_site, aes(x = herbivore_evenness, y = shannon))+
+  geom_line(data = outer10_emm, aes(x = herbivore_evenness, y = emmean)) +
+  geom_ribbon(data = outer10_emm, aes(x = herbivore_evenness, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Herbivore evenness", y = "Outer 10 Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+
 
 ## outer17 - no nitrogen or herbivores
 outer17_all_site <- subset(alpha_diversity_site, habitat == "outer_17") # only use rows that contain all factors
@@ -604,6 +759,24 @@ plot(residuals(backreef_macro_shannon_top_mod) ~ fitted(backreef_macro_shannon_t
 summary(backreef_macro_shannon_top_mod)
 Anova(backreef_macro_shannon_top_mod) # lol X2 = 2.56, P = 0.1
 
+backreef_emm <-as.data.frame(emmeans(backreef_macro_shannon_top_mod, ~wave_power_adcp,
+                                     at = list(wave_power_adcp = seq(min(backreef_macro_site$wave_power_adcp),
+                                                            max(backreef_macro_site$wave_power_adcp),
+                                                            1000)))) 
+ggplot()+
+  geom_point(data = backreef_macro_site, aes(x = wave_power_adcp, y = shannon))+
+  geom_line(data = backreef_emm, aes(x = wave_power_adcp, y = emmean)) +
+  geom_ribbon(data = backreef_emm, aes(x = wave_power_adcp, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Wave power", y = "Backreef Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
 
 ## outer10 - no nitrogen 
 outer10_macro_site <- subset(alpha_diversity_site_macro, habitat == "outer_10") # only use rows that contain all factors
@@ -629,7 +802,7 @@ outer17_macro_site<- outer17_macro_site[,-which(names(outer17_macro_site) %in% c
 outer17_macro_site <- na.omit(outer17_macro_site)
 
 outer17_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c + (1|site), data = outer17_macro_site, na.action = na.pass)
-outer17_macro_shannon_dredge <- dredge(outer17_macro_shannon_mod_universal) # some convergence issues
+outer17_macro_shannon_dredge <- dredge(outer17_macro_shannon_mod_universal) 
 model.sel(outer17_macro_shannon_dredge) #  best includes all terms!
 qqnorm(residuals(outer17_macro_shannon_mod_universal)) # a little hump shaped
 plot(residuals(outer17_macro_shannon_mod_universal) ~ fitted(outer17_macro_shannon_mod_universal)) # looks fine
