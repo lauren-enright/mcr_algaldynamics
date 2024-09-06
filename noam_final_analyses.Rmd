@@ -215,6 +215,7 @@ alpha_diversity_site_macro <-
   )
 
 alpha_diversity_site_macro <- merge(site_meta_df, alpha_diversity_site_macro, by= c("year", "site_hab_year"))
+alpha_diversity_site_macro$richness_area <- alpha_diversity_site_macro$richness/(alpha_diversity_site_macro$hard_cover/100)
 
 ```
 
@@ -493,43 +494,45 @@ site_macro_shannon_emm <- emmip(site_macro_shannon_mod,habitat ~ year,
 
 ## FRINGING - exclude wave power
 fringing_all_site <- na.omit(subset(alpha_diversity_site, habitat == "fringing")) # only use rows that contain all factors
+# 
+# fringing_all_richness_mod_universal <- glmmTMB(richness ~ year + mean_n + mean_temp_c +  herbivore_evenness +
+# offset(log(hard_cover)) #+ (1|site), family = poisson, data = fringing_all_site, na.action = na.pass) 
+# fringing_all_richness_dredge <- dredge(fringing_all_richness_mod_universal) 
+# model.sel(fringing_all_richness_dredge) # top model just includes year
+# fringing_all_richness_top_mod <- glmmTMB(richness ~ year + offset(log(hard_cover)) + (1|site), family = poisson, data = # fringing_all_site, na.action = na.pass)
+# summary(fringing_all_richness_top_mod)
+# hist(residuals(fringing_all_richness_top_mod)) # slight skew but not bad
+# plot(residuals(fringing_all_richness_top_mod) ~ fitted(fringing_all_richness_top_mod)) # looks fine
 
-fringing_all_richness_mod_universal <- glmmTMB(richness ~ year + coral_cover_hard + mean_n + mean_temp_c +  herbivore_evenness + offset(log(hard_cover)) + (1|site), family = poisson, data = fringing_all_site, na.action = na.pass) # universal model has convergence issues
-fringing_all_richness_dredge <- dredge(fringing_all_richness_mod_universal) # most models have convergence issues
-model.sel(fringing_all_richness_dredge) # top model just includes year
-fringing_all_richness_top_mod <- glmmTMB(richness ~ year + offset(log(hard_cover)) + (1|site), family = poisson, data = fringing_all_site, na.action = na.pass)
-summary(fringing_all_richness_top_mod)
-hist(residuals(fringing_all_richness_top_mod)) # slight skew but not bad
-plot(residuals(fringing_all_richness_top_mod) ~ fitted(fringing_all_richness_top_mod)) # looks fine
-
-fringing_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + coral_cover_hard + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = fringing_all_site, na.action = na.pass)
+fringing_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = fringing_all_site, na.action = na.pass)
 fringing_all_shannon_dredge <- dredge(fringing_all_shannon_mod_universal) 
-model.sel(fringing_all_shannon_dredge) # tie for the top model - best includes year and coral cover or just nitrogen
-fringing_all_shannon_top_mod1 <- glmmTMB(log(shannon + 1) ~ year + coral_cover_hard + (1|site), data = fringing_all_site, na.action = na.pass)
-fringing_all_shannon_top_mod2 <- glmmTMB(log(shannon + 1) ~ mean_n + mean_temp_c + (1|site), data = fringing_all_site, na.action = na.pass)
-hist(residuals(fringing_all_shannon_top_mod1)) # slightly bimodal
-hist(residuals(fringing_all_shannon_top_mod2)) # also uniform - neither are great
-plot(residuals(fringing_all_shannon_top_mod1) ~ fitted(fringing_all_shannon_top_mod1)) # slight patterning
-plot(residuals(fringing_all_shannon_top_mod2) ~ fitted(fringing_all_shannon_top_mod2)) # similar here
+model.sel(fringing_all_shannon_dredge) # tie for the top model just nitrogen
+fringing_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ mean_n + (1|site), data = fringing_all_site, na.action = na.pass)
+
+qqnorm(residuals(fringing_all_shannon_top_mod))# not bad
+qqline(residuals(fringing_all_shannon_top_mod))
+plot(residuals(fringing_all_shannon_top_mod) ~ fitted(fringing_all_shannon_top_mod)) # slight patterning
+
 
 
 ## Backreef - includes all 
-backreef_all_site <- na.omit(subset(alpha_diversity_site, habitat == "backreef")) # only use rows that contain all factors
+# backreef_all_site <- na.omit(subset(alpha_diversity_site, habitat == "backreef")) # only use rows that contain all factors
+# 
+# backreef_all_richness_mod_universal <- glmmTMB(richness ~ year + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + # offset(log(hard_cover)) + (1|site), family = poisson, data = backreef_all_site, na.action = na.pass) # universal model has # convergence issues
+# backreef_all_richness_dredge <- dredge(backreef_all_richness_mod_universal) # most models have convergence issues
+# model.sel(backreef_all_richness_dredge) # top model includes year and coral 
+# backreef_all_richness_top_mod <- glmmTMB(richness ~ year  + offset(log(hard_cover)) + (1|site), family = poisson, data = # backreef_all_site, na.action = na.pass)
+# summary(backreef_all_richness_top_mod)
+# hist(residuals(backreef_all_richness_top_mod)) # slight skew but not bad
+# plot(residuals(backreef_all_richness_top_mod) ~ fitted(backreef_all_richness_top_mod)) # looks fine
 
-backreef_all_richness_mod_universal <- glmmTMB(richness ~ year + coral_cover_hard + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + offset(log(hard_cover)) + (1|site), family = poisson, data = backreef_all_site, na.action = na.pass) # universal model has convergence issues
-backreef_all_richness_dredge <- dredge(backreef_all_richness_mod_universal) # most models have convergence issues
-model.sel(backreef_all_richness_dredge) # top model includes year and coral 
-backreef_all_richness_top_mod <- glmmTMB(richness ~ year + coral_cover_hard + offset(log(hard_cover)) + (1|site), family = poisson, data = backreef_all_site, na.action = na.pass)
-summary(backreef_all_richness_top_mod)
-hist(residuals(backreef_all_richness_top_mod)) # slight skew but not bad
-plot(residuals(backreef_all_richness_top_mod) ~ fitted(backreef_all_richness_top_mod)) # looks fine
-
-backreef_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + coral_cover_hard + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = backreef_all_site, na.action = na.pass)
+backreef_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = backreef_all_site, na.action = na.pass)
 backreef_all_shannon_dredge <- dredge(backreef_all_shannon_mod_universal) 
-model.sel(backreef_all_shannon_dredge) #  best includes just coral cover 
-backreef_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  coral_cover_hard + (1|site), data = backreef_all_site, na.action = na.pass)
-hist(residuals(backreef_all_shannon_top_mod)) # pretty good
+model.sel(backreef_all_shannon_dredge) #  best includes just year, next best also includes herbivore evenness
+backreef_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  year + (1|site), data = backreef_all_site, na.action = na.pass)
+qqnorm(residuals(backreef_all_shannon_top_mod)) #  a little wonky on the tail but not bad
 plot(residuals(backreef_all_shannon_top_mod) ~ fitted(backreef_all_shannon_top_mod)) # looks fine
+summary(backreef_all_shannon_top_mod)
 
 
 ## outer10 - no nitrogen 
@@ -539,21 +542,19 @@ outer10_all_site <- outer10_all_site[,-which(names(outer10_all_site) %in% c("mea
 # remove other na rows
 outer10_all_site <- na.omit(outer10_all_site)
 
-outer10_all_richness_mod_universal <- glmmTMB(richness ~ year + coral_cover_hard + wave_power_adcp  + mean_temp_c +  herbivore_evenness + offset(log(hard_cover)) + (1|site), family = poisson, data = outer10_all_site, na.action = na.pass) # universal model has convergence issues
-outer10_all_richness_dredge <- dredge(outer10_all_richness_mod_universal) # most models have convergence issues
-model.sel(outer10_all_richness_dredge) # top model includes just intercept... next best is coral 
-outer10_all_richness_top_mod <- glmmTMB(richness ~ coral_cover_hard + offset(log(hard_cover)) + (1|site), family = poisson, data = outer10_all_site, na.action = na.pass)
-summary(outer10_all_richness_top_mod)
-hist(residuals(outer10_all_richness_top_mod)) #  not bad
-plot(residuals(outer10_all_richness_top_mod) ~ fitted(outer10_all_richness_top_mod)) # looks fine
+# outer10_all_richness_mod_universal <- glmmTMB(richness ~ year  + wave_power_adcp  + mean_temp_c +  herbivore_evenness + # offset(log(hard_cover)) + (1|site), family = poisson, data = outer10_all_site, na.action = na.pass) # universal model has convergence # issues
+# outer10_all_richness_dredge <- dredge(outer10_all_richness_mod_universal) # most models have convergence issues
+# model.sel(outer10_all_richness_dredge) 
 
-outer10_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + coral_cover_hard + wave_power_adcp  + mean_temp_c +  herbivore_evenness + (1|site), data = outer10_all_site, na.action = na.pass)
-outer10_all_shannon_dredge <- dredge(outer10_all_shannon_mod_universal) # some convergence issues
-model.sel(outer10_all_shannon_dredge) #  best includes just herbivore evenness - first time there's been a decent gap in AICc
+
+# 
+outer10_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c +  herbivore_evenness + (1|site), data = outer10_all_site, na.action = na.pass)
+outer10_all_shannon_dredge <- dredge(outer10_all_shannon_mod_universal) 
+model.sel(outer10_all_shannon_dredge) #  best includes just herbivore evenness 
 outer10_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  herbivore_evenness + (1|site), data = outer10_all_site, na.action = na.pass)
-hist(residuals(outer10_all_shannon_top_mod)) # pretty good
+qqnorm(residuals(outer10_all_shannon_top_mod)) # pretty good
 plot(residuals(outer10_all_shannon_top_mod) ~ fitted(outer10_all_shannon_top_mod)) # looks fine
-
+summary(outer10_all_shannon_top_mod)
 
 ## outer17 - no nitrogen or herbivores
 outer17_all_site <- subset(alpha_diversity_site, habitat == "outer_17") # only use rows that contain all factors
@@ -562,20 +563,78 @@ outer17_all_site <- outer17_all_site[,-which(names(outer17_all_site) %in% c("mea
 # remove other na rows
 outer17_all_site <- na.omit(outer17_all_site)
 
-outer17_all_richness_mod_universal <- glmmTMB(richness ~ year + coral_cover_hard + wave_power_adcp  + mean_temp_c +  offset(log(hard_cover)) + (1|site), family = poisson, data = outer17_all_site, na.action = na.pass) # universal model has convergence issues
-outer17_all_richness_dredge <- dredge(outer17_all_richness_mod_universal) # most models have convergence issues
-model.sel(outer17_all_richness_dredge) # top model includes just intercept... next best is coral 
-outer17_all_richness_top_mod <- glmmTMB(richness ~ coral_cover_hard + offset(log(hard_cover)) + (1|site), family = poisson, data = outer17_all_site, na.action = na.pass)
-summary(outer17_all_richness_top_mod)
-hist(residuals(outer17_all_richness_top_mod)) #  not bad
-plot(residuals(outer17_all_richness_top_mod) ~ fitted(outer17_all_richness_top_mod)) # looks fine
+# outer17_all_richness_mod_universal <- glmmTMB(richness ~ year  + wave_power_adcp  + mean_temp_c +  offset(log(hard_cover)) + # (1|site), family = poisson, data = outer17_all_site, na.action = na.pass) # universal model has convergence issues
+# outer17_all_richness_dredge <- dredge(outer17_all_richness_mod_universal) # most models have convergence issues
+# model.sel(outer17_all_richness_dredge) # top model includes just intercept... 
 
-outer17_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + coral_cover_hard + wave_power_adcp  + mean_temp_c + (1|site), data = outer17_all_site, na.action = na.pass)
+
+outer17_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c + (1|site), data = outer17_all_site, na.action = na.pass)
 outer17_all_shannon_dredge <- dredge(outer17_all_shannon_mod_universal) # some convergence issues
-model.sel(outer17_all_shannon_dredge) #  best includes just year
+model.sel(outer17_all_shannon_dredge) #  best includes just year. next best also includes temperature and is almost equivalent AICc
 outer17_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  year + (1|site), data = outer17_all_site, na.action = na.pass)
-hist(residuals(outer17_all_shannon_top_mod)) # pretty good
+qqnorm(residuals(outer17_all_shannon_top_mod)) # pretty good
 plot(residuals(outer17_all_shannon_top_mod) ~ fitted(outer17_all_shannon_top_mod)) # looks fine
+summary(outer17_all_shannon_top_mod)
+
+```
+
+```{r stepwise models site level macroalgae}
+
+## FRINGING - exclude wave power
+fringing_macro_site <- na.omit(subset(alpha_diversity_site_macro, habitat == "fringing")) # only use rows that contain all factors
+
+
+fringing_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = fringing_macro_site, na.action = na.pass)
+fringing_macro_shannon_dredge <- dredge(fringing_macro_shannon_mod_universal) 
+model.sel(fringing_macro_shannon_dredge) # top model just year, next best includes temp
+fringing_macro_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ year + (1|site), data = fringing_macro_site, na.action = na.pass)
+qqnorm(residuals(fringing_macro_shannon_top_mod))# not bad
+plot(residuals(fringing_macro_shannon_top_mod) ~ fitted(fringing_macro_shannon_top_mod)) # slight negative trend
+
+
+## Backreef - includes all 
+backreef_macro_site <- na.omit(subset(alpha_diversity_site_macro, habitat == "backreef")) # only use rows that contain all factors
+
+backreef_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + (1|site), data = backreef_macro_site, na.action = na.pass)
+backreef_macro_shannon_dredge <- dredge(backreef_macro_shannon_mod_universal) 
+model.sel(backreef_macro_shannon_dredge) #  best includes just wave power but estimate is tiny
+backreef_macro_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  wave_power_adcp + (1|site), data = backreef_macro_site, na.action = na.pass)
+qqnorm(residuals(backreef_macro_shannon_top_mod)) #  a little wonky but not bad
+plot(residuals(backreef_macro_shannon_top_mod) ~ fitted(backreef_macro_shannon_top_mod)) # looks fine
+summary(backreef_macro_shannon_top_mod)
+Anova(backreef_macro_shannon_top_mod) # lol X2 = 2.56, P = 0.1
+
+
+## outer10 - no nitrogen 
+outer10_macro_site <- subset(alpha_diversity_site_macro, habitat == "outer_10") # only use rows that contain all factors
+# remove nitrogent columns
+outer10_macro_site<- outer10_macro_site[,-which(names(outer10_macro_site) %in% c("mean_n", "n_cv"))]
+# remove other na rows
+outer10_macro_site <- na.omit(outer10_macro_site)
+
+
+outer10_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c +  herbivore_evenness + (1|site), data = outer10_macro_site, na.action = na.pass)
+outer10_macro_shannon_dredge <- dredge(outer10_macro_shannon_mod_universal) 
+model.sel(outer10_macro_shannon_dredge) #  best includes wave power and year 
+outer10_macro_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ year  + (1|site), data = outer10_macro_site, na.action = na.pass)
+qqnorm(residuals(outer10_macro_shannon_top_mod)) # pretty good, tails maybe off
+plot(residuals(outer10_macro_shannon_top_mod) ~ fitted(outer10_macro_shannon_top_mod)) # looks fine
+summary(outer10_macro_shannon_top_mod) # NaN?
+
+## outer17 - no nitrogen or herbivores
+outer17_macro_site<- subset(alpha_diversity_site_macro, habitat == "outer_17") # only use rows that contain all factors
+# remove nitrogent columns
+outer17_macro_site<- outer17_macro_site[,-which(names(outer17_macro_site) %in% c("mean_n", "n_cv", "herbivore_biomass", "herbivore_evenness", "herbivore_richness", "herbivore_shannon"))]
+# remove other na rows
+outer17_macro_site <- na.omit(outer17_macro_site)
+
+outer17_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c + (1|site), data = outer17_macro_site, na.action = na.pass)
+outer17_macro_shannon_dredge <- dredge(outer17_macro_shannon_mod_universal) # some convergence issues
+model.sel(outer17_macro_shannon_dredge) #  best includes all terms!
+qqnorm(residuals(outer17_macro_shannon_mod_universal)) # a little hump shaped
+plot(residuals(outer17_macro_shannon_mod_universal) ~ fitted(outer17_macro_shannon_mod_universal)) # looks fine
+summary(outer17_macro_shannon_mod_universal) # also NaNs...
+
 ```
 
 ```{r synchrony diversity stability setup site level, fig.height = 8, fig.width= 8}
