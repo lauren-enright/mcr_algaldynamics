@@ -1499,7 +1499,7 @@ ggplot()+
 
 ```
 
-```{r quad level beta dispersion}
+```{r quad level beta dispersion, fig.height = 8, fig.width = 12}
 full_species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
 full_species_matrix <- full_species_matrix/data$hard_cover # convert from percent to proportion
 rownames(full_species_matrix) <- paste(data$year,"-", data$location, sep = "")
@@ -1508,13 +1508,16 @@ full_species_matrix <- full_species_matrix[!full_rows_to_remove,]
 full_species_matrix <- na.omit(full_species_matrix)
 full_species_matrix <- asin(sqrt(full_species_matrix)) # arcsin squareroot transform
 data$stratum <- paste(data$year,"-", data$location, sep = "") # for merging with bray matrix later
-full_subset <- data[data$stratum %in% rownames(full_species_matrix),] # make sure rows are also removed from dataframe
+# full_subset <- data[data$stratum %in% rownames(full_species_matrix),] # make sure rows are also removed from dataframe
+# 
+# brayfull <- vegdist(full_species_matrix, "bray") # create bray dissimilarity matrix
+# # full_quad_betadisper <- vegan::betadisper(brayfull, full_subset$hab_year)
+# full_subset$betadispersion <- full_quad_betadisper$distances[match(full_subset$stratum, names(full_quad_betadisper$distances))]
+# full_subset$betadispersion_trans <- sv_trans(full_subset$betadispersion, full_subset)
+# 
+# write_csv(full_subset, here("data", "quad_level_all_species_with_betadisper.csv"))
 
-brayfull <- vegdist(full_species_matrix, "bray") # create bray dissimilarity matrix
-# full_quad_betadisper <- vegan::betadisper(brayfull, full_subset$hab_year)
-full_subset$betadispersion <- full_quad_betadisper$distances[match(full_subset$stratum, names(full_quad_betadisper$distances))]
-
-full_subset$betadispersion_trans <- sv_trans(full_subset$betadispersion, full_subset)
+full_subset <- read.csv(here("data", "quad_level_all_species_with_betadisper.csv")) # read back in data from csv so you don't have to re-run
 
 betadisper_quad_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = full_subset)
 summary(betadisper_quad_mod) # fair bit of within site variance - inv_logit(0.02) = 0.5
@@ -1526,6 +1529,39 @@ Anova(betadisper_quad_mod)
 # habitat      333.7035  3     <2e-16 ***
 # year:habitat 720.3054  3     <2e-16 ***
 
+emtrends(betadisper_quad_mod, pairwise ~ habitat , "year") # all different
+betadisper_quad_emm <- emmip(betadisper_quad_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = full_subset, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_quad_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_quad_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+
+
 macro_species_matrix <- as.matrix(macroalgae[ , -which(names(macroalgae) %in% meta_cols)])
 macro_species_matrix <- macro_species_matrix/macroalgae$hard_cover # convert from percent to proportion
 rownames(macro_species_matrix) <- paste(macroalgae$year,"-", macroalgae$location, sep = "")
@@ -1534,12 +1570,58 @@ macro_species_matrix <- macro_species_matrix[!macro_rows_to_remove,]
 macro_species_matrix <- na.omit(macro_species_matrix)
 macro_species_matrix <- asin(sqrt(macro_species_matrix)) # arcsin squareroot transform
 macroalgae$stratum <- paste(macroalgae$year,"-", macroalgae$location, sep = "") # for merging with bray matrix later
-macro_subset <- macroalgae[macroalgae$stratum %in% rownames(macro_species_matrix),] # make sure rows are also removed from macroalgaeframe
+# macro_subset <- macroalgae[macroalgae$stratum %in% rownames(macro_species_matrix),] # make sure rows are also removed from macroalgaeframe
+# 
+# braymacro <- vegdist(macro_species_matrix, "bray") # create bray dissimilarity matrix
+# # macro_quad_betadisper <- vegan::betadisper(braymacro, macro_subset$hab_year)
+# macro_subset$betadispersion <- macro_quad_betadisper$distances[match(macro_subset$stratum, names(macro_quad_betadisper$distances))]
+# macro_subset$betadispersion_trans <- sv_trans(macro_subset$betadispersion, macro_subset)
+# write_csv(macro_subset, here("data", "quad_level_just_macroalgae_with_betadisper.csv"))
+macro_subset <- read.csv(here("data", "quad_level_just_macroalgae_with_betadisper.csv"))
 
-braymacro <- vegdist(macro_species_matrix, "bray") # create bray dissimilarity matrix
-# macro_quad_betadisper <- vegan::betadisper(braymacro, macro_subset$hab_year)
-macro_subset$betadispersion <- macro_quad_betadisper$distances[match(macro_subset$stratum, names(macro_quad_betadisper$distances))]
+betadisper_macro_quad_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = macro_subset)
+summary(betadisper_macro_quad_mod) # fair bit of within site variance - inv_logit(0.02) = 0.5
+qqnorm(residuals(betadisper_macro_quad_mod)) # a little lumpy but not bad
+plot(residuals(betadisper_macro_quad_mod) ~ fitted(betadisper_macro_quad_mod)) # negative trend
+Anova(betadisper_macro_quad_mod)
 
+#                 Chisq Df Pr(>Chisq)    
+# year           97.391  1  < 2.2e-16 ***
+# habitat      1973.896  3  < 2.2e-16 ***
+# year:habitat  511.722  3  < 2.2e-16 ***
+
+
+emtrends(betadisper_macro_quad_mod, pairwise ~ habitat , "year") # backreef, outer10, and fringing don't differ
+betadisper_quad_macro_emm <- emmip(betadisper_macro_quad_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = macro_subset, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_quad_macro_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_quad_macro_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
 ```
 
 
