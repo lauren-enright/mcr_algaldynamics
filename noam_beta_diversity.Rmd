@@ -28,10 +28,34 @@ library(emmeans)
 ```
 
 ```{r import and format data}
+# for figures
+island_side_colours <- c("north" = "darkblue",
+                         "east" = "mediumorchid",
+                         "west" = "orange")
+habitat_colours <- c("fringing" = "#D81B60",
+                     "backreef" = "#FFC107",
+                     "outer_10" = "#1E88E5",
+                     "outer_17" = "#004D40")
+
+# some quadrats have dissimilarity = 0 or 1
+# Smithson verkuilen transformation for beta-regression
+sv_trans <- function(prop, N, s = 0.000005){
+  (prop*(nrow(N) - 1) + s)/nrow(N)
+  # where prop is the proportional value you're transforming, 
+  # N is the sample size, which is specified by taking the number of rows/observations from a given dataframe,
+  # and s is a small offset 
+}
+
+inv_logit <- function(x) {
+  exp(x)/(1+exp(x))
+}
+
+
 # starting with all data now because of 0 algae transects/quadrats
 data <- read.csv(here::here("data", "allbenthicdata_cleaned_colnames.csv"), stringsAsFactors = F) 
 
 not_algae <- c("ascidian", "bare_space", "coral", "coral_rubble", "corallimorpharia", "heteractis_sp", "millepora_platyphylla", "no_data", "sand", "sarcophyton_sp", "shell_debris", "soft_coral", "sponge", "tridacna_sp", "zooxanthellae", "row_sums")
+
 
 data <- data[ , -which(names(data) %in% not_algae)]
 
@@ -44,65 +68,1090 @@ data <- data %>% mutate(island_side = case_when(site == "lter_1" ~ "north",
                                  site == "lter_6" ~ "west"))
 data$island_side_habitat <- paste(data$island_side, data$habitat)
 
+macroalgae <- data %>% 
+  select(-algal_turf, -crustose_corallines, -cyanophyta, -damselfish_turf, -lithophyllum_kotschyanum,
+         -neogoniolithon_brassica_florida, -sporolithon_sp)
 
-str(data)
-
-
-meta_cols <- c(colnames(data[1:7] ), "island_side", "island_side_habitat", "stratum")
-species_cols <- colnames(data)[!colnames(data) %in% meta_cols]
-
-meta_df <- data[ , which(names(data) %in% meta_cols)]
-
-site_colours <- c("lter_1" = "cornflowerblue",
-                  "lter_2" = "darkblue",
-                  "lter_3" = "yellowgreen",
-                  "lter_4" = "forestgreen",
-                  "lter_5" = "mediumorchid",
-                  "lter_6" = "orange")
-island_side_colours <- c("north" = "darkblue",
-                         "east" = "mediumorchid",
-                         "west" = "orange")
-habitat_linetypes <- c("fringing" = "solid",
-                       "backreef" = "longdash",
-                       "outer_10" = "twodash",
-                       "outer_17" = "dotted")
-habitat_shapes <- c("fringing" = 16,
-                     "backreef" = 17,
-                     "outer_10" = 1,
-                     "outer_17" = 2)
+sand_coral <- read_csv(here("data", "allbenthicdata_cleaned_colnames.csv")) %>% 
+  select(year, location, site, habitat, site_habitat, transect, quadrat, sand, coral)
 
 
-#pivot long 
-# long_data <- pivot_longer(
-#   data = data,
-#   cols = 8:77,
-#   names_to = "taxa",
-#   values_to = "percent_cover") 
-# 
-# 
-#  transect_level <- long_data %>%
-#    dplyr::group_by(year, island_side, site, habitat, transect, taxa) %>%
-#    dplyr::summarise(mean_cover = mean(percent_cover), 
-#              SE = sd(percent_cover)/sqrt(n()))
-#  
-# site_level <- long_data %>%
-#   dplyr::group_by(year, island_side, site, habitat, site_habitat, taxa) %>%
-#   dplyr::summarise(mean_site_cover = mean(percent_cover), 
-#             site_se = sd(percent_cover)/sqrt(n()))
-# 
-# subset based on habitat
+# get ranges to calculate over (this is just for indexing purposes in the next bit of code)
+startAlg <- grep("acanthophora_spicifera", colnames(macroalgae))
+endAlg <- grep("valonia_ventricosa", colnames(macroalgae))
+
+
+macroalgae %>% 
+  # bring in sand data
+  full_join(sand_coral) %>% 
+  rename(coral_cover = coral,
+         sand_cover = sand) %>% 
+  mutate(hard_cover = 100-sand_cover) %>% 
+  mutate(macroalgae_cover = rowSums(macroalgae[startAlg:endAlg]), # percent cover of macroalgae
+         
+         macroalgae_cover_hard = case_when(
+           sand_cover == 100 ~ NA, # since we can't divide by a zero
+           TRUE ~ (macroalgae_cover/hard_cover)*100 
+           ),
+         # also for corals
+         coral_cover_hard = case_when(
+           sand_cover == 100 ~ NA, # since we can't divide by a zero
+           TRUE ~ (coral_cover/hard_cover)*100 
+           )
+         ) %>% # percent cover of hard substrate
+   # make a year-habitat column for betadisper
+  mutate(hab_year = paste0(habitat, "_", year),
+         site_hab_year = paste0(site, "_", hab_year)) %>% 
+  select(year, location, site, habitat, island_side, site_habitat, island_side_habitat,
+         hab_year, site_hab_year, transect, quadrat, macroalgae_cover, 
+         macroalgae_cover_hard, sand_cover, hard_cover, coral_cover, coral_cover_hard)  -> meta_df
+
+meta_df$all_algae_cover <- rowSums(data[startAlg:endAlg]) # percent cover of all algae
+meta_df$all_algae_cover_hard <- case_when(
+           meta_df$sand_cover == 100 ~ NA, # since we can't divide by a zero
+           TRUE ~ (meta_df$all_algae_cover/meta_df$hard_cover)*100   
+         )
+
+data <- merge(meta_df, data )
+macroalgae <- merge(meta_df, macroalgae)
+
+
+meta_cols <- colnames(meta_df)
+
+full_species_cols <- colnames(data)[!colnames(data) %in% meta_cols]
+macro_species_cols <- colnames(macroalgae)[!colnames(macroalgae) %in% meta_cols]
+
+
+# summarize at site level
+site_full <- data %>%
+  dplyr::group_by(year, island_side, site, habitat, site_habitat, hab_year, site_hab_year) %>%
+  dplyr::summarize(across(all_of(
+    c("macroalgae_cover", "macroalgae_cover_hard", "sand_cover", "hard_cover", "coral_cover",
+      "coral_cover_hard","all_algae_cover", "all_algae_cover_hard", full_species_cols)), mean, na.rm = TRUE))
+
+
+# summarize at species level
+site_macro <- macroalgae %>%
+  dplyr::group_by(year, island_side, site, habitat, site_habitat, hab_year, site_hab_year) %>%
+  dplyr::summarize(across(all_of(
+    c("macroalgae_cover", "macroalgae_cover_hard", "sand_cover", "hard_cover", "coral_cover",
+      "coral_cover_hard","all_algae_cover", "all_algae_cover_hard", macro_species_cols)), mean, na.rm = TRUE))
+
+
+# extract site level meta_df for future merges
+site_meta_df <- site_full[,which(names(site_full) %in% meta_cols)]
+
 fringing <- subset(data, habitat == "fringing")
 backreef <- subset(data, habitat == "backreef")
 outer10 <- subset(data, habitat == "outer_10")
 outer17 <- subset(data, habitat == "outer_17")
 
+fringing_macro <- subset(macroalgae, habitat == "fringing")
+backreef_macro <- subset(macroalgae, habitat == "backreef")
+outer10_macro <- subset(macroalgae, habitat == "outer_10")
+outer17_macro <- subset(macroalgae, habitat == "outer_17")
+
+
+fringing_site <- subset(site_full, habitat == "fringing")
+backreef_site <- subset(site_full, habitat == "backreef")
+outer10_site <- subset(site_full, habitat == "outer_10")
+outer17_site <- subset(site_full, habitat == "outer_17")
+
+fringing_site_macro <- subset(site_macro, habitat == "fringing")
+backreef_site_macro <- subset(site_macro, habitat == "backreef")
+outer10_site_macro <- subset(site_macro, habitat == "outer_10")
+outer17_site_macro <- subset(site_macro, habitat == "outer_17")
+```
+
+Moving all site level analyses to before quadrat for beta diversity
+
+
+```{r site level bray curtis setup}
+fringing_site_species_matrix <- as.matrix(fringing_site[ , -which(names(fringing_site) %in% meta_cols)])
+fringing_site_species_matrix <- fringing_site_species_matrix/fringing_site$hard_cover # convert from percent to proportion of hard cover
+rownames(fringing_site_species_matrix) <- paste(fringing_site$year,"-", fringing_site$site_habitat, sep = "")
+
+
+# filter rare species
+# fringing_site_species_presence <- colSums(fringing_site_species_matrix > 0) # Presence absence matrix
+# fringing_site_species_percentage <- (fringing_site_species_presence/nrow(fringing_site_species_matrix)) # proportion of rows where a species is present
+# fringing_site_common_species <- names(fringing_site_species_percentage[fringing_site_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+# fringing_site_species_matrix <- fringing_site_species_matrix[,colnames(fringing_site_species_matrix) %in% fringing_site_common_species] # filter original species matrix
+
+fringing_site_rows_to_remove <- rowSums(fringing_site_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+fringing_site_species_matrix <- fringing_site_species_matrix[!fringing_site_rows_to_remove,] 
+
+fringing_site_species_matrix_untransformed <- fringing_site_species_matrix
+fringing_site_species_matrix_transformed <- asin(sqrt(fringing_site_species_matrix)) # arcsin squareroot transform
+fringing_site_subset <- fringing_site[!fringing_site_rows_to_remove,] # make sure rows are also removed from dataframe
+fringing_site_subset$stratum <- paste(fringing_site_subset$year,"-", fringing_site_subset$site_habitat, sep = "") # for merging with bray matrix later
+
+
+
+brayfringing_site <- vegdist(fringing_site_species_matrix_transformed, "bray") # create bray dissimilarity matrix
+# View(brayfringing_site)
+brayfringing_site_untransformed <- vegdist(fringing_site_species_matrix_untransformed, "bray")
+fringing_site_braymat <- as.matrix(brayfringing_site) # conver to matrix object
+# convert to pairwise comparison
+fringing_site_comp <- fringing_site_braymat[lower.tri(fringing_site_braymat)] # extract lower triangle
+fringing_site_row_indices <- row(fringing_site_braymat)[lower.tri(fringing_site_braymat)] # extract row indices for first quad in comparison
+fringing_site_col_indices <- col(fringing_site_braymat)[lower.tri(fringing_site_braymat)] # extract col indices = second quad in comp
+fringing_site_loc1 <- rownames(fringing_site_braymat)[fringing_site_row_indices] # populate appropriate vector
+fringing_site_loc2 <- colnames(fringing_site_braymat)[fringing_site_col_indices] # populate appropriate vector
+fringing_site_pairwise_df <- data.frame(loc1 = fringing_site_loc1, loc2 = fringing_site_loc2, dissimilarity = fringing_site_comp)
+fringing_site_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", fringing_site_pairwise_df$loc1)) # extract timepoint from first quad in comp
+fringing_site_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", fringing_site_pairwise_df$loc2)) # repeat for second quad
+fringing_site_pairwise_df$time <- abs(fringing_site_pairwise_df$year2 - fringing_site_pairwise_df$year1) # extract length of differences
+fringing_site_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", fringing_site_pairwise_df$loc1) # extract quadrat id from first quad in comp
+fringing_site_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", fringing_site_pairwise_df$loc2) # repeat for second quad
+
+fringing_site_untransformed_braymat <- as.matrix(brayfringing_site_untransformed) # conver to matrix object
+# convert to pairwise comparison
+fringing_site_untransformed_comp <- fringing_site_untransformed_braymat[lower.tri(fringing_site_untransformed_braymat)] # extract lower triangle
+fringing_site_untransformed_row_indices <- row(fringing_site_untransformed_braymat)[lower.tri(fringing_site_untransformed_braymat)] # extract row indices for first quad in comparison
+fringing_site_untransformed_col_indices <- col(fringing_site_untransformed_braymat)[lower.tri(fringing_site_untransformed_braymat)] # extract col indices = second quad in comp
+fringing_site_untransformed_loc1 <- rownames(fringing_site_untransformed_braymat)[fringing_site_untransformed_row_indices] # populate appropriate vector
+fringing_site_untransformed_loc2 <- colnames(fringing_site_untransformed_braymat)[fringing_site_untransformed_col_indices] # populate appropriate vector
+fringing_site_untransformed_pairwise_df <- data.frame(loc1 = fringing_site_untransformed_loc1, loc2 = fringing_site_untransformed_loc2, dissimilarity = fringing_site_untransformed_comp)
+fringing_site_untransformed_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", fringing_site_untransformed_pairwise_df$loc1)) # extract timepoint from first quad in comp
+fringing_site_untransformed_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", fringing_site_untransformed_pairwise_df$loc2)) # repeat for second quad
+fringing_site_untransformed_pairwise_df$time <- abs(fringing_site_untransformed_pairwise_df$year2 - fringing_site_untransformed_pairwise_df$year1) # extract length of differences
+fringing_site_untransformed_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", fringing_site_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
+fringing_site_untransformed_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", fringing_site_untransformed_pairwise_df$loc2) # repeat for second quad
+
+
+# backreef
+
+backreef_site_species_matrix <- as.matrix(backreef_site[ , -which(names(backreef_site) %in% meta_cols)])
+backreef_site_species_matrix <- backreef_site_species_matrix/backreef_site$hard_cover # convert from percent to proportion of hard cover
+rownames(backreef_site_species_matrix) <- paste(backreef_site$year,"-", backreef_site$site_habitat, sep = "")
+
+
+# filter rare species
+# backreef_site_species_presence <- colSums(backreef_site_species_matrix > 0) # Presence absence matrix
+# backreef_site_species_percentage <- (backreef_site_species_presence/nrow(backreef_site_species_matrix)) # proportion of rows where a species is present
+# backreef_site_common_species <- names(backreef_site_species_percentage[backreef_site_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+# backreef_site_species_matrix <- backreef_site_species_matrix[,colnames(backreef_site_species_matrix) %in% backreef_site_common_species] # filter original species matrix
+
+backreef_site_rows_to_remove <- rowSums(backreef_site_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+backreef_site_species_matrix <- backreef_site_species_matrix[!backreef_site_rows_to_remove,] 
+
+backreef_site_species_matrix_untransformed <- backreef_site_species_matrix
+backreef_site_species_matrix_transformed <- asin(sqrt(backreef_site_species_matrix)) # arcsin squareroot transform
+backreef_site_subset <- backreef_site[!backreef_site_rows_to_remove,] # make sure rows are also removed from dataframe
+backreef_site_subset$stratum <- paste(backreef_site_subset$year,"-", backreef_site_subset$site_habitat, sep = "") # for merging with bray matrix later
+
+
+
+braybackreef_site <- vegdist(backreef_site_species_matrix_transformed, "bray") # create bray dissimilarity matrix
+# View(braybackreef_site)
+braybackreef_site_untransformed <- vegdist(backreef_site_species_matrix_untransformed, "bray")
+backreef_site_braymat <- as.matrix(braybackreef_site) # conver to matrix object
+# convert to pairwise comparison
+backreef_site_comp <- backreef_site_braymat[lower.tri(backreef_site_braymat)] # extract lower triangle
+backreef_site_row_indices <- row(backreef_site_braymat)[lower.tri(backreef_site_braymat)] # extract row indices for first quad in comparison
+backreef_site_col_indices <- col(backreef_site_braymat)[lower.tri(backreef_site_braymat)] # extract col indices = second quad in comp
+backreef_site_loc1 <- rownames(backreef_site_braymat)[backreef_site_row_indices] # populate appropriate vector
+backreef_site_loc2 <- colnames(backreef_site_braymat)[backreef_site_col_indices] # populate appropriate vector
+backreef_site_pairwise_df <- data.frame(loc1 = backreef_site_loc1, loc2 = backreef_site_loc2, dissimilarity = backreef_site_comp)
+backreef_site_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", backreef_site_pairwise_df$loc1)) # extract timepoint from first quad in comp
+backreef_site_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", backreef_site_pairwise_df$loc2)) # repeat for second quad
+backreef_site_pairwise_df$time <- abs(backreef_site_pairwise_df$year2 - backreef_site_pairwise_df$year1) # extract length of differences
+backreef_site_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", backreef_site_pairwise_df$loc1) # extract quadrat id from first quad in comp
+backreef_site_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", backreef_site_pairwise_df$loc2) # repeat for second quad
+
+backreef_site_untransformed_braymat <- as.matrix(braybackreef_site_untransformed) # conver to matrix object
+# convert to pairwise comparison
+backreef_site_untransformed_comp <- backreef_site_untransformed_braymat[lower.tri(backreef_site_untransformed_braymat)] # extract lower triangle
+backreef_site_untransformed_row_indices <- row(backreef_site_untransformed_braymat)[lower.tri(backreef_site_untransformed_braymat)] # extract row indices for first quad in comparison
+backreef_site_untransformed_col_indices <- col(backreef_site_untransformed_braymat)[lower.tri(backreef_site_untransformed_braymat)] # extract col indices = second quad in comp
+backreef_site_untransformed_loc1 <- rownames(backreef_site_untransformed_braymat)[backreef_site_untransformed_row_indices] # populate appropriate vector
+backreef_site_untransformed_loc2 <- colnames(backreef_site_untransformed_braymat)[backreef_site_untransformed_col_indices] # populate appropriate vector
+backreef_site_untransformed_pairwise_df <- data.frame(loc1 = backreef_site_untransformed_loc1, loc2 = backreef_site_untransformed_loc2, dissimilarity = backreef_site_untransformed_comp)
+backreef_site_untransformed_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", backreef_site_untransformed_pairwise_df$loc1)) # extract timepoint from first quad in comp
+backreef_site_untransformed_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", backreef_site_untransformed_pairwise_df$loc2)) # repeat for second quad
+backreef_site_untransformed_pairwise_df$time <- abs(backreef_site_untransformed_pairwise_df$year2 - backreef_site_untransformed_pairwise_df$year1) # extract length of differences
+backreef_site_untransformed_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", backreef_site_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
+backreef_site_untransformed_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", backreef_site_untransformed_pairwise_df$loc2) # repeat for second quad
+
+# outer10
+
+outer10_site_species_matrix <- as.matrix(outer10_site[ , -which(names(outer10_site) %in% meta_cols)])
+outer10_site_species_matrix <- outer10_site_species_matrix/outer10_site$hard_cover # convert from percent to proportion of hard cover
+rownames(outer10_site_species_matrix) <- paste(outer10_site$year,"-", outer10_site$site_habitat, sep = "")
+
+
+# filter rare species
+# outer10_site_species_presence <- colSums(outer10_site_species_matrix > 0) # Presence absence matrix
+# outer10_site_species_percentage <- (outer10_site_species_presence/nrow(outer10_site_species_matrix)) # proportion of rows where a species is present
+# outer10_site_common_species <- names(outer10_site_species_percentage[outer10_site_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+# outer10_site_species_matrix <- outer10_site_species_matrix[,colnames(outer10_site_species_matrix) %in% outer10_site_common_species] # filter original species matrix
+
+outer10_site_rows_to_remove <- rowSums(outer10_site_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+outer10_site_species_matrix <- outer10_site_species_matrix[!outer10_site_rows_to_remove,] 
+
+outer10_site_species_matrix_untransformed <- outer10_site_species_matrix
+outer10_site_species_matrix_transformed <- asin(sqrt(outer10_site_species_matrix)) # arcsin squareroot transform
+outer10_site_subset <- outer10_site[!outer10_site_rows_to_remove,] # make sure rows are also removed from dataframe
+outer10_site_subset$stratum <- paste(outer10_site_subset$year,"-", outer10_site_subset$site_habitat, sep = "") # for merging with bray matrix later
+
+
+
+brayouter10_site <- vegdist(outer10_site_species_matrix_transformed, "bray") # create bray dissimilarity matrix
+# View(brayouter10_site)
+brayouter10_site_untransformed <- vegdist(outer10_site_species_matrix_untransformed, "bray")
+outer10_site_braymat <- as.matrix(brayouter10_site) # conver to matrix object
+# convert to pairwise comparison
+outer10_site_comp <- outer10_site_braymat[lower.tri(outer10_site_braymat)] # extract lower triangle
+outer10_site_row_indices <- row(outer10_site_braymat)[lower.tri(outer10_site_braymat)] # extract row indices for first quad in comparison
+outer10_site_col_indices <- col(outer10_site_braymat)[lower.tri(outer10_site_braymat)] # extract col indices = second quad in comp
+outer10_site_loc1 <- rownames(outer10_site_braymat)[outer10_site_row_indices] # populate appropriate vector
+outer10_site_loc2 <- colnames(outer10_site_braymat)[outer10_site_col_indices] # populate appropriate vector
+outer10_site_pairwise_df <- data.frame(loc1 = outer10_site_loc1, loc2 = outer10_site_loc2, dissimilarity = outer10_site_comp)
+outer10_site_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", outer10_site_pairwise_df$loc1)) # extract timepoint from first quad in comp
+outer10_site_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", outer10_site_pairwise_df$loc2)) # repeat for second quad
+outer10_site_pairwise_df$time <- abs(outer10_site_pairwise_df$year2 - outer10_site_pairwise_df$year1) # extract length of differences
+outer10_site_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", outer10_site_pairwise_df$loc1) # extract quadrat id from first quad in comp
+outer10_site_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", outer10_site_pairwise_df$loc2) # repeat for second quad
+
+outer10_site_untransformed_braymat <- as.matrix(brayouter10_site_untransformed) # conver to matrix object
+# convert to pairwise comparison
+outer10_site_untransformed_comp <- outer10_site_untransformed_braymat[lower.tri(outer10_site_untransformed_braymat)] # extract lower triangle
+outer10_site_untransformed_row_indices <- row(outer10_site_untransformed_braymat)[lower.tri(outer10_site_untransformed_braymat)] # extract row indices for first quad in comparison
+outer10_site_untransformed_col_indices <- col(outer10_site_untransformed_braymat)[lower.tri(outer10_site_untransformed_braymat)] # extract col indices = second quad in comp
+outer10_site_untransformed_loc1 <- rownames(outer10_site_untransformed_braymat)[outer10_site_untransformed_row_indices] # populate appropriate vector
+outer10_site_untransformed_loc2 <- colnames(outer10_site_untransformed_braymat)[outer10_site_untransformed_col_indices] # populate appropriate vector
+outer10_site_untransformed_pairwise_df <- data.frame(loc1 = outer10_site_untransformed_loc1, loc2 = outer10_site_untransformed_loc2, dissimilarity = outer10_site_untransformed_comp)
+outer10_site_untransformed_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", outer10_site_untransformed_pairwise_df$loc1)) # extract timepoint from first quad in comp
+outer10_site_untransformed_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", outer10_site_untransformed_pairwise_df$loc2)) # repeat for second quad
+outer10_site_untransformed_pairwise_df$time <- abs(outer10_site_untransformed_pairwise_df$year2 - outer10_site_untransformed_pairwise_df$year1) # extract length of differences
+outer10_site_untransformed_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", outer10_site_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
+outer10_site_untransformed_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", outer10_site_untransformed_pairwise_df$loc2) # repeat for second quad
+
+
+# outer 17
+
+outer17_site_species_matrix <- as.matrix(outer17_site[ , -which(names(outer17_site) %in% meta_cols)])
+outer17_site_species_matrix <- outer17_site_species_matrix/outer17_site$hard_cover # convert from percent to proportion of hard cover
+rownames(outer17_site_species_matrix) <- paste(outer17_site$year,"-", outer17_site$site_habitat, sep = "")
+
+
+# filter rare species
+# outer17_site_species_presence <- colSums(outer17_site_species_matrix > 0) # Presence absence matrix
+# outer17_site_species_percentage <- (outer17_site_species_presence/nrow(outer17_site_species_matrix)) # proportion of rows where a species is present
+# outer17_site_common_species <- names(outer17_site_species_percentage[outer17_site_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+# outer17_site_species_matrix <- outer17_site_species_matrix[,colnames(outer17_site_species_matrix) %in% outer17_site_common_species] # filter original species matrix
+
+outer17_site_rows_to_remove <- rowSums(outer17_site_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+outer17_site_species_matrix <- outer17_site_species_matrix[!outer17_site_rows_to_remove,] 
+
+outer17_site_species_matrix_untransformed <- outer17_site_species_matrix
+outer17_site_species_matrix_transformed <- asin(sqrt(outer17_site_species_matrix)) # arcsin squareroot transform
+outer17_site_subset <- outer17_site[!outer17_site_rows_to_remove,] # make sure rows are also removed from dataframe
+outer17_site_subset$stratum <- paste(outer17_site_subset$year,"-", outer17_site_subset$site_habitat, sep = "") # for merging with bray matrix later
+
+
+
+brayouter17_site <- vegdist(outer17_site_species_matrix_transformed, "bray") # create bray dissimilarity matrix
+# View(brayouter17_site)
+brayouter17_site_untransformed <- vegdist(outer17_site_species_matrix_untransformed, "bray")
+outer17_site_braymat <- as.matrix(brayouter17_site) # conver to matrix object
+# convert to pairwise comparison
+outer17_site_comp <- outer17_site_braymat[lower.tri(outer17_site_braymat)] # extract lower triangle
+outer17_site_row_indices <- row(outer17_site_braymat)[lower.tri(outer17_site_braymat)] # extract row indices for first quad in comparison
+outer17_site_col_indices <- col(outer17_site_braymat)[lower.tri(outer17_site_braymat)] # extract col indices = second quad in comp
+outer17_site_loc1 <- rownames(outer17_site_braymat)[outer17_site_row_indices] # populate appropriate vector
+outer17_site_loc2 <- colnames(outer17_site_braymat)[outer17_site_col_indices] # populate appropriate vector
+outer17_site_pairwise_df <- data.frame(loc1 = outer17_site_loc1, loc2 = outer17_site_loc2, dissimilarity = outer17_site_comp)
+outer17_site_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", outer17_site_pairwise_df$loc1)) # extract timepoint from first quad in comp
+outer17_site_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", outer17_site_pairwise_df$loc2)) # repeat for second quad
+outer17_site_pairwise_df$time <- abs(outer17_site_pairwise_df$year2 - outer17_site_pairwise_df$year1) # extract length of differences
+outer17_site_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", outer17_site_pairwise_df$loc1) # extract quadrat id from first quad in comp
+outer17_site_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", outer17_site_pairwise_df$loc2) # repeat for second quad
+
+outer17_site_untransformed_braymat <- as.matrix(brayouter17_site_untransformed) # conver to matrix object
+# convert to pairwise comparison
+outer17_site_untransformed_comp <- outer17_site_untransformed_braymat[lower.tri(outer17_site_untransformed_braymat)] # extract lower triangle
+outer17_site_untransformed_row_indices <- row(outer17_site_untransformed_braymat)[lower.tri(outer17_site_untransformed_braymat)] # extract row indices for first quad in comparison
+outer17_site_untransformed_col_indices <- col(outer17_site_untransformed_braymat)[lower.tri(outer17_site_untransformed_braymat)] # extract col indices = second quad in comp
+outer17_site_untransformed_loc1 <- rownames(outer17_site_untransformed_braymat)[outer17_site_untransformed_row_indices] # populate appropriate vector
+outer17_site_untransformed_loc2 <- colnames(outer17_site_untransformed_braymat)[outer17_site_untransformed_col_indices] # populate appropriate vector
+outer17_site_untransformed_pairwise_df <- data.frame(loc1 = outer17_site_untransformed_loc1, loc2 = outer17_site_untransformed_loc2, dissimilarity = outer17_site_untransformed_comp)
+outer17_site_untransformed_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", outer17_site_untransformed_pairwise_df$loc1)) # extract timepoint from first quad in comp
+outer17_site_untransformed_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", outer17_site_untransformed_pairwise_df$loc2)) # repeat for second quad
+outer17_site_untransformed_pairwise_df$time <- abs(outer17_site_untransformed_pairwise_df$year2 - outer17_site_untransformed_pairwise_df$year1) # extract length of differences
+outer17_site_untransformed_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", outer17_site_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
+outer17_site_untransformed_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", outer17_site_untransformed_pairwise_df$loc2) # repeat for second quad
+
 
 
 ```
 
-```{r fringing bray curtis}
+
+```{r site bray dissimilarity over time, fig.height=15, fig.width=15}
+# for the purposes of this first set of analyses, I'm interested in dissimilarity of a given quad over time
+# not necessarily interested in how quads compare to each other over time/at each timepoint
+fringing_site_pairwise_subset <- fringing_site_pairwise_df[fringing_site_pairwise_df$site_1 == fringing_site_pairwise_df$site_2,]
+backreef_site_pairwise_subset <- backreef_site_pairwise_df[backreef_site_pairwise_df$site_1 == backreef_site_pairwise_df$site_2,]
+outer10_site_pairwise_subset <- outer10_site_pairwise_df[outer10_site_pairwise_df$site_1 == outer10_site_pairwise_df$site_2,]
+outer17_site_pairwise_subset <- outer17_site_pairwise_df[outer17_site_pairwise_df$site_1 == outer17_site_pairwise_df$site_2,]
+
+comb_site_subset <- rbind(fringing_site_pairwise_subset,
+                     backreef_site_pairwise_subset,
+                     outer10_site_pairwise_subset,
+                     outer17_site_pairwise_subset)
+# site_1 and site_2 columns are all the same now
+# create new col just called for merge with other metadata
+comb_site_subset$site_habitat <- comb_site_subset$site_1
+
+bray_time_series_site <- left_join(unique(site_meta_df[ , c("site", "site_habitat", "habitat", "island_side")]), comb_site_subset, by = "site_habitat")
+
+
+# model
+
+
+
+# transformed dissimilarities
+bray_time_series_site$dissimilarity_trans <- sv_trans(bray_time_series_site$dissimilarity, bray_time_series_site)
+
+bray_mod_site <- glmmTMB(dissimilarity_trans ~ time*habitat + (1 | site),
+                              na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series_site) #
+summary(bray_mod_site) 
+hist(residuals(bray_mod_site)) # slight skew but not awful
+plot(residuals(bray_mod_site) ~ fitted(bray_mod_site)) # some heteroskedasticity but not bad
+Anova(bray_mod_site)
+emtrends(bray_mod_site, pairwise ~ habitat , "time") # no sig differences
+bray_trends_emm_site <- emmip(bray_mod_site, habitat ~ time , at = list(time = seq(1,16,1)), plotit = F, CIs = T)
+
+
+ggplot()+
+   geom_point(data = bray_time_series_site, aes(x = time, y = dissimilarity, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = bray_trends_emm_site, aes(x = time, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = bray_trends_emm_site, aes(x = time, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+
+   labs(y = "Dissimilarity\n") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+```
+
+```{r dissimilarity compared to baseline all, fig.height=15, fig.width = 15}
+bray_time_series_site_baseline <- subset(bray_time_series_site, year2 == 2007)
+bray_mod_site_baseline <- glmmTMB(dissimilarity_trans ~ time*habitat + (1 | site),
+                              na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series_site_baseline)
+hist(residuals(bray_mod_site_baseline)) # long tails but not bad
+plot(residuals(bray_mod_site_baseline) ~ fitted(bray_mod_site_baseline) ) # heteroskedastic
+Anova(bray_mod_site_baseline)
+#                Chisq Df Pr(>Chisq)   
+# time          1.9842  1   0.158944   
+# habitat      12.3261  3   0.006346 **
+# time:habitat  0.7516  3   0.860994   
+emtrends(bray_mod_site_baseline, pairwise ~ habitat , "time") # no sig differences
+bray_trends_emm_site_baseline <- emmip(bray_mod_site_baseline, habitat ~ time , at = list(time = seq(1,16,1)), plotit = F, CIs = T)
+
+
+ggplot()+
+   geom_point(data = bray_time_series_site_baseline, aes(x = time, y = dissimilarity, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = bray_trends_emm_site_baseline, aes(x = time, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = bray_trends_emm_site_baseline, aes(x = time, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+
+   labs(y = "Dissimilarity\n") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+```
+
+```{r site macroalgae level bray curtis setup}
+fringing_site_macro_species_matrix <- as.matrix(fringing_site_macro[ , -which(names(fringing_site_macro) %in% meta_cols)])
+fringing_site_macro_species_matrix <- fringing_site_macro_species_matrix/fringing_site_macro$hard_cover # convert from percent to proportion of hard cover
+rownames(fringing_site_macro_species_matrix) <- paste(fringing_site_macro$year,"-", fringing_site_macro$site_habitat, sep = "")
+
+
+# filter rare species
+# fringing_site_macro_species_presence <- colSums(fringing_site_macro_species_matrix > 0) # Presence absence matrix
+# fringing_site_macro_species_percentage <- (fringing_site_macro_species_presence/nrow(fringing_site_macro_species_matrix)) # proportion of rows where a species is present
+# fringing_site_macro_common_species <- names(fringing_site_macro_species_percentage[fringing_site_macro_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+# fringing_site_macro_species_matrix <- fringing_site_macro_species_matrix[,colnames(fringing_site_macro_species_matrix) %in% fringing_site_macro_common_species] # filter original species matrix
+
+fringing_site_macro_rows_to_remove <- rowSums(fringing_site_macro_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+fringing_site_macro_species_matrix <- fringing_site_macro_species_matrix[!fringing_site_macro_rows_to_remove,] 
+
+fringing_site_macro_species_matrix_untransformed <- fringing_site_macro_species_matrix
+fringing_site_macro_species_matrix_transformed <- asin(sqrt(fringing_site_macro_species_matrix)) # arcsin squareroot transform
+fringing_site_macro_subset <- fringing_site_macro[!fringing_site_macro_rows_to_remove,] # make sure rows are also removed from dataframe
+fringing_site_macro_subset$stratum <- paste(fringing_site_macro_subset$year,"-", fringing_site_macro_subset$site_habitat, sep = "") # for merging with bray matrix later
+
+
+
+brayfringing_site_macro <- vegdist(fringing_site_macro_species_matrix_transformed, "bray") # create bray dissimilarity matrix
+# View(brayfringing_site_macro)
+brayfringing_site_macro_untransformed <- vegdist(fringing_site_macro_species_matrix_untransformed, "bray")
+fringing_site_macro_braymat <- as.matrix(brayfringing_site_macro) # conver to matrix object
+# convert to pairwise comparison
+fringing_site_macro_comp <- fringing_site_macro_braymat[lower.tri(fringing_site_macro_braymat)] # extract lower triangle
+fringing_site_macro_row_indices <- row(fringing_site_macro_braymat)[lower.tri(fringing_site_macro_braymat)] # extract row indices for first quad in comparison
+fringing_site_macro_col_indices <- col(fringing_site_macro_braymat)[lower.tri(fringing_site_macro_braymat)] # extract col indices = second quad in comp
+fringing_site_macro_loc1 <- rownames(fringing_site_macro_braymat)[fringing_site_macro_row_indices] # populate appropriate vector
+fringing_site_macro_loc2 <- colnames(fringing_site_macro_braymat)[fringing_site_macro_col_indices] # populate appropriate vector
+fringing_site_macro_pairwise_df <- data.frame(loc1 = fringing_site_macro_loc1, loc2 = fringing_site_macro_loc2, dissimilarity = fringing_site_macro_comp)
+fringing_site_macro_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", fringing_site_macro_pairwise_df$loc1)) # extract timepoint from first quad in comp
+fringing_site_macro_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", fringing_site_macro_pairwise_df$loc2)) # repeat for second quad
+fringing_site_macro_pairwise_df$time <- abs(fringing_site_macro_pairwise_df$year2 - fringing_site_macro_pairwise_df$year1) # extract length of differences
+fringing_site_macro_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", fringing_site_macro_pairwise_df$loc1) # extract quadrat id from first quad in comp
+fringing_site_macro_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", fringing_site_macro_pairwise_df$loc2) # repeat for second quad
+
+fringing_site_macro_untransformed_braymat <- as.matrix(brayfringing_site_macro_untransformed) # conver to matrix object
+# convert to pairwise comparison
+fringing_site_macro_untransformed_comp <- fringing_site_macro_untransformed_braymat[lower.tri(fringing_site_macro_untransformed_braymat)] # extract lower triangle
+fringing_site_macro_untransformed_row_indices <- row(fringing_site_macro_untransformed_braymat)[lower.tri(fringing_site_macro_untransformed_braymat)] # extract row indices for first quad in comparison
+fringing_site_macro_untransformed_col_indices <- col(fringing_site_macro_untransformed_braymat)[lower.tri(fringing_site_macro_untransformed_braymat)] # extract col indices = second quad in comp
+fringing_site_macro_untransformed_loc1 <- rownames(fringing_site_macro_untransformed_braymat)[fringing_site_macro_untransformed_row_indices] # populate appropriate vector
+fringing_site_macro_untransformed_loc2 <- colnames(fringing_site_macro_untransformed_braymat)[fringing_site_macro_untransformed_col_indices] # populate appropriate vector
+fringing_site_macro_untransformed_pairwise_df <- data.frame(loc1 = fringing_site_macro_untransformed_loc1, loc2 = fringing_site_macro_untransformed_loc2, dissimilarity = fringing_site_macro_untransformed_comp)
+fringing_site_macro_untransformed_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", fringing_site_macro_untransformed_pairwise_df$loc1)) # extract timepoint from first quad in comp
+fringing_site_macro_untransformed_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", fringing_site_macro_untransformed_pairwise_df$loc2)) # repeat for second quad
+fringing_site_macro_untransformed_pairwise_df$time <- abs(fringing_site_macro_untransformed_pairwise_df$year2 - fringing_site_macro_untransformed_pairwise_df$year1) # extract length of differences
+fringing_site_macro_untransformed_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", fringing_site_macro_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
+fringing_site_macro_untransformed_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", fringing_site_macro_untransformed_pairwise_df$loc2) # repeat for second quad
+
+
+# backreef
+
+backreef_site_macro_species_matrix <- as.matrix(backreef_site_macro[ , -which(names(backreef_site_macro) %in% meta_cols)])
+backreef_site_macro_species_matrix <- backreef_site_macro_species_matrix/backreef_site_macro$hard_cover # convert from percent to proportion of hard cover
+rownames(backreef_site_macro_species_matrix) <- paste(backreef_site_macro$year,"-", backreef_site_macro$site_habitat, sep = "")
+
+
+# filter rare species
+# backreef_site_macro_species_presence <- colSums(backreef_site_macro_species_matrix > 0) # Presence absence matrix
+# backreef_site_macro_species_percentage <- (backreef_site_macro_species_presence/nrow(backreef_site_macro_species_matrix)) # proportion of rows where a species is present
+# backreef_site_macro_common_species <- names(backreef_site_macro_species_percentage[backreef_site_macro_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+# backreef_site_macro_species_matrix <- backreef_site_macro_species_matrix[,colnames(backreef_site_macro_species_matrix) %in% backreef_site_macro_common_species] # filter original species matrix
+
+backreef_site_macro_rows_to_remove <- rowSums(backreef_site_macro_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+backreef_site_macro_species_matrix <- backreef_site_macro_species_matrix[!backreef_site_macro_rows_to_remove,] 
+
+backreef_site_macro_species_matrix_untransformed <- backreef_site_macro_species_matrix
+backreef_site_macro_species_matrix_transformed <- asin(sqrt(backreef_site_macro_species_matrix)) # arcsin squareroot transform
+backreef_site_macro_subset <- backreef_site_macro[!backreef_site_macro_rows_to_remove,] # make sure rows are also removed from dataframe
+backreef_site_macro_subset$stratum <- paste(backreef_site_macro_subset$year,"-", backreef_site_macro_subset$site_habitat, sep = "") # for merging with bray matrix later
+
+
+
+braybackreef_site_macro <- vegdist(backreef_site_macro_species_matrix_transformed, "bray") # create bray dissimilarity matrix
+# View(braybackreef_site_macro)
+braybackreef_site_macro_untransformed <- vegdist(backreef_site_macro_species_matrix_untransformed, "bray")
+backreef_site_macro_braymat <- as.matrix(braybackreef_site_macro) # conver to matrix object
+# convert to pairwise comparison
+backreef_site_macro_comp <- backreef_site_macro_braymat[lower.tri(backreef_site_macro_braymat)] # extract lower triangle
+backreef_site_macro_row_indices <- row(backreef_site_macro_braymat)[lower.tri(backreef_site_macro_braymat)] # extract row indices for first quad in comparison
+backreef_site_macro_col_indices <- col(backreef_site_macro_braymat)[lower.tri(backreef_site_macro_braymat)] # extract col indices = second quad in comp
+backreef_site_macro_loc1 <- rownames(backreef_site_macro_braymat)[backreef_site_macro_row_indices] # populate appropriate vector
+backreef_site_macro_loc2 <- colnames(backreef_site_macro_braymat)[backreef_site_macro_col_indices] # populate appropriate vector
+backreef_site_macro_pairwise_df <- data.frame(loc1 = backreef_site_macro_loc1, loc2 = backreef_site_macro_loc2, dissimilarity = backreef_site_macro_comp)
+backreef_site_macro_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", backreef_site_macro_pairwise_df$loc1)) # extract timepoint from first quad in comp
+backreef_site_macro_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", backreef_site_macro_pairwise_df$loc2)) # repeat for second quad
+backreef_site_macro_pairwise_df$time <- abs(backreef_site_macro_pairwise_df$year2 - backreef_site_macro_pairwise_df$year1) # extract length of differences
+backreef_site_macro_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", backreef_site_macro_pairwise_df$loc1) # extract quadrat id from first quad in comp
+backreef_site_macro_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", backreef_site_macro_pairwise_df$loc2) # repeat for second quad
+
+backreef_site_macro_untransformed_braymat <- as.matrix(braybackreef_site_macro_untransformed) # conver to matrix object
+# convert to pairwise comparison
+backreef_site_macro_untransformed_comp <- backreef_site_macro_untransformed_braymat[lower.tri(backreef_site_macro_untransformed_braymat)] # extract lower triangle
+backreef_site_macro_untransformed_row_indices <- row(backreef_site_macro_untransformed_braymat)[lower.tri(backreef_site_macro_untransformed_braymat)] # extract row indices for first quad in comparison
+backreef_site_macro_untransformed_col_indices <- col(backreef_site_macro_untransformed_braymat)[lower.tri(backreef_site_macro_untransformed_braymat)] # extract col indices = second quad in comp
+backreef_site_macro_untransformed_loc1 <- rownames(backreef_site_macro_untransformed_braymat)[backreef_site_macro_untransformed_row_indices] # populate appropriate vector
+backreef_site_macro_untransformed_loc2 <- colnames(backreef_site_macro_untransformed_braymat)[backreef_site_macro_untransformed_col_indices] # populate appropriate vector
+backreef_site_macro_untransformed_pairwise_df <- data.frame(loc1 = backreef_site_macro_untransformed_loc1, loc2 = backreef_site_macro_untransformed_loc2, dissimilarity = backreef_site_macro_untransformed_comp)
+backreef_site_macro_untransformed_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", backreef_site_macro_untransformed_pairwise_df$loc1)) # extract timepoint from first quad in comp
+backreef_site_macro_untransformed_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", backreef_site_macro_untransformed_pairwise_df$loc2)) # repeat for second quad
+backreef_site_macro_untransformed_pairwise_df$time <- abs(backreef_site_macro_untransformed_pairwise_df$year2 - backreef_site_macro_untransformed_pairwise_df$year1) # extract length of differences
+backreef_site_macro_untransformed_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", backreef_site_macro_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
+backreef_site_macro_untransformed_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", backreef_site_macro_untransformed_pairwise_df$loc2) # repeat for second quad
+
+# outer10
+
+outer10_site_macro_species_matrix <- as.matrix(outer10_site_macro[ , -which(names(outer10_site_macro) %in% meta_cols)])
+outer10_site_macro_species_matrix <- outer10_site_macro_species_matrix/outer10_site_macro$hard_cover # convert from percent to proportion of hard cover
+rownames(outer10_site_macro_species_matrix) <- paste(outer10_site_macro$year,"-", outer10_site_macro$site_habitat, sep = "")
+
+
+# filter rare species
+# outer10_site_macro_species_presence <- colSums(outer10_site_macro_species_matrix > 0) # Presence absence matrix
+# outer10_site_macro_species_percentage <- (outer10_site_macro_species_presence/nrow(outer10_site_macro_species_matrix)) # proportion of rows where a species is present
+# outer10_site_macro_common_species <- names(outer10_site_macro_species_percentage[outer10_site_macro_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+# outer10_site_macro_species_matrix <- outer10_site_macro_species_matrix[,colnames(outer10_site_macro_species_matrix) %in% outer10_site_macro_common_species] # filter original species matrix
+
+outer10_site_macro_rows_to_remove <- rowSums(outer10_site_macro_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+outer10_site_macro_species_matrix <- outer10_site_macro_species_matrix[!outer10_site_macro_rows_to_remove,] 
+
+outer10_site_macro_species_matrix_untransformed <- outer10_site_macro_species_matrix
+outer10_site_macro_species_matrix_transformed <- asin(sqrt(outer10_site_macro_species_matrix)) # arcsin squareroot transform
+outer10_site_macro_subset <- outer10_site_macro[!outer10_site_macro_rows_to_remove,] # make sure rows are also removed from dataframe
+outer10_site_macro_subset$stratum <- paste(outer10_site_macro_subset$year,"-", outer10_site_macro_subset$site_habitat, sep = "") # for merging with bray matrix later
+
+
+
+brayouter10_site_macro <- vegdist(outer10_site_macro_species_matrix_transformed, "bray") # create bray dissimilarity matrix
+# View(brayouter10_site_macro)
+brayouter10_site_macro_untransformed <- vegdist(outer10_site_macro_species_matrix_untransformed, "bray")
+outer10_site_macro_braymat <- as.matrix(brayouter10_site_macro) # conver to matrix object
+# convert to pairwise comparison
+outer10_site_macro_comp <- outer10_site_macro_braymat[lower.tri(outer10_site_macro_braymat)] # extract lower triangle
+outer10_site_macro_row_indices <- row(outer10_site_macro_braymat)[lower.tri(outer10_site_macro_braymat)] # extract row indices for first quad in comparison
+outer10_site_macro_col_indices <- col(outer10_site_macro_braymat)[lower.tri(outer10_site_macro_braymat)] # extract col indices = second quad in comp
+outer10_site_macro_loc1 <- rownames(outer10_site_macro_braymat)[outer10_site_macro_row_indices] # populate appropriate vector
+outer10_site_macro_loc2 <- colnames(outer10_site_macro_braymat)[outer10_site_macro_col_indices] # populate appropriate vector
+outer10_site_macro_pairwise_df <- data.frame(loc1 = outer10_site_macro_loc1, loc2 = outer10_site_macro_loc2, dissimilarity = outer10_site_macro_comp)
+outer10_site_macro_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", outer10_site_macro_pairwise_df$loc1)) # extract timepoint from first quad in comp
+outer10_site_macro_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", outer10_site_macro_pairwise_df$loc2)) # repeat for second quad
+outer10_site_macro_pairwise_df$time <- abs(outer10_site_macro_pairwise_df$year2 - outer10_site_macro_pairwise_df$year1) # extract length of differences
+outer10_site_macro_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", outer10_site_macro_pairwise_df$loc1) # extract quadrat id from first quad in comp
+outer10_site_macro_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", outer10_site_macro_pairwise_df$loc2) # repeat for second quad
+
+outer10_site_macro_untransformed_braymat <- as.matrix(brayouter10_site_macro_untransformed) # conver to matrix object
+# convert to pairwise comparison
+outer10_site_macro_untransformed_comp <- outer10_site_macro_untransformed_braymat[lower.tri(outer10_site_macro_untransformed_braymat)] # extract lower triangle
+outer10_site_macro_untransformed_row_indices <- row(outer10_site_macro_untransformed_braymat)[lower.tri(outer10_site_macro_untransformed_braymat)] # extract row indices for first quad in comparison
+outer10_site_macro_untransformed_col_indices <- col(outer10_site_macro_untransformed_braymat)[lower.tri(outer10_site_macro_untransformed_braymat)] # extract col indices = second quad in comp
+outer10_site_macro_untransformed_loc1 <- rownames(outer10_site_macro_untransformed_braymat)[outer10_site_macro_untransformed_row_indices] # populate appropriate vector
+outer10_site_macro_untransformed_loc2 <- colnames(outer10_site_macro_untransformed_braymat)[outer10_site_macro_untransformed_col_indices] # populate appropriate vector
+outer10_site_macro_untransformed_pairwise_df <- data.frame(loc1 = outer10_site_macro_untransformed_loc1, loc2 = outer10_site_macro_untransformed_loc2, dissimilarity = outer10_site_macro_untransformed_comp)
+outer10_site_macro_untransformed_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", outer10_site_macro_untransformed_pairwise_df$loc1)) # extract timepoint from first quad in comp
+outer10_site_macro_untransformed_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", outer10_site_macro_untransformed_pairwise_df$loc2)) # repeat for second quad
+outer10_site_macro_untransformed_pairwise_df$time <- abs(outer10_site_macro_untransformed_pairwise_df$year2 - outer10_site_macro_untransformed_pairwise_df$year1) # extract length of differences
+outer10_site_macro_untransformed_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", outer10_site_macro_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
+outer10_site_macro_untransformed_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", outer10_site_macro_untransformed_pairwise_df$loc2) # repeat for second quad
+
+
+# outer 17
+
+outer17_site_macro_species_matrix <- as.matrix(outer17_site_macro[ , -which(names(outer17_site_macro) %in% meta_cols)])
+outer17_site_macro_species_matrix <- outer17_site_macro_species_matrix/outer17_site_macro$hard_cover # convert from percent to proportion of hard cover
+rownames(outer17_site_macro_species_matrix) <- paste(outer17_site_macro$year,"-", outer17_site_macro$site_habitat, sep = "")
+
+
+# filter rare species
+# outer17_site_macro_species_presence <- colSums(outer17_site_macro_species_matrix > 0) # Presence absence matrix
+# outer17_site_macro_species_percentage <- (outer17_site_macro_species_presence/nrow(outer17_site_macro_species_matrix)) # proportion of rows where a species is present
+# outer17_site_macro_common_species <- names(outer17_site_macro_species_percentage[outer17_site_macro_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+# outer17_site_macro_species_matrix <- outer17_site_macro_species_matrix[,colnames(outer17_site_macro_species_matrix) %in% outer17_site_macro_common_species] # filter original species matrix
+
+outer17_site_macro_rows_to_remove <- rowSums(outer17_site_macro_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+outer17_site_macro_species_matrix <- outer17_site_macro_species_matrix[!outer17_site_macro_rows_to_remove,] 
+
+outer17_site_macro_species_matrix_untransformed <- outer17_site_macro_species_matrix
+outer17_site_macro_species_matrix_transformed <- asin(sqrt(outer17_site_macro_species_matrix)) # arcsin squareroot transform
+outer17_site_macro_subset <- outer17_site_macro[!outer17_site_macro_rows_to_remove,] # make sure rows are also removed from dataframe
+outer17_site_macro_subset$stratum <- paste(outer17_site_macro_subset$year,"-", outer17_site_macro_subset$site_habitat, sep = "") # for merging with bray matrix later
+
+
+
+brayouter17_site_macro <- vegdist(outer17_site_macro_species_matrix_transformed, "bray") # create bray dissimilarity matrix
+# View(brayouter17_site_macro)
+brayouter17_site_macro_untransformed <- vegdist(outer17_site_macro_species_matrix_untransformed, "bray")
+outer17_site_macro_braymat <- as.matrix(brayouter17_site_macro) # conver to matrix object
+# convert to pairwise comparison
+outer17_site_macro_comp <- outer17_site_macro_braymat[lower.tri(outer17_site_macro_braymat)] # extract lower triangle
+outer17_site_macro_row_indices <- row(outer17_site_macro_braymat)[lower.tri(outer17_site_macro_braymat)] # extract row indices for first quad in comparison
+outer17_site_macro_col_indices <- col(outer17_site_macro_braymat)[lower.tri(outer17_site_macro_braymat)] # extract col indices = second quad in comp
+outer17_site_macro_loc1 <- rownames(outer17_site_macro_braymat)[outer17_site_macro_row_indices] # populate appropriate vector
+outer17_site_macro_loc2 <- colnames(outer17_site_macro_braymat)[outer17_site_macro_col_indices] # populate appropriate vector
+outer17_site_macro_pairwise_df <- data.frame(loc1 = outer17_site_macro_loc1, loc2 = outer17_site_macro_loc2, dissimilarity = outer17_site_macro_comp)
+outer17_site_macro_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", outer17_site_macro_pairwise_df$loc1)) # extract timepoint from first quad in comp
+outer17_site_macro_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", outer17_site_macro_pairwise_df$loc2)) # repeat for second quad
+outer17_site_macro_pairwise_df$time <- abs(outer17_site_macro_pairwise_df$year2 - outer17_site_macro_pairwise_df$year1) # extract length of differences
+outer17_site_macro_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", outer17_site_macro_pairwise_df$loc1) # extract quadrat id from first quad in comp
+outer17_site_macro_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", outer17_site_macro_pairwise_df$loc2) # repeat for second quad
+
+outer17_site_macro_untransformed_braymat <- as.matrix(brayouter17_site_macro_untransformed) # conver to matrix object
+# convert to pairwise comparison
+outer17_site_macro_untransformed_comp <- outer17_site_macro_untransformed_braymat[lower.tri(outer17_site_macro_untransformed_braymat)] # extract lower triangle
+outer17_site_macro_untransformed_row_indices <- row(outer17_site_macro_untransformed_braymat)[lower.tri(outer17_site_macro_untransformed_braymat)] # extract row indices for first quad in comparison
+outer17_site_macro_untransformed_col_indices <- col(outer17_site_macro_untransformed_braymat)[lower.tri(outer17_site_macro_untransformed_braymat)] # extract col indices = second quad in comp
+outer17_site_macro_untransformed_loc1 <- rownames(outer17_site_macro_untransformed_braymat)[outer17_site_macro_untransformed_row_indices] # populate appropriate vector
+outer17_site_macro_untransformed_loc2 <- colnames(outer17_site_macro_untransformed_braymat)[outer17_site_macro_untransformed_col_indices] # populate appropriate vector
+outer17_site_macro_untransformed_pairwise_df <- data.frame(loc1 = outer17_site_macro_untransformed_loc1, loc2 = outer17_site_macro_untransformed_loc2, dissimilarity = outer17_site_macro_untransformed_comp)
+outer17_site_macro_untransformed_pairwise_df$year1 <- as.numeric(sub("(.*)-.*", "\\1", outer17_site_macro_untransformed_pairwise_df$loc1)) # extract timepoint from first quad in comp
+outer17_site_macro_untransformed_pairwise_df$year2 <- as.numeric(sub("(.*)-.*", "\\1", outer17_site_macro_untransformed_pairwise_df$loc2)) # repeat for second quad
+outer17_site_macro_untransformed_pairwise_df$time <- abs(outer17_site_macro_untransformed_pairwise_df$year2 - outer17_site_macro_untransformed_pairwise_df$year1) # extract length of differences
+outer17_site_macro_untransformed_pairwise_df$site_1 <- sub(".*-(.*)", "\\1", outer17_site_macro_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
+outer17_site_macro_untransformed_pairwise_df$site_2 <- sub(".*-(.*)", "\\1", outer17_site_macro_untransformed_pairwise_df$loc2) # repeat for second quad
+
+
+
+```
+
+
+```{r site macroalgae bray dissimilarity over time, fig.height=15, fig.width=15}
+# for the purposes of this first set of analyses, I'm interested in dissimilarity of a given quad over time
+# not necessarily interested in how quads compare to each other over time/at each timepoint
+fringing_site_macro_pairwise_subset <- fringing_site_macro_pairwise_df[fringing_site_macro_pairwise_df$site_1 == fringing_site_macro_pairwise_df$site_2,]
+backreef_site_macro_pairwise_subset <- backreef_site_macro_pairwise_df[backreef_site_macro_pairwise_df$site_1 == backreef_site_macro_pairwise_df$site_2,]
+outer10_site_macro_pairwise_subset <- outer10_site_macro_pairwise_df[outer10_site_macro_pairwise_df$site_1 == outer10_site_macro_pairwise_df$site_2,]
+outer17_site_macro_pairwise_subset <- outer17_site_macro_pairwise_df[outer17_site_macro_pairwise_df$site_1 == outer17_site_macro_pairwise_df$site_2,]
+
+comb_site_macro_subset <- rbind(fringing_site_macro_pairwise_subset,
+                     backreef_site_macro_pairwise_subset,
+                     outer10_site_macro_pairwise_subset,
+                     outer17_site_macro_pairwise_subset)
+# site_1 and site_2 columns are all the same now
+# create new col just called for merge with other metadata
+comb_site_macro_subset$site_habitat <- comb_site_macro_subset$site_1
+
+bray_time_series_site_macro <- left_join(unique(site_meta_df[ , c("site", "site_habitat", "habitat", "island_side")]), comb_site_macro_subset, by = "site_habitat")
+
+
+# model
+# transformed dissimilarities
+bray_time_series_site_macro$dissimilarity_trans <- sv_trans(bray_time_series_site_macro$dissimilarity, bray_time_series_site_macro)
+
+bray_mod_site_macro <- glmmTMB(dissimilarity_trans ~ time*habitat + (1 | site),
+                              na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series_site_macro) #
+summary(bray_mod_site_macro) 
+hist(residuals(bray_mod_site_macro)) # slight skew but not awful
+plot(residuals(bray_mod_site_macro) ~ fitted(bray_mod_site_macro)) # stronger patterning here - negative slope
+
+emtrends(bray_mod_site_macro, pairwise ~ habitat , "time") # fringing slope significantly different from all others
+bray_trends_emm_site_macro <- emmip(bray_mod_site_macro, habitat ~ time , at = list(time = seq(1,16,1)), plotit = F, CIs = T)
+
+
+ggplot()+
+   geom_point(data = bray_time_series_site_macro, aes(x = time, y = dissimilarity, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = bray_trends_emm_site_macro, aes(x = time, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = bray_trends_emm_site_macro, aes(x = time, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+
+   labs(y = "Dissimilarity\n") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+```
+
+```{r dissimilarity compared to baseline macro, fig.height=15, fig.width = 15}
+bray_time_series_site_macro_baseline <- subset(bray_time_series_site_macro, year2 == 2007)
+bray_mod_site_macro_baseline <- glmmTMB(dissimilarity_trans ~ time*habitat + (1 | site),
+                              na.action = na.pass, family = beta_family(link = "logit"), data = bray_time_series_site_macro_baseline)
+hist(residuals(bray_mod_site_macro_baseline)) # slight negative skew
+plot(residuals(bray_mod_site_macro_baseline) ~ fitted(bray_mod_site_macro_baseline) ) # strong negative trend
+Anova(bray_mod_site_macro_baseline)
+Response: dissimilarity_trans
+#                Chisq Df Pr(>Chisq)    
+# time          0.7391  1    0.38994    
+# habitat      56.1360  3  3.929e-12 ***
+# time:habitat 14.4254  3    0.00238 ** 
+emtrends(bray_mod_site_macro_baseline, pairwise ~ habitat , "time") # fringing slope significantly different from all others
+bray_trends_emm_site_macro_baseline <- emmip(bray_mod_site_macro_baseline, habitat ~ time , at = list(time = seq(1,16,1)), plotit = F, CIs = T)
+
+
+ggplot()+
+   geom_point(data = bray_time_series_site_macro_baseline, aes(x = time, y = dissimilarity, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = bray_trends_emm_site_macro_baseline, aes(x = time, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = bray_trends_emm_site_macro_baseline, aes(x = time, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+
+   labs(y = "Dissimilarity\n") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+```
+
+```{r site level ordination all algae, fig.height=15, fig.width=15}
+
+# get names of quads that remained after removing rare species
+relevant_sites <- c(rownames(fringing_site_species_matrix_transformed), rownames(backreef_site_species_matrix_transformed),
+                    rownames(outer10_site_species_matrix_transformed), rownames(outer17_site_species_matrix_transformed))
+
+full_site_species_matrix <- as.matrix(site_full[ , -which(names(site_full) %in% meta_cols)])
+full_site_species_matrix <- full_site_species_matrix/site_full$hard_cover # convert from percent to proportion of hard cover
+rownames(full_site_species_matrix) <- paste(site_full$year,"-", site_full$site_habitat, sep = "")
+
+full_site_species_matrix <- full_site_species_matrix[rownames(full_site_species_matrix) %in% relevant_sites,] # subset so only quads that didn't contain rare species are represented
+full_site_species_matrix <- asin(sqrt(full_site_species_matrix)) # arcsin squareroot transform
+site_full$stratum <- paste(site_full$year,"-", site_full$site_habitat, sep = "") # for merging with bray matrix later
+full_subset <- site_full[site_full$stratum %in% relevant_sites,] # make sure rows are also removed from dataframe
+
+
+
+full_columns_to_keep <- apply(full_site_species_matrix, 2, function(x) any(x >= asin(sqrt(0.05) )))
+full_abundant_site_species_matrix <- as.data.frame(full_site_species_matrix)[ , full_columns_to_keep]
+full_abundant_site_species_names <- colnames(full_abundant_site_species_matrix)
+
+ 
+# for mean centroid:
+
+
+full_site_meta_condensed <- site_meta_df %>%
+ group_by(year, habitat, hab_year) %>%
+ summarize() %>%
+ ungroup()
+     
+
+set.seed(1032) 
+full_ord3_site <- metaMDS(full_site_species_matrix, dist	= "bray", k = 3, trymax = 100) 
+full_ord3_site # 0.149
+
+
+full.species.scores_site <- as.data.frame(scores(full_ord3_site, "species")) # some NaN for absent species
+full.species.scores_site <- na.omit(full.species.scores_site)
+full.species.scores_site$species <- rownames(full.species.scores_site) 
+full.abundant.species.scores_site <- full.species.scores_site[full.species.scores_site$species %in% full_abundant_site_species_names,]
+
+
+full.site.scores_site <- as.data.frame(vegan::scores(full_ord3_site, "sites"))  # extract the site scores and convert to a data.frame
+# add back in metadata
+full.site.scores_site$stratum <- rownames(full.site.scores_site)
+full.site.scores_site <- merge(site_meta_df, full.site.scores_site, by = "stratum")
+
+
+
+
+# write_csv(full.site.scores_site, here("data", "full_site_level_site_scores.csv"))
+# write_csv(full.species.scores_site, here("data", "full_site_level_species_scores.csv"))
+
+full.cent_site <- aggregate(cbind(NMDS1, NMDS2) ~ hab_year, data = full.site.scores_site, FUN = mean) 
+full.cent_site <- merge(full.cent_site, full_site_meta_condensed, by = "hab_year")
+
+# read in disturbances
+disturbances <- read.csv(here("data", "disturbance_list.csv"))
+full.cent_site <- merge(full.cent_site, disturbances, by = "year") # add disturbances to path
+library(ggrepel)
+ggplot() + 
+  geom_point(data= full.site.scores_site, aes(x=NMDS1,y=NMDS2, colour = habitat), alpha = 0.05) + # add the point markers
+  geom_text_repel(data= full.abundant.species.scores_site,aes(x=NMDS1,y=NMDS2, label = species), size = 6, alpha = 0.7) +  # add the species labels
+  
+  geom_path(data = full.cent_site, aes(x = NMDS1, y = NMDS2, group = habitat, colour = habitat),
+            arrow = arrow(length=unit(0.4,"cm"), ends="last", type = "closed"), size = 1) +
+  geom_point(data = full.cent_site, aes(x = NMDS1, y = NMDS2, group = habitat, colour = habitat, shape = disturbance), size = 3, stroke = 1.4) +
+  scale_shape_manual(values = c(
+    "cots" = 8,
+    "cyclone" = 13,
+    "bleaching" = 4
+  )) +
+
+  scale_colour_manual(values = habitat_colours) +
+
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        strip.text.x = element_text(size = 25),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(1.5)), # increase legend text
+        legend.title = element_text(size = rel(1.5)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) + # add box around legend
+  guides(colour=guide_legend(title.position="top", # make color legend title go above legend
+                                     title.hjust =0.5, nrow = 2),
+         shape=guide_legend(title.position="top",  # make shape legend title go above legend
+                                     title.hjust =0.5,
+                            nrow = 2),
+         path = guide_legend(title.position="top",  # make shape legend title go above legend
+                                     title.hjust =0.5)
+         )  
+
+
+
+```
+
+```{r site level ordination set up macroalgae, fig.height=15, fig.width=15}
+
+# get names of quads that remained after removing rare species
+relevant_site_macros <- c(rownames(fringing_site_macro_species_matrix_transformed), rownames(backreef_site_macro_species_matrix_transformed),
+                    rownames(outer10_site_macro_species_matrix_transformed), rownames(outer17_site_macro_species_matrix_transformed))
+
+full_site_macro_species_matrix <- as.matrix(site_macro[ , -which(names(site_macro) %in% colnames(site_meta_df))])
+full_site_macro_species_matrix <- full_site_macro_species_matrix/site_macro$hard_cover # convert from percent to proportion of hard cover
+rownames(full_site_macro_species_matrix) <- paste(site_macro$year,"-", site_macro$site_habitat, sep = "")
+
+full_site_macro_species_matrix <- full_site_macro_species_matrix[rownames(full_site_macro_species_matrix) %in% relevant_site_macros,] # subset so only quads that didn't contain rare species are represented
+full_site_macro_species_matrix <- asin(sqrt(full_site_macro_species_matrix)) # arcsin squareroot transform
+site_macro$stratum <- paste(site_macro$year,"-", site_macro$site_habitat, sep = "") # for merging with bray matrix later
+full_subset_site_macro <- site_macro[site_macro$stratum %in% relevant_site_macros,] # make sure rows are also removed from dataframe
+
+
+
+full_columns_to_keep <- apply(full_site_macro_species_matrix, 2, function(x) any(x >= asin(sqrt(0.05) )))
+full_abundant_site_macro_species_matrix <- as.data.frame(full_site_macro_species_matrix)[ , full_columns_to_keep]
+full_abundant_site_macro_species_names <- colnames(full_abundant_site_macro_species_matrix)
+
+ 
+# for mean centroid:
+
+
+full_site_macro_meta_condensed <- site_meta_df %>%
+ group_by(year, habitat, hab_year) %>%
+ summarize() %>%
+ ungroup()
+     
+
+set.seed(1032) 
+full_ord3_site_macro <- metaMDS(full_site_macro_species_matrix, dist	= "bray", k = 3, trymax = 100) 
+full_ord3_site_macro # 0.149
+
+
+full.species.scores_site_macro <- as.data.frame(scores(full_ord3_site_macro, "species")) # some NaN for absent species
+full.species.scores_site_macro <- na.omit(full.species.scores_site_macro)
+full.species.scores_site_macro$species <- rownames(full.species.scores_site_macro) 
+full.abundant.species.scores_site_macro <- full.species.scores_site_macro[full.species.scores_site_macro$species %in% full_abundant_site_macro_species_names,]
+
+
+full.site.scores_site_macro <- as.data.frame(vegan::scores(full_ord3_site_macro, "sites"))  # extract the site scores and convert to a data.frame
+# add back in metadata
+full.site.scores_site_macro$stratum <- rownames(full.site.scores_site_macro)
+full.site.scores_site_macro <- merge(site_meta_df, full.site.scores_site_macro, by = "stratum")
+
+
+
+
+# write_csv(full.site.scores_site_macro, here("data", "full_site_macro_level_site_macro_scores.csv"))
+# write_csv(full.species.scores_site_macro, here("data", "full_site_macro_level_species_scores.csv"))
+
+full.cent_site_macro <- aggregate(cbind(NMDS1, NMDS2) ~ hab_year, data = full.site.scores_site_macro, FUN = mean) 
+full.cent_site_macro <- merge(full.cent_site_macro, full_site_macro_meta_condensed, by = "hab_year")
+
+# read in disturbances
+full.cent_site_macro <- merge(full.cent_site_macro, disturbances, by = "year") # add disturbances to path
+
+ggplot() + 
+  geom_point(data= full.site.scores_site_macro, aes(x=NMDS1,y=NMDS2, colour = habitat), alpha = 0.2) + # add the point markers
+  geom_text_repel(data= full.abundant.species.scores_site_macro,aes(x=NMDS1,y=NMDS2, label = species), size = 6, alpha = 0.7) +  # add the species labels
+  
+  geom_path(data = full.cent_site_macro, aes(x = NMDS1, y = NMDS2, group = habitat, colour = habitat),
+            arrow = arrow(length=unit(0.4,"cm"), ends="last", type = "closed"), size = 1) +
+  geom_point(data = full.cent_site_macro, aes(x = NMDS1, y = NMDS2, group = habitat, colour = habitat, shape = disturbance), size = 5, stroke = 1.4) +
+  scale_shape_manual(values = c(
+    "cots" = 8,
+    "cyclone" = 13,
+    "bleaching" = 4
+  )) +
+
+  scale_colour_manual(values = habitat_colours) +
+
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        strip.text.x = element_text(size = 25),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.key.size = unit(2, "cm"), # increase legend size
+        legend.text = element_text(size = rel(1.5)), # increase legend text
+        legend.title = element_text(size = rel(1.5)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) + # add box around legend
+  guides(colour=guide_legend(title.position="top", # make color legend title go above legend
+                                     title.hjust =0.5, nrow = 2),
+         shape=guide_legend(title.position="top",  # make shape legend title go above legend
+                                     title.hjust =0.5,
+                            nrow = 2),
+         path = guide_legend(title.position="top",  # make shape legend title go above legend
+                                     title.hjust =0.5)
+         )  
+
+
+
+```
+
+```{r full site permanova}
+full_site_bray <- vegdist(full_site_species_matrix, "bray") 
+full_site_macro_bray <- vegdist(full_site_macro_species_matrix, "bray") 
+
+# adonis2(full_site_bray ~ year*habitat, data = site_full)
+#               Df SumOfSqs      R2       F Pr(>F)    
+# year           1    1.293 0.03257 18.4422  0.001 ***
+# habitat        3    9.952 0.25065 47.3113  0.001 ***
+# year:habitat   3    1.255 0.03161  5.9659  0.001 ***
+# Residual     388   27.204 0.68518                   
+# Total        395   39.704 1.00000                   
+# habitat accounts for most of the variation in algal communities
+
+# adonis2(full_site_macro_bray ~ year*habitat, data = full_subset_site_macro)
+#               Df SumOfSqs      R2       F Pr(>F)    
+# year           1    6.209 0.04528 24.8046  0.001 ***
+# habitat        3   28.410 0.20719 37.8323  0.001 ***
+# year:habitat   3    5.882 0.04290  7.8332  0.001 ***
+# Residual     386   96.622 0.70464                   
+# Total        393  137.124 1.00000               
+# same when just looking at macroalgal communities, but still greater residual variance
+
+```
+
+```{r beta dispersion all algae, fig.height=15, fig.width=15}
+full_site_betadisper <- vegan::betadisper(full_site_bray, full.site.scores_site$hab_year)
+site_full$betadispersion <- full_site_betadisper$distances[match(site_full$stratum, names(full_site_betadisper$distances))]
+site_full$betadispersion_trans <- sv_trans(site_full$betadispersion, site_full)
+
+betadisper_site_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = site_full)
+summary(betadisper_site_mod) # fair bit of within site variance - inv_logit(0.04) = 0.5
+hist(residuals(betadisper_site_mod)) # pretty good
+plot(residuals(betadisper_site_mod) ~ fitted(betadisper_site_mod)) # slight heteroskedasticity
+Anova(betadisper_site_mod)
+#                Chisq Df Pr(>Chisq)    
+# year         12.9561  1  0.0003189 ***
+# habitat      27.2191  3  5.296e-06 ***
+# year:habitat  6.8472  3  0.0769311 .  
+
+emtrends(betadisper_site_mod, pairwise ~ habitat , "year") # fringing slope significantly different from outer17
+betadisper_site_emm <- emmip(betadisper_site_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = site_full, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_site_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_site_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 0.6, yend = 0.6, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+
+```
+
+```{r beta dispersion macoralgae, fig.height=15, fig.width=15}
+full_site_macro_betadisper <- vegan::betadisper(full_site_macro_bray, full.site.scores_site_macro$hab_year)
+full_subset_site_macro$betadispersion <- full_site_macro_betadisper$distances[match(full_subset_site_macro$stratum, names(full_site_macro_betadisper$distances))]
+full_subset_site_macro$betadispersion_trans <- sv_trans(full_subset_site_macro$betadispersion, full_subset_site_macro)
+
+betadisper_site_macro_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = full_subset_site_macro)
+summary(betadisper_site_macro_mod) # similar site variance - inv_logit(0.01) = 0.5
+hist(residuals(betadisper_site_macro_mod)) # pretty good
+plot(residuals(betadisper_site_macro_mod) ~ fitted(betadisper_site_macro_mod)) # slight heteroskedasticity and negative trend
+Anova(betadisper_site_macro_mod)
+#               Chisq Df Pr(>Chisq)    
+# year         36.591  1  1.457e-09 ***
+# habitat      46.029  3  5.590e-10 ***
+# year:habitat 31.232  3  7.597e-07 ***
+
+emtrends(betadisper_site_macro_mod, pairwise ~ habitat , "year") # backreef distinct from all other habitats
+betadisper_site_macro_emm <- emmip(betadisper_site_macro_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = site_full, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_site_macro_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_site_macro_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 0.75, yend = 0.75, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+
+```
+
+
+----------------- QUADRAT BELOW
+```{r quad bray curtis setup}
 fringing_species_matrix <- as.matrix(fringing[ , -which(names(fringing) %in% meta_cols)])
-fringing_species_matrix <- fringing_species_matrix/100 # convert from percent to proportion
+fringing_species_matrix <- fringing_species_matrix/fringing$hard_cover # convert from percent to proportion
 rownames(fringing_species_matrix) <- paste(fringing$year,"-", fringing$location, sep = "")
 
 
@@ -110,10 +1159,11 @@ rownames(fringing_species_matrix) <- paste(fringing$year,"-", fringing$location,
 fringing_species_presence <- colSums(fringing_species_matrix > 0) # Presence absence matrix
 fringing_species_percentage <- (fringing_species_presence/nrow(fringing_species_matrix)) # proportion of rows where a species is present
 fringing_common_species <- names(fringing_species_percentage[fringing_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
-fringing_species_matrix <- fringing_species_matrix[,colnames(fringing_species_matrix) %in% fringing_common_species] # filter original species matrix
+# fringing_species_matrix <- fringing_species_matrix[,colnames(fringing_species_matrix) %in% fringing_common_species] # filter original species matrix
 
 fringing_rows_to_remove <- rowSums(fringing_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
 fringing_species_matrix <- fringing_species_matrix[!fringing_rows_to_remove,] 
+fringing_species_matrix <- na.omit(fringing_species_matrix)
 
 fringing_species_matrix_untransformed <- fringing_species_matrix
 fringing_species_matrix_transformed <- asin(sqrt(fringing_species_matrix)) # arcsin squareroot transform
@@ -153,11 +1203,9 @@ fringing_untransformed_pairwise_df$time <- abs(fringing_untransformed_pairwise_d
 fringing_untransformed_pairwise_df$location_1 <- sub(".*-(.*)", "\\1", fringing_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
 fringing_untransformed_pairwise_df$location_2 <- sub(".*-(.*)", "\\1", fringing_untransformed_pairwise_df$loc2) # repeat for second quad
 
-```
-
-```{r backreef bray curtis}
+## backreef
 backreef_species_matrix <- as.matrix(backreef[ , -which(names(backreef) %in% meta_cols)])
-backreef_species_matrix <- backreef_species_matrix/100 # convert from percent to proportion
+backreef_species_matrix <- backreef_species_matrix/backreef$hard_cover # convert from percent to proportion
 rownames(backreef_species_matrix) <- paste(backreef$year,"-", backreef$location, sep = "")
 
 
@@ -165,10 +1213,11 @@ rownames(backreef_species_matrix) <- paste(backreef$year,"-", backreef$location,
 backreef_species_presence <- colSums(backreef_species_matrix > 0) # Presence absence matrix
 backreef_species_percentage <- (backreef_species_presence/nrow(backreef_species_matrix)) # proportion of rows where a species is present
 backreef_common_species <- names(backreef_species_percentage[backreef_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
-backreef_species_matrix <- backreef_species_matrix[,colnames(backreef_species_matrix) %in% backreef_common_species] # filter original species matrix
+# backreef_species_matrix <- backreef_species_matrix[,colnames(backreef_species_matrix) %in% backreef_common_species] # filter original species matrix
 
 backreef_rows_to_remove <- rowSums(backreef_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
 backreef_species_matrix <- backreef_species_matrix[!backreef_rows_to_remove,] 
+backreef_species_matrix <- na.omit(backreef_species_matrix)
 
 backreef_species_matrix_untransformed <- backreef_species_matrix
 backreef_species_matrix_transformed <- asin(sqrt(backreef_species_matrix)) # arcsin squareroot transform
@@ -206,11 +1255,9 @@ backreef_untransformed_pairwise_df$location_1 <- sub(".*-(.*)", "\\1", backreef_
 backreef_untransformed_pairwise_df$location_2 <- sub(".*-(.*)", "\\1", backreef_untransformed_pairwise_df$loc2) # repeat for second quad
 
 
-```
-
-```{r outer10 bray curtis}
+## Outer 10
 outer10_species_matrix <- as.matrix(outer10[ , -which(names(outer10) %in% meta_cols)])
-outer10_species_matrix <- outer10_species_matrix/100 # convert from percent to proportion
+outer10_species_matrix <- outer10_species_matrix/outer10$hard_cover # convert from percent to proportion
 rownames(outer10_species_matrix) <- paste(outer10$year,"-", outer10$location, sep = "")
 
 
@@ -218,10 +1265,11 @@ rownames(outer10_species_matrix) <- paste(outer10$year,"-", outer10$location, se
 outer10_species_presence <- colSums(outer10_species_matrix > 0) # Presence absence matrix
 outer10_species_percentage <- (outer10_species_presence/nrow(outer10_species_matrix)) # proportion of rows where a species is present
 outer10_common_species <- names(outer10_species_percentage[outer10_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
-outer10_species_matrix <- outer10_species_matrix[,colnames(outer10_species_matrix) %in% outer10_common_species] # filter original species matrix
+# outer10_species_matrix <- outer10_species_matrix[,colnames(outer10_species_matrix) %in% outer10_common_species] # filter original species matrix
 
 outer10_rows_to_remove <- rowSums(outer10_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
 outer10_species_matrix <- outer10_species_matrix[!outer10_rows_to_remove,] 
+outer10_species_matrix <- na.omit(outer10_species_matrix)
 
 outer10_species_matrix_untransformed <- outer10_species_matrix
 outer10_species_matrix_transformed <- asin(sqrt(outer10_species_matrix)) # arcsin squareroot transform
@@ -258,11 +1306,9 @@ outer10_untransformed_pairwise_df$time <- abs(outer10_untransformed_pairwise_df$
 outer10_untransformed_pairwise_df$location_1 <- sub(".*-(.*)", "\\1", outer10_untransformed_pairwise_df$loc1) # extract quadrat id from first quad in comp
 outer10_untransformed_pairwise_df$location_2 <- sub(".*-(.*)", "\\1", outer10_untransformed_pairwise_df$loc2) # repeat for second quad
 
-```
-
-```{r outer17 bray curtis}
+## OUTER 17
 outer17_species_matrix <- as.matrix(outer17[ , -which(names(outer17) %in% meta_cols)])
-outer17_species_matrix <- outer17_species_matrix/100 # convert from percent to proportion
+outer17_species_matrix <- outer17_species_matrix/outer17$hard_cover # convert from percent to proportion
 rownames(outer17_species_matrix) <- paste(outer17$year,"-", outer17$location, sep = "")
 
 
@@ -270,10 +1316,11 @@ rownames(outer17_species_matrix) <- paste(outer17$year,"-", outer17$location, se
 outer17_species_presence <- colSums(outer17_species_matrix > 0) # Presence absence matrix
 outer17_species_percentage <- (outer17_species_presence/nrow(outer17_species_matrix)) # proportion of rows where a species is present
 outer17_common_species <- names(outer17_species_percentage[outer17_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
-outer17_species_matrix <- outer17_species_matrix[,colnames(outer17_species_matrix) %in% outer17_common_species] # filter original species matrix
+# outer17_species_matrix <- outer17_species_matrix[,colnames(outer17_species_matrix) %in% outer17_common_species] # filter original species matrix
 
 outer17_rows_to_remove <- rowSums(outer17_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
 outer17_species_matrix <- outer17_species_matrix[!outer17_rows_to_remove,] 
+outer17_species_matrix <- na.omit(outer17_species_matrix)
 
 outer17_species_matrix_untransformed <- outer17_species_matrix
 outer17_species_matrix_transformed <- asin(sqrt(outer17_species_matrix)) # arcsin squareroot transform
@@ -451,6 +1498,133 @@ ggplot()+
 
 
 ```
+
+```{r quad level beta dispersion, fig.height = 8, fig.width = 12}
+full_species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
+full_species_matrix <- full_species_matrix/data$hard_cover # convert from percent to proportion
+rownames(full_species_matrix) <- paste(data$year,"-", data$location, sep = "")
+full_rows_to_remove <- rowSums(full_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+full_species_matrix <- full_species_matrix[!full_rows_to_remove,] 
+full_species_matrix <- na.omit(full_species_matrix)
+full_species_matrix <- asin(sqrt(full_species_matrix)) # arcsin squareroot transform
+data$stratum <- paste(data$year,"-", data$location, sep = "") # for merging with bray matrix later
+# full_subset <- data[data$stratum %in% rownames(full_species_matrix),] # make sure rows are also removed from dataframe
+# 
+# brayfull <- vegdist(full_species_matrix, "bray") # create bray dissimilarity matrix
+# # full_quad_betadisper <- vegan::betadisper(brayfull, full_subset$hab_year)
+# full_subset$betadispersion <- full_quad_betadisper$distances[match(full_subset$stratum, names(full_quad_betadisper$distances))]
+# full_subset$betadispersion_trans <- sv_trans(full_subset$betadispersion, full_subset)
+# 
+# write_csv(full_subset, here("data", "quad_level_all_species_with_betadisper.csv"))
+
+full_subset <- read.csv(here("data", "quad_level_all_species_with_betadisper.csv")) # read back in data from csv so you don't have to re-run
+
+betadisper_quad_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = full_subset)
+summary(betadisper_quad_mod) # fair bit of within site variance - inv_logit(0.02) = 0.5
+hist(residuals(betadisper_quad_mod)) # positive skew
+plot(residuals(betadisper_quad_mod) ~ fitted(betadisper_quad_mod)) # slight heteroskedasticity
+Anova(betadisper_quad_mod)
+#                Chisq Df Pr(>Chisq)    
+# year           0.3156  1     0.5743    
+# habitat      333.7035  3     <2e-16 ***
+# year:habitat 720.3054  3     <2e-16 ***
+
+emtrends(betadisper_quad_mod, pairwise ~ habitat , "year") # all different
+betadisper_quad_emm <- emmip(betadisper_quad_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = full_subset, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_quad_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_quad_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+
+
+macro_species_matrix <- as.matrix(macroalgae[ , -which(names(macroalgae) %in% meta_cols)])
+macro_species_matrix <- macro_species_matrix/macroalgae$hard_cover # convert from percent to proportion
+rownames(macro_species_matrix) <- paste(macroalgae$year,"-", macroalgae$location, sep = "")
+macro_rows_to_remove <- rowSums(macro_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+macro_species_matrix <- macro_species_matrix[!macro_rows_to_remove,] 
+macro_species_matrix <- na.omit(macro_species_matrix)
+macro_species_matrix <- asin(sqrt(macro_species_matrix)) # arcsin squareroot transform
+macroalgae$stratum <- paste(macroalgae$year,"-", macroalgae$location, sep = "") # for merging with bray matrix later
+# macro_subset <- macroalgae[macroalgae$stratum %in% rownames(macro_species_matrix),] # make sure rows are also removed from macroalgaeframe
+# 
+# braymacro <- vegdist(macro_species_matrix, "bray") # create bray dissimilarity matrix
+# # macro_quad_betadisper <- vegan::betadisper(braymacro, macro_subset$hab_year)
+# macro_subset$betadispersion <- macro_quad_betadisper$distances[match(macro_subset$stratum, names(macro_quad_betadisper$distances))]
+# macro_subset$betadispersion_trans <- sv_trans(macro_subset$betadispersion, macro_subset)
+# write_csv(macro_subset, here("data", "quad_level_just_macroalgae_with_betadisper.csv"))
+macro_subset <- read.csv(here("data", "quad_level_just_macroalgae_with_betadisper.csv"))
+
+betadisper_macro_quad_mod <- glmmTMB(betadispersion_trans ~ year*habitat + (1|site), family = beta_family(link = "logit"), data = macro_subset)
+summary(betadisper_macro_quad_mod) # fair bit of within site variance - inv_logit(0.02) = 0.5
+qqnorm(residuals(betadisper_macro_quad_mod)) # a little lumpy but not bad
+plot(residuals(betadisper_macro_quad_mod) ~ fitted(betadisper_macro_quad_mod)) # negative trend
+Anova(betadisper_macro_quad_mod)
+
+#                 Chisq Df Pr(>Chisq)    
+# year           97.391  1  < 2.2e-16 ***
+# habitat      1973.896  3  < 2.2e-16 ***
+# year:habitat  511.722  3  < 2.2e-16 ***
+
+
+emtrends(betadisper_macro_quad_mod, pairwise ~ habitat , "year") # backreef, outer10, and fringing don't differ
+betadisper_quad_macro_emm <- emmip(betadisper_macro_quad_mod, habitat ~ year , at = list(year = seq(2007,2023,1)), plotit = F, CIs = T)
+
+ggplot()+
+   geom_point(data = macro_subset, aes(x = year, y = betadispersion_trans, colour = habitat), alpha = 0.1 ) +
+   geom_line(data = betadisper_quad_macro_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), linewidth = 2) +
+   geom_ribbon(data = betadisper_quad_macro_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat), alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+   scale_fill_manual(values = habitat_colours) +
+   geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   labs(y = "Beta dispersion\n", x = "Year") +
+   theme_bw() + 
+   theme(panel.grid.major = element_blank(), 
+         panel.grid.minor = element_blank(),
+         panel.background = element_blank(),
+         plot.title = element_text(color = "grey20", size = 32, vjust = 0, face = "plain"),
+         axis.line.y = element_line(colour = "black"),
+         axis.text.y = element_text(color = "grey20", size = 28, hjust = .5, vjust = .5, face = "plain"),
+         axis.title.y = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         axis.line.x = element_line(colour = "black"),
+         axis.text.x = element_text(color = "grey20", size = 28, angle = 90, vjust = 0.5, hjust=1, face = "plain"),
+         axis.title.x = element_text(color = "grey20", size = 32, hjust = .5, vjust = 0, face = "plain"),
+         strip.text.x = element_text(size = 32),
+         legend.key.size = unit(2, "cm"), # increase legend size
+         legend.text = element_text(size = rel(2)), # increase legend text
+         legend.title = element_text(size = rel(2.25)),
+         legend.position = 'bottom', # move legend to bottom
+         legend.box = 'horizontal',
+         legend.box.background = element_rect(colour = "black") )# make legend horizontal
+```
+
+
 
 ```{r hab level nmds set up}
 
@@ -864,17 +2038,8 @@ ggarrange(fringing_nmds_plot, backreef_nmds_plot, outer10_nmds_plot, outer17_nmd
 relevant_quads <- c(rownames(fringing_species_matrix_untransformed), rownames(backreef_species_matrix_untransformed),
                     rownames(outer10_species_matrix_untransformed), rownames(outer17_species_matrix_untransformed))
 
-full_species_matrix <- as.matrix(data[ , -which(names(data) %in% meta_cols)])
-full_species_matrix <- full_species_matrix/100 # convert from percent to proportion
-rownames(full_species_matrix) <- paste(data$year,"-", data$location, sep = "")
 
-full_species_matrix <- full_species_matrix[rownames(full_species_matrix) %in% relevant_quads,] # subset so only quads that didn't contain rare species are represented
-full_species_matrix <- asin(sqrt(full_species_matrix)) # arcsin squareroot transform
-data$stratum <- paste(data$year,"-", data$location, sep = "") # for merging with bray matrix later
-full_subset <- data[data$stratum %in% relevant_quads,] # make sure rows are also removed from dataframe
 
-brayfull <- vegdist(full_species_matrix, "bray") # create bray dissimilarity matrix
-# View(brayfull)
 full_braymat <- as.matrix(brayfull) # conver to matrix object
 
 full_columns_to_keep <- apply(full_species_matrix, 2, function(x) any(x >= asin(sqrt(0.1) )))
