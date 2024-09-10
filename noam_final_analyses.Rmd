@@ -2631,6 +2631,869 @@ quad_macro_betadisper <- read.csv(here("data", "quad_level_just_macroalgae_with_
 alpha_diversity_quad <- full_join(alpha_diversity_quad, quad_all_betadisper[,c("year", "betadispersion_trans", "location")], by = c("location", "year"))
 
 alpha_diversity_quad_macro <- full_join(alpha_diversity_quad_macro, quad_macro_betadisper[,c("year", "betadispersion_trans", "location")], by = c("location", "year"))
+
+fringing_all_quad <- na.omit(subset(alpha_diversity_quad, habitat == "fringing"))
+backreef_all_quad <- na.omit(subset(alpha_diversity_quad, habitat == "backreef"))
+outer10_all_quad <- subset(alpha_diversity_quad, habitat == "outer_10") 
+outer10_all_quad <- outer10_all_quad[,-which(names(outer10_all_quad) %in% c("mean_n", "n_cv"))]
+outer10_all_quad <- na.omit(outer10_all_quad)
+outer17_all_quad <- subset(alpha_diversity_quad, habitat == "outer_17") 
+outer17_all_quad <- outer17_all_quad[,-which(names(outer17_all_quad) %in% c("mean_n", "n_cv", "herbivore_biomass", "herbivore_evenness", "herbivore_richness", "herbivore_shannon"))]
+outer17_all_quad <- na.omit(outer17_all_quad)
+
+fringing_macro_quad <- na.omit(subset(alpha_diversity_quad_macro, habitat == "fringing"))
+backreef_macro_quad <- na.omit(subset(alpha_diversity_quad_macro, habitat == "backreef"))
+outer10_macro_quad <- subset(alpha_diversity_quad, habitat == "outer_10") 
+outer10_macro_quad <- outer10_macro_quad[,-which(names(outer10_macro_quad) %in% c("mean_n", "n_cv"))]
+outer10_macro_quad <- na.omit(outer10_macro_quad)
+outer17_macro_quad <- subset(alpha_diversity_quad, habitat == "outer_17") 
+outer17_macro_quad <- outer17_macro_quad[,-which(names(outer17_macro_quad) %in% c("mean_n", "n_cv", "herbivore_biomass", "herbivore_evenness", "herbivore_richness", "herbivore_shannon"))]
+outer17_macro_quad <- na.omit(outer17_macro_quad)
+```
+
+```{r stepwise model all shannon quad}
+fringing_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + mean_n +  mean_temp_c +  herbivore_evenness + (1|site/location), data = fringing_all_quad, na.action = na.pass)
+fringing_all_shannon_dredge <- dredge(fringing_all_shannon_mod_universal) 
+model.sel(fringing_all_shannon_dredge) # all terms
+qqnorm(residuals(fringing_all_shannon_mod_universal))# a little wonky
+qqline(residuals(fringing_all_shannon_mod_universal))
+plot(residuals(fringing_all_shannon_mod_universal) ~ fitted(fringing_all_shannon_mod_universal)) # sharp line again
+summary(fringing_all_shannon_mod_universal)
+Anova(fringing_all_shannon_mod_universal) # only year and mean temp sig. herbivore evenness is borderline.
+
+fringing_emm <-as.data.frame(emmeans(fringing_all_shannon_top_mod, ~mean_temp_c,
+                                     at = list(mean_temp_c = seq(min(fringing_all_quad$mean_temp_c),
+                                                            max(fringing_all_quad$mean_temp_c),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = fringing_all_quad, aes(x = mean_temp_c, y = shannon))+
+  geom_line(data = fringing_emm, aes(x = mean_temp_c, y = emmean)) +
+  geom_ribbon(data = fringing_emm, aes(x = mean_temp_c, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Mean Temp (C)", y = "Fringing Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+  
+
+## Backreef - includes all 
+
+backreef_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + (1|site/location), data = backreef_all_quad, na.action = na.pass)
+backreef_all_shannon_dredge <- dredge(backreef_all_shannon_mod_universal) # some have convergence issues
+model.sel(backreef_all_shannon_dredge) #  best includes all but results in only NaN results. Next best removes year and wave power
+backreef_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ mean_n + mean_temp_c +  herbivore_evenness + (1|site/location), data = backreef_all_quad, na.action = na.pass) #  a little wonky on the tail but not bad
+hist(residuals(backreef_all_shannon_top_mod)) # still a little chunky
+plot(residuals(backreef_all_shannon_top_mod) ~ fitted(backreef_all_shannon_top_mod)) # same stripe
+summary(backreef_all_shannon_top_mod)
+Anova(backreef_all_shannon_top_mod)
+
+backreef_emm <-as.data.frame(emmeans(backreef_all_shannon_top_mod, ~mean_temp_c,
+                                     at = list(mean_temp_c = seq(min(backreef_all_quad$mean_temp_c),
+                                                            max(backreef_all_quad$mean_temp_c),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = backreef_all_quad, aes(x = mean_temp_c, y = shannon))+
+  geom_line(data = backreef_emm, aes(x = mean_temp_c, y = emmean)) +
+  geom_ribbon(data = backreef_emm, aes(x = mean_temp_c, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Mean Temp (C)", y = "Backreef Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+backreef_emm_2 <-as.data.frame(emmeans(backreef_all_shannon_top_mod, ~mean_n,
+                                     at = list(mean_n = seq(min(backreef_all_quad$mean_n),
+                                                            max(backreef_all_quad$mean_n),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = backreef_all_quad, aes(x = mean_n, y = shannon))+
+  geom_line(data = backreef_emm_2, aes(x = mean_n, y = emmean)) +
+  geom_ribbon(data = backreef_emm_2, aes(x = mean_n, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Mean N", y = "Backreef Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+
+backreef_emm_3 <-as.data.frame(emmeans(backreef_all_shannon_top_mod, ~herbivore_evenness,
+                                     at = list(herbivore_evenness = seq(min(backreef_all_quad$herbivore_evenness),
+                                                            max(backreef_all_quad$herbivore_evenness),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = backreef_all_quad, aes(x = herbivore_evenness, y = shannon))+
+  geom_line(data = backreef_emm_3, aes(x = herbivore_evenness, y = emmean)) +
+  geom_ribbon(data = backreef_emm_3, aes(x = herbivore_evenness, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Herbivore evenness", y = "Backreef Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+
+
+
+# Outer10
+outer10_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c +  herbivore_evenness + (1|site/location), data = outer10_all_quad, na.action = na.pass)
+outer10_all_shannon_dredge <- dredge(outer10_all_shannon_mod_universal) 
+model.sel(outer10_all_shannon_dredge) #  best includes just herbivore evenness 
+outer10_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  herbivore_evenness + (1|site/location), data = outer10_all_quad, na.action = na.pass)
+qqnorm(residuals(outer10_all_shannon_top_mod)) # slight negative skew
+plot(residuals(outer10_all_shannon_top_mod) ~ fitted(outer10_all_shannon_top_mod)) # looks fine
+summary(outer10_all_shannon_top_mod)
+Anova(outer10_all_shannon_top_mod)
+outer10_emm <-as.data.frame(emmeans(outer10_all_shannon_top_mod, ~herbivore_evenness,
+                                     at = list(herbivore_evenness = seq(min(outer10_all_quad$herbivore_evenness),
+                                                            max(outer10_all_quad$herbivore_evenness),
+                                                            0.05)))) 
+
+ggplot()+
+  geom_point(data = outer10_all_quad, aes(x = herbivore_evenness, y = shannon))+
+  geom_line(data = outer10_emm, aes(x = herbivore_evenness, y = emmean)) +
+  geom_ribbon(data = outer10_emm, aes(x = herbivore_evenness, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Herbivore evenness", y = "Outer 10 Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+
+
+## outer17
+
+outer17_all_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c + (1|site/location), data = outer17_all_quad, na.action = na.pass)
+outer17_all_shannon_dredge <- dredge(outer17_all_shannon_mod_universal) 
+model.sel(outer17_all_shannon_dredge) # best includes all but results in NaNs
+# next best includes just year and mean_temp
+outer17_all_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ year  + mean_temp_c + (1|site/location), data = outer17_all_quad, na.action = na.pass)
+hist(residuals(outer17_all_shannon_top_mod))
+plot(residuals(outer17_all_shannon_top_mod) ~ fitted(outer17_all_shannon_top_mod)) # looks fine
+summary(outer17_all_shannon_top_mod)
+Anova(outer17_all_shannon_top_mod)
+
+outer17_emm <-as.data.frame(emmeans(outer17_all_shannon_top_mod, ~mean_temp_c,
+                                     at = list(mean_temp_c = seq(min(outer17_all_quad$mean_temp_c),
+                                                            max(outer17_all_quad$mean_temp_c),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = outer17_all_quad, aes(x = mean_temp_c, y = shannon))+
+  geom_line(data = outer17_emm, aes(x = mean_temp_c, y = emmean)) +
+  geom_ribbon(data = outer17_emm, aes(x = mean_temp_c, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Mean Temp (C)", y = "Outer 17 Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+```
+```{r stepwise model all betadisp quad}
+fringing_all_betadisp_mod_universal <- glmmTMB(betadispersion_trans ~ year + mean_n +  mean_temp_c +  herbivore_evenness + (1|site/location), data = fringing_all_quad, na.action = na.pass, family = beta_family())
+fringing_all_betadisp_dredge <- dredge(fringing_all_betadisp_mod_universal) 
+model.sel(fringing_all_betadisp_dredge) # best includes evenness, nitrogen, and year
+fringing_all_betadisp_top_mod <- glmmTMB(betadispersion_trans ~ year +  mean_n +  herbivore_evenness + (1|site/location), data = fringing_all_quad, na.action = na.pass, family = beta_family())
+hist(residuals(fringing_all_betadisp_top_mod)) #  positive skew
+plot(residuals(fringing_all_betadisp_top_mod) ~ fitted(fringing_all_betadisp_top_mod)) # negative trend
+summary(fringing_all_betadisp_top_mod)
+Anova(fringing_all_betadisp_top_mod) # herbivore evenness not sig
+
+fringing_betadisp_emm <-as.data.frame(emmeans(fringing_all_betadisp_top_mod, ~mean_n,
+                                     at = list(mean_n = seq(min(fringing_all_quad$mean_n),
+                                                            max(fringing_all_quad$mean_n),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = fringing_all_quad, aes(x = mean_n, y = betadispersion_trans))+
+  geom_line(data = fringing_betadisp_emm, aes(x = mean_n, y = inv_logit(emmean))) +
+  geom_ribbon(data = fringing_betadisp_emm, aes(x = mean_n, ymin = inv_logit(asymp.LCL),
+                                                ymax = inv_logit(asymp.UCL), alpha = 0.2), show.legend = F) +
+  labs(x = "Mean N", y = "Fringing Beta Dispersion") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+  
+
+## Backreef - includes all 
+
+backreef_all_betadisp_mod_universal <- glmmTMB(betadispersion_trans ~ year  + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + (1|site/location), data = backreef_all_quad, na.action = na.pass, family = beta_family())
+backreef_all_betadisp_dredge <- dredge(backreef_all_betadisp_mod_universal) # most have convergence issues
+model.sel(backreef_all_betadisp_dredge) #  best includes evenness nitrogen year
+backreef_all_betadisp_top_mod <- glmmTMB(betadispersion_trans ~ year  +  mean_n + herbivore_evenness + (1|site/location), data = backreef_all_quad, na.action = na.pass, family = beta_family()) 
+hist(residuals(backreef_all_betadisp_top_mod)) # positive skew
+plot(residuals(backreef_all_betadisp_top_mod) ~ fitted(backreef_all_betadisp_top_mod)) # negative trend
+summary(backreef_all_betadisp_top_mod)
+Anova(backreef_all_betadisp_top_mod) # evenness and year sig
+
+backreef_betadisp_emm <-as.data.frame(emmeans(backreef_all_betadisp_top_mod, ~herbivore_evenness,
+                                     at = list(herbivore_evenness = seq(min(backreef_all_quad$herbivore_evenness),
+                                                            max(backreef_all_quad$herbivore_evenness),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = backreef_all_quad, aes(x = herbivore_evenness, y = betadispersion_trans))+
+  geom_line(data = backreef_betadisp_emm, aes(x = herbivore_evenness, y = inv_logit(emmean))) +
+  geom_ribbon(data = backreef_betadisp_emm, aes(x = herbivore_evenness, ymin = inv_logit(asymp.LCL), ymax = inv_logit(asymp.UCL), alpha = 0.2), show.legend = F) +
+  labs(x = "Herbivore evenness", y = "Backreef Beta Dispersion") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+
+
+
+
+# Outer10
+outer10_all_betadisp_mod_universal <- glmmTMB(betadispersion_trans ~ year  + wave_power_adcp  + mean_temp_c +  herbivore_evenness + (1|site/location), data = outer10_all_quad, na.action = na.pass, family = beta_family()) # model convergence
+outer10_all_betadisp_dredge <- dredge(outer10_all_betadisp_mod_universal) # all have errors of some kind
+model.sel(outer10_all_betadisp_dredge) #  best includes herbivore evenness, temp, and year
+outer10_all_betadisp_top_mod <- glmmTMB(betadispersion_trans ~ year + mean_temp_c +  herbivore_evenness + (1|site/location), data = outer10_all_quad, na.action = na.pass, family = beta_family()) 
+qqnorm(residuals(outer10_all_betadisp_top_mod)) # positive skew
+plot(residuals(outer10_all_betadisp_top_mod) ~ fitted(outer10_all_betadisp_top_mod)) # less negative than before
+summary(outer10_all_betadisp_top_mod)
+Anova(outer10_all_betadisp_top_mod) # all sig
+outer10_betadisp_emm <-as.data.frame(emmeans(outer10_all_betadisp_top_mod, ~herbivore_evenness,
+                                     at = list(herbivore_evenness = seq(min(outer10_all_quad$herbivore_evenness),
+                                                            max(outer10_all_quad$herbivore_evenness),
+                                                            0.05)))) 
+
+ggplot()+
+  geom_point(data = outer10_all_quad, aes(x = herbivore_evenness, y = betadispersion_trans))+
+  geom_line(data = outer10_betadisp_emm, aes(x = herbivore_evenness, y = inv_logit(emmean))) +
+  geom_ribbon(data = outer10_betadisp_emm,
+              aes(x = herbivore_evenness, ymin = inv_logit(asymp.LCL), ymax = inv_logit(asymp.UCL), alpha = 0.2), show.legend = F) +
+  labs(x = "Herbivore evenness", y = "Outer 10 Beta Dispersion") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+outer10_betadisp_emm2 <-as.data.frame(emmeans(outer10_all_betadisp_top_mod, ~mean_temp_c,
+                                     at = list(mean_temp_c = seq(min(outer10_all_quad$mean_temp_c),
+                                                            max(outer10_all_quad$mean_temp_c),
+                                                            0.05)))) 
+
+ggplot()+
+  geom_point(data = outer10_all_quad, aes(x = mean_temp_c, y = betadispersion_trans))+
+  geom_line(data = outer10_betadisp_emm2, aes(x = mean_temp_c, y = inv_logit(emmean))) +
+  geom_ribbon(data = outer10_betadisp_emm2,
+              aes(x = mean_temp_c, ymin = inv_logit(asymp.LCL), ymax = inv_logit(asymp.UCL), alpha = 0.2), show.legend = F) +
+  labs(x = "Mean temp (C)", y = "Outer 10 Beta Dispersion") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+
+
+## outer17
+
+outer17_all_betadisp_mod_universal <- glmmTMB(betadispersion_trans ~ year  + wave_power_adcp  + mean_temp_c + (1|site/location), data = outer17_all_quad, na.action = na.pass, family = beta_family()) # convergence issue
+outer17_all_betadisp_dredge <- dredge(outer17_all_betadisp_mod_universal) 
+model.sel(outer17_all_betadisp_dredge) # best mean temp and year
+outer17_all_betadisp_top_mod <-  glmmTMB(betadispersion_trans ~ year  +  mean_temp_c + (1|site/location), data = outer17_all_quad, na.action = na.pass, family = beta_family())
+hist(residuals(outer17_all_betadisp_top_mod)) # similar issues
+plot(residuals(outer17_all_betadisp_top_mod) ~ fitted(outer17_all_betadisp_top_mod)) # similar issues
+summary(outer17_all_betadisp_top_mod)
+Anova(outer17_all_betadisp_top_mod) # sig
+
+outer17_betadisp_emm <-as.data.frame(emmeans(outer17_all_betadisp_top_mod, ~mean_temp_c,
+                                     at = list(mean_temp_c = seq(min(outer17_all_quad$mean_temp_c),
+                                                            max(outer17_all_quad$mean_temp_c),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = outer17_all_quad, aes(x = mean_temp_c, y = betadispersion_trans))+
+  geom_line(data = outer17_betadisp_emm, aes(x = mean_temp_c, y = inv_logit(emmean))) +
+  geom_ribbon(data = outer17_betadisp_emm, aes(x = mean_temp_c, ymin = inv_logit(asymp.LCL), ymax = inv_logit(asymp.UCL), alpha = 0.2), show.legend = F) +
+  labs(x = "Mean Temp (C)", y = "Outer 17 beta dispersion") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
 ```
 
 
+```{r stepwise model macro shannon quad}
+fringing_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year + mean_n +  mean_temp_c +  herbivore_evenness + (1|site/location), data = fringing_macro_quad, na.action = na.pass)
+fringing_macro_shannon_dredge <- dredge(fringing_macro_shannon_mod_universal) 
+model.sel(fringing_macro_shannon_dredge) # best just year
+fringing_macro_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ year + (1|site/location), data = fringing_macro_quad, na.action = na.pass)
+hist(residuals(fringing_macro_shannon_top_mod))# almost bimodal
+
+plot(residuals(fringing_macro_shannon_top_mod) ~ fitted(fringing_macro_shannon_top_mod)) # sharp line again
+summary(fringing_macro_shannon_top_mod)
+Anova(fringing_macro_shannon_top_mod) 
+
+
+## Backreef - includes macro 
+
+backreef_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + (1|site/location), data = backreef_macro_quad, na.action = na.pass)
+backreef_macro_shannon_dredge <- dredge(backreef_macro_shannon_mod_universal) # some have convergence issues
+model.sel(backreef_macro_shannon_dredge) #  best  removes wave power
+backreef_macro_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ year + mean_n + mean_temp_c +  herbivore_evenness + (1|site/location), data = backreef_macro_quad, na.action = na.pass) #  a little wonky on the tail but not bad
+hist(residuals(backreef_macro_shannon_top_mod)) # bimodal again... zero inflation?
+plot(residuals(backreef_macro_shannon_top_mod) ~ fitted(backreef_macro_shannon_top_mod)) # same stripe
+summary(backreef_macro_shannon_top_mod)
+Anova(backreef_macro_shannon_top_mod) # just year and temp sig
+
+backreef_emm <-as.data.frame(emmeans(backreef_macro_shannon_top_mod, ~mean_temp_c,
+                                     at = list(mean_temp_c = seq(min(backreef_macro_quad$mean_temp_c),
+                                                            max(backreef_macro_quad$mean_temp_c),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = backreef_macro_quad, aes(x = mean_temp_c, y = shannon))+
+  geom_line(data = backreef_emm, aes(x = mean_temp_c, y = emmean)) +
+  geom_ribbon(data = backreef_emm, aes(x = mean_temp_c, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Mean Temp (C)", y = "Backreef Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+
+# Outer10
+outer10_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c +  herbivore_evenness + (1|site/location), data = outer10_macro_quad, na.action = na.pass)
+outer10_macro_shannon_dredge <- dredge(outer10_macro_shannon_mod_universal) 
+model.sel(outer10_macro_shannon_dredge) #  best includes just herbivore evenness 
+outer10_macro_shannon_top_mod <- glmmTMB(log(shannon + 1) ~  herbivore_evenness + (1|site/location), data = outer10_macro_quad, na.action = na.pass)
+hist(residuals(outer10_macro_shannon_top_mod)) # slight negative skew but better than the others
+plot(residuals(outer10_macro_shannon_top_mod) ~ fitted(outer10_macro_shannon_top_mod)) # looks fine
+summary(outer10_macro_shannon_top_mod)
+Anova(outer10_macro_shannon_top_mod)
+outer10_emm <-as.data.frame(emmeans(outer10_macro_shannon_top_mod, ~herbivore_evenness,
+                                     at = list(herbivore_evenness = seq(min(outer10_macro_quad$herbivore_evenness),
+                                                            max(outer10_macro_quad$herbivore_evenness),
+                                                            0.05)))) 
+
+ggplot()+
+  geom_point(data = outer10_macro_quad, aes(x = herbivore_evenness, y = shannon))+
+  geom_line(data = outer10_emm, aes(x = herbivore_evenness, y = emmean)) +
+  geom_ribbon(data = outer10_emm, aes(x = herbivore_evenness, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Herbivore evenness", y = "Outer 10 Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+
+
+## outer17
+
+outer17_macro_shannon_mod_universal <- glmmTMB(log(shannon + 1) ~ year  + wave_power_adcp  + mean_temp_c + (1|site/location), data = outer17_macro_quad, na.action = na.pass)
+outer17_macro_shannon_dredge <- dredge(outer17_macro_shannon_mod_universal) 
+model.sel(outer17_macro_shannon_dredge) # best includes all but results in NaNs
+# next best includes just year and mean_temp
+outer17_macro_shannon_top_mod <- glmmTMB(log(shannon + 1) ~ year  + mean_temp_c + (1|site/location), data = outer17_macro_quad, na.action = na.pass)
+hist(residuals(outer17_macro_shannon_top_mod)) # negative skew
+plot(residuals(outer17_macro_shannon_top_mod) ~ fitted(outer17_macro_shannon_top_mod)) # looks fine
+summary(outer17_macro_shannon_top_mod)
+Anova(outer17_macro_shannon_top_mod)
+
+outer17_emm <-as.data.frame(emmeans(outer17_macro_shannon_top_mod, ~mean_temp_c,
+                                     at = list(mean_temp_c = seq(min(outer17_macro_quad$mean_temp_c),
+                                                            max(outer17_macro_quad$mean_temp_c),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = outer17_macro_quad, aes(x = mean_temp_c, y = shannon))+
+  geom_line(data = outer17_emm, aes(x = mean_temp_c, y = emmean)) +
+  geom_ribbon(data = outer17_emm, aes(x = mean_temp_c, ymin = lower.CL, ymax = upper.CL, alpha = 0.2), show.legend = F) +
+  scale_y_log10() + 
+  labs(x = "Mean Temp (C)", y = "Outer 17 Shannon Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+```
+```{r stepwise model macro betadisp quad}
+fringing_macro_betadisp_mod_universal <- glmmTMB(betadispersion_trans ~ year + mean_n +  mean_temp_c +  herbivore_evenness + (1|site/location), data = fringing_macro_quad, na.action = na.pass, family = beta_family())
+fringing_macro_betadisp_dredge <- dredge(fringing_macro_betadisp_mod_universal) 
+model.sel(fringing_macro_betadisp_dredge) # best includes all
+hist(residuals(fringing_macro_betadisp_mod_universal)) #  a little lumpy but not bad
+plot(residuals(fringing_macro_betadisp_mod_universal) ~ fitted(fringing_macro_betadisp_mod_universal)) # negative trend
+summary(fringing_macro_betadisp_mod_universal)
+Anova(fringing_macro_betadisp_mod_universal) # all sig
+
+fringing_betadisp_emm <-as.data.frame(emmeans(fringing_macro_betadisp_mod_universal, ~mean_n,
+                                     at = list(mean_n = seq(min(fringing_macro_quad$mean_n),
+                                                            max(fringing_macro_quad$mean_n),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = fringing_macro_quad, aes(x = mean_n, y = betadispersion_trans))+
+  geom_line(data = fringing_betadisp_emm, aes(x = mean_n, y = inv_logit(emmean))) +
+  geom_ribbon(data = fringing_betadisp_emm, aes(x = mean_n, ymin = inv_logit(asymp.LCL),
+                                                ymax = inv_logit(asymp.UCL), alpha = 0.2), show.legend = F) +
+  labs(x = "Mean N", y = "Fringing Beta Dispersion") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+fringing_betadisp_emm2 <-as.data.frame(emmeans(fringing_macro_betadisp_mod_universal, ~herbivore_evenness,
+                                     at = list(herbivore_evenness = seq(min(fringing_macro_quad$herbivore_evenness),
+                                                            max(fringing_macro_quad$herbivore_evenness),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = fringing_macro_quad, aes(x = herbivore_evenness, y = betadispersion_trans))+
+  geom_line(data = fringing_betadisp_emm2, aes(x = herbivore_evenness, y = inv_logit(emmean))) +
+  geom_ribbon(data = fringing_betadisp_emm2, aes(x = herbivore_evenness, ymin = inv_logit(asymp.LCL),
+                                                ymax = inv_logit(asymp.UCL), alpha = 0.2), show.legend = F) +
+  labs(x = "Herbivore evenness", y = "Fringing Beta Dispersion") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank())
+
+fringing_betadisp_emm3 <-as.data.frame(emmeans(fringing_macro_betadisp_mod_universal, ~mean_temp_c,
+                                     at = list(mean_temp_c = seq(min(fringing_macro_quad$mean_temp_c),
+                                                            max(fringing_macro_quad$mean_temp_c),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = fringing_macro_quad, aes(x = mean_temp_c, y = betadispersion_trans))+
+  geom_line(data = fringing_betadisp_emm3, aes(x = mean_temp_c, y = inv_logit(emmean))) +
+  geom_ribbon(data = fringing_betadisp_emm3, aes(x = mean_temp_c, ymin = inv_logit(asymp.LCL),
+                                                ymax = inv_logit(asymp.UCL), alpha = 0.2), show.legend = F) +
+  labs(x = "Mean Temp (C)", y = "Fringing Beta Dispersion") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank())
+  
+
+## Backreef - includes macro 
+
+backreef_macro_betadisp_mod_universal <- glmmTMB(betadispersion_trans ~ year  + wave_power_adcp + mean_n + mean_temp_c +  herbivore_evenness + (1|site/location), data = backreef_macro_quad, na.action = na.pass, family = beta_family())
+backreef_macro_betadisp_dredge <- dredge(backreef_macro_betadisp_mod_universal) # most have convergence issues
+model.sel(backreef_macro_betadisp_dredge) #  best includes nitrogen and year
+backreef_macro_betadisp_top_mod <- glmmTMB(betadispersion_trans ~ year  +  mean_n  + (1|site/location), data = backreef_macro_quad, na.action = na.pass, family = beta_family()) 
+hist(residuals(backreef_macro_betadisp_top_mod)) # not bad
+plot(residuals(backreef_macro_betadisp_top_mod) ~ fitted(backreef_macro_betadisp_top_mod)) # weird cluster, slight negative trend
+summary(backreef_macro_betadisp_top_mod)
+Anova(backreef_macro_betadisp_top_mod) 
+
+
+# Outer10
+outer10_macro_betadisp_mod_universal <- glmmTMB(betadispersion_trans ~ year  + wave_power_adcp  + mean_temp_c +  herbivore_evenness + (1|site/location), data = outer10_macro_quad, na.action = na.pass, family = beta_family()) # model convergence
+outer10_macro_betadisp_dredge <- dredge(outer10_macro_betadisp_mod_universal) # all have errors of some kind
+model.sel(outer10_macro_betadisp_dredge) #  best includes herbivore evenness, temp, and year
+outer10_macro_betadisp_top_mod <- glmmTMB(betadispersion_trans ~ year + mean_temp_c +  herbivore_evenness + (1|site/location), data = outer10_macro_quad, na.action = na.pass, family = beta_family()) 
+qqnorm(residuals(outer10_macro_betadisp_top_mod)) # positive skew
+plot(residuals(outer10_macro_betadisp_top_mod) ~ fitted(outer10_macro_betadisp_top_mod)) # less negative than before
+summary(outer10_macro_betadisp_top_mod)
+Anova(outer10_macro_betadisp_top_mod) # all sig
+outer10_betadisp_emm <-as.data.frame(emmeans(outer10_macro_betadisp_top_mod, ~herbivore_evenness,
+                                     at = list(herbivore_evenness = seq(min(outer10_macro_quad$herbivore_evenness),
+                                                            max(outer10_macro_quad$herbivore_evenness),
+                                                            0.05)))) 
+
+ggplot()+
+  geom_point(data = outer10_macro_quad, aes(x = herbivore_evenness, y = betadispersion_trans))+
+  geom_line(data = outer10_betadisp_emm, aes(x = herbivore_evenness, y = inv_logit(emmean))) +
+  geom_ribbon(data = outer10_betadisp_emm,
+              aes(x = herbivore_evenness, ymin = inv_logit(asymp.LCL), ymax = inv_logit(asymp.UCL), alpha = 0.2), show.legend = F) +
+  labs(x = "Herbivore evenness", y = "Outer 10 Beta Dispersion") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+outer10_betadisp_emm2 <-as.data.frame(emmeans(outer10_macro_betadisp_top_mod, ~mean_temp_c,
+                                     at = list(mean_temp_c = seq(min(outer10_macro_quad$mean_temp_c),
+                                                            max(outer10_macro_quad$mean_temp_c),
+                                                            0.05)))) 
+
+ggplot()+
+  geom_point(data = outer10_macro_quad, aes(x = mean_temp_c, y = betadispersion_trans))+
+  geom_line(data = outer10_betadisp_emm2, aes(x = mean_temp_c, y = inv_logit(emmean))) +
+  geom_ribbon(data = outer10_betadisp_emm2,
+              aes(x = mean_temp_c, ymin = inv_logit(asymp.LCL), ymax = inv_logit(asymp.UCL), alpha = 0.2), show.legend = F) +
+  labs(x = "Mean temp (C)", y = "Outer 10 Beta Dispersion") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+
+
+## outer17
+
+outer17_macro_betadisp_mod_universal <- glmmTMB(betadispersion_trans ~ year  + wave_power_adcp  + mean_temp_c + (1|site/location), data = outer17_macro_quad, na.action = na.pass, family = beta_family()) # convergence issue
+outer17_macro_betadisp_dredge <- dredge(outer17_macro_betadisp_mod_universal) 
+model.sel(outer17_macro_betadisp_dredge) # best mean temp and year
+outer17_macro_betadisp_top_mod <-  glmmTMB(betadispersion_trans ~ year  +  mean_temp_c + (1|site/location), data = outer17_macro_quad, na.action = na.pass, family = beta_family())
+hist(residuals(outer17_macro_betadisp_top_mod)) # similar positive skew, not bad
+plot(residuals(outer17_macro_betadisp_top_mod) ~ fitted(outer17_macro_betadisp_top_mod)) # similar issues
+summary(outer17_macro_betadisp_top_mod)
+Anova(outer17_macro_betadisp_top_mod) # sig
+
+outer17_betadisp_emm <-as.data.frame(emmeans(outer17_macro_betadisp_top_mod, ~mean_temp_c,
+                                     at = list(mean_temp_c = seq(min(outer17_macro_quad$mean_temp_c),
+                                                            max(outer17_macro_quad$mean_temp_c),
+                                                            0.01)))) 
+ggplot()+
+  geom_point(data = outer17_macro_quad, aes(x = mean_temp_c, y = betadispersion_trans))+
+  geom_line(data = outer17_betadisp_emm, aes(x = mean_temp_c, y = inv_logit(emmean))) +
+  geom_ribbon(data = outer17_betadisp_emm, aes(x = mean_temp_c, ymin = inv_logit(asymp.LCL), ymax = inv_logit(asymp.UCL), alpha = 0.2), show.legend = F) +
+  labs(x = "Mean Temp (C)", y = "Backreef betadisp Index (H')") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank()) 
+
+```
+
+```{r turnover quad setup}
+# some quadrats don't have algae to run turnover and synchrony functions
+problem_children <- c(
+                      "lter_5_fringing_reef_algae_transect_3_quad_9",
+                      "lter_5_fringing_reef_algae_transect_3_quad_8",
+                      "lter_5_fringing_reef_algae_transect_3_quad_6",
+                      "lter_5_fringing_reef_algae_transect_3_quad_3",
+                      "lter_5_fringing_reef_algae_transect_3_quad_10")
+
+long_data_sub <- long_data[!long_data$location %in% problem_children, ] # remove problem children
+
+data_sub <- data[!data$location %in% problem_children, ]
+
+macroalgae_sub <- macroalgae[!macroalgae$location %in% problem_children, ]
+macro_long_data_sub <- macro_long_data[!macro_long_data$location %in% problem_children, ]
+```
+
+```{r turnover quad all}
+total_turnover<-
+  turnover(
+  df = long_data_sub,
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "location",
+  metric = "total"
+)
+
+
+
+# merge with turnover df
+total_turnover <- merge(total_turnover, meta_df, by = c("year", "location"))
+total_turnover$year_factor <- as.factor(total_turnover$year)
+total_turnover$turnover_trans <- sv_trans(total_turnover$total)
+
+turnover_mod_quad <- glmmTMB(turnover_trans ~ year*habitat + (1|site/location), family = beta_family(), data = total_turnover) # same here
+summary(turnover_mod_quad)
+hist(residuals(turnover_mod_quad)) # almost bimodal but not terrible
+plot(residuals(turnover_mod_quad) ~ fitted(turnover_mod_quad)) # negative trend
+Anova(turnover_mod_quad)
+# all P < 2e-16  
+emtrends(turnover_mod_quad, pairwise ~ habitat, var = "year") # fringing not different from forereef
+turnover_quad_emm <- emmip(turnover_mod_quad,
+                        habitat ~ year,
+                        at = list(year = seq(2008,2023,1)), plotit = F, CIs = T)
+
+(turnover_quad_plot <- 
+  ggplot() +
+  geom_point(data = total_turnover,
+             aes(x = year, y = turnover_trans, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = turnover_quad_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = turnover_quad_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL),
+                                                  fill = habitat), alpha = 0.3) +
+  geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+    labs(x = "Year", y = "Total Turnover\n") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+
+
+```
+```{r diversity synchrony quad all setup}
+lm_synchrony_quadrat <- codyn::synchrony(df = long_data_sub,
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "percent_cover",
+                                   metric = "Loreau",
+                                   replicate.var = "location") # Loreau and Mazancourt synchrony
+colnames(lm_synchrony_quadrat) = c("location", "loreau_synchrony") # rename cols for merge later
+diversity_stability_quadrat <- alpha_diversity_quad %>%
+  dplyr::group_by(location, site, habitat, island_side, site_habitat, transect) %>%
+  dplyr::summarise(
+            algae_richness_mean = mean(algae_richness_mean), 
+            algae_shannon_mean = mean(algae_shannon_mean), 
+            algae_cover_mean = mean(algae_cover_mean),
+            algae_cover_cv = CV(algae_cover_hard_mean)) 
+
+diversity_stability_quadrat <- 
+  merge(diversity_stability_quadrat, lm_synchrony_quadrat, by = "location") # add in loreau and de Mazancourt synchrony
+diversity_stability_quadrat$loreau_synchrony_trans <- sv_trans(diversity_stability_quadrat$loreau_synchrony)
+
+
+# for plotting later
+diversity_ranges_quad <- diversity_stability_quadrat %>%
+  group_by(habitat) %>%
+  summarise(min_richness = min(algae_richness_mean),
+            max_richness = max(algae_richness_mean),
+            min_shannon = min(algae_shannon_mean),
+            max_shannon = max(algae_shannon_mean),
+            min_loreau = min(loreau_synchrony),
+            max_loreau = max(loreau_synchrony))
+
+```
+
+```{r diversity stability synchrony all quad, fig.height=8, fig.width = 8}
+diversity_cv_quad_mod <- glmmTMB(algae_cover_cv ~ algae_shannon_mean*habitat + (1|site), data = diversity_stability_quadrat, family = Gamma(link = "log"))
+hist(residuals(diversity_cv_quad_mod)) # a little chunky
+plot(residuals(diversity_cv_quad_mod) ~ fitted(diversity_cv_quad_mod)) # some heteroskedasticity
+summary(diversity_cv_quad_mod)
+Anova(diversity_cv_quad_mod)
+
+emtrends(diversity_cv_quad_mod, pairwise ~ habitat, var = "algae_shannon_mean") # backreef not different from forereef
+
+shannon_cv_emm_quad <- emmip(diversity_cv_quad_mod,
+                        habitat ~ algae_shannon_mean,
+                        at = list(algae_shannon_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_shannon_effects_quad <- shannon_cv_emm_quad %>%
+  left_join(diversity_ranges_quad, by = c("habitat")) %>%
+  filter(algae_shannon_mean >= min_shannon & algae_shannon_mean <= max_shannon)
+
+
+(shannon_cv_plot_quad = 
+  ggplot() +
+  geom_point(data = diversity_stability_quadrat,
+             aes(x = algae_shannon_mean, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_shannon_effects_quad, aes(x = algae_shannon_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_shannon_effects_quad, aes(x = algae_shannon_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+diversity_synchrony_quad_mod <- glmmTMB(loreau_synchrony_trans ~ algae_shannon_mean*habitat + (1|site), data = diversity_stability_quadrat, family = beta_family())
+hist(residuals(diversity_synchrony_quad_mod)) # not bad
+plot(residuals(diversity_synchrony_quad_mod) ~ fitted(diversity_synchrony_quad_mod)) # heteroskedasticity
+summary(diversity_synchrony_quad_mod)
+Anova(diversity_synchrony_quad_mod)
+
+emtrends(diversity_synchrony_quad_mod, pairwise ~ habitat, var = "algae_shannon_mean") # backreef not different from forereef
+
+shannon_synchrony_emm_quad <- emmip(diversity_synchrony_quad_mod,
+                        habitat ~ algae_shannon_mean,
+                        at = list(algae_shannon_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_shannon_synchrony_effects_quad <- shannon_synchrony_emm_quad %>%
+  left_join(diversity_ranges_quad, by = c("habitat")) %>%
+  filter(algae_shannon_mean >= min_shannon & algae_shannon_mean <= max_shannon)
+
+
+(shannon_synchrony_plot_quad = 
+  ggplot() +
+  geom_point(data = diversity_stability_quadrat,
+             aes(x = algae_shannon_mean, y = loreau_synchrony_trans, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_shannon_synchrony_effects_quad, aes(x = algae_shannon_mean, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_shannon_synchrony_effects_quad, aes(x = algae_shannon_mean, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+synchrony_cv_quad_mod <- glmmTMB(algae_cover_cv ~ loreau_synchrony*habitat + (1|site), data = diversity_stability_quadrat, family = Gamma(link = "log"))
+hist(residuals(synchrony_cv_quad_mod)) # not bad
+plot(residuals(synchrony_cv_quad_mod) ~ fitted(synchrony_cv_quad_mod)) # sstripey
+summary(synchrony_cv_quad_mod)
+Anova(synchrony_cv_quad_mod)
+
+emtrends(synchrony_cv_quad_mod, pairwise ~ habitat, var = "loreau_synchrony") # backreef not different from forereef
+
+synchrony_cv_emm_quad <- emmip(synchrony_cv_quad_mod,
+                        habitat ~ algae_synchrony_mean,
+                        at = list(algae_synchrony_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_synchrony_effects_quad <- synchrony_cv_quad_mod %>%
+  left_join(diversity_ranges_quad, by = c("habitat")) %>%
+  filter(algae_synchrony_mean >= min_synchrony & algae_synchrony_mean <= max_synchrony)
+
+
+(synchrony_cv_plot_quad = 
+  ggplot() +
+  geom_point(data = diversity_stability_quadrat,
+             aes(x = algae_synchrony_mean, y = algae_cover_cv, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = filtered_synchrony_effects_quad, aes(x = algae_synchrony_mean, y = exp(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = filtered_synchrony_effects_quad, aes(x = algae_synchrony_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+   scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+
+```
+
+
+```{r total turnover macro}
+total_turnover_macro<-
+  turnover(
+  df = macro_long_data_sub,
+  time.var = "year",
+  species.var = "taxa",
+  abundance.var = "percent_cover",
+  replicate.var = "location",
+  metric = "total"
+)
+
+
+
+# merge with turnover df
+total_turnover_macro <- merge(total_turnover_macro, meta_df, by = c("year", "location"))
+total_turnover_macro$year_factor <- as.factor(total_turnover_macro$year)
+total_turnover_macro$turnover_trans <- sv_trans(total_turnover_macro$total)
+
+turnover_mod_quad_macro <- glmmTMB(turnover_trans ~ year*habitat + (1|site/location), family = beta_family(), data = total_turnover_macro) # same here
+summary(turnover_mod_quad_macro)
+hist(residuals(turnover_mod_quad_macro)) # almost bimodal but not terrible
+plot(residuals(turnover_mod_quad_macro) ~ fitted(turnover_mod_quad_macro)) # negative trend
+Anova(turnover_mod_quad_macro)
+# all P < 2e-16  
+emtrends(turnover_mod_quad_macro, pairwise ~ habitat, var = "year") # fringing not different from forereef
+turnover_quad_macro_emm <- emmip(turnover_mod_quad_macro,
+                        habitat ~ year,
+                        at = list(year = seq(2008,2023,1)), plotit = F, CIs = T)
+
+(turnover_quad_macro_plot <- 
+  ggplot() +
+  geom_point(data = total_turnover_macro,
+             aes(x = year, y = turnover_trans, colour = habitat), size = 2, alpha = 0.5) + 
+  geom_line(data = turnover_quad_macro_emm, aes(x = year, y = inv_logit(yvar), colour = habitat), size = 2) +
+  geom_ribbon(data = turnover_quad_macro_emm, aes(x = year, ymin = inv_logit(LCL), ymax = inv_logit(UCL),
+                                                  fill = habitat), alpha = 0.3) +
+  geom_segment(aes(y = 1, yend = 1, x = 2006, xend = 2010), linewidth = 2, alpha = 1, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+    labs(x = "Year", y = "Total Turnover\n") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+```
