@@ -3,6 +3,8 @@ title: "noam_final_analyses"
 author: "Noam Altman-Kurosaki"
 date: "2024-08-30"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}

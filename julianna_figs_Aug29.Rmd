@@ -66,7 +66,7 @@ macroalgQuad %>%
          ) %>% 
   select(year, location, site, habitat, transect, quadrat, island_side, 
          macroalgae_cover, macroalgae_cover_hard, coral_cover, coral_cover_hard, sand_cover, 
-         turf_cover, turf_cover_hard, CCA_cover, CCA_cover_hard
+         turf_cover, turf_cover_hard, CCA_cover, CCA_cover_hard, sand_cover
          ) %>% 
   # relevel for graphing
   mutate(island_side = str_to_sentence(island_side),
@@ -88,9 +88,9 @@ macroalgQuad %>%
 ```{r plot for absolute cover}
 main4quad %>% 
   select(year, location, site, habitat, transect, quadrat, island_side, 
-         macroalgae_cover, turf_cover, CCA_cover, coral_cover) %>% 
+         macroalgae_cover, turf_cover, CCA_cover, coral_cover, sand_cover) %>% 
   # pivot key columns longer
-  pivot_longer(cols = c(macroalgae_cover, turf_cover, CCA_cover, coral_cover),
+  pivot_longer(cols = c(macroalgae_cover, turf_cover, CCA_cover, coral_cover, sand_cover),
                names_to = "Substrate",
                values_to = "cover") %>% 
   # summarize and group quadrats by island/habitat
@@ -106,13 +106,13 @@ main4quad %>%
               alpha  = 0.7) +
   geom_line() +
   theme_bw() +
-   scale_fill_manual(values = c(
-    moma.colors("Klein", type = "discrete")[2], # CCA
-    moma.colors("Klein", type = "discrete")[1], # coral
-    moma.colors("Klein", type = "discrete")[5], # macro
-    moma.colors("Klein", type = "discrete")[4] # turf
-  ),
-  labels = c("CCA", "Coral", "Macroalgae", "Turf algae")) +
+  # scale_fill_manual(values = c(
+  #  moma.colors("Klein", type = "discrete")[2], # CCA
+  #  moma.colors("Klein", type = "discrete")[1], # coral
+  #  moma.colors("Klein", type = "discrete")[5], # macro
+  #  moma.colors("Klein", type = "discrete")[4] # turf
+  #),
+  #labels = c("CCA", "Coral", "Macroalgae", "Turf algae")) +
   facet_grid(site ~ habitat) + # not sure which direction is best here
   ylab("Mean absolute cover (%)") +
   xlab("Year") +

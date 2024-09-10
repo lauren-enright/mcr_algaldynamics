@@ -38,6 +38,7 @@ sand_coral <- read_csv(here("data", "allbenthicdata_cleaned_colnames.csv")) %>%
   select(year, location, site, habitat, site_habitat, transect, quadrat, sand, coral)
 ```
 
+
 # Calculate macroalgal alpha diversity 
 
 ## Make matrices 

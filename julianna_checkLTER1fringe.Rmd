@@ -1,0 +1,48 @@
+---
+title: "julianna_check2017fringeLTER1"
+output: html_document
+date: "2024-09-10"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# clean up
+rm(list=ls()) 
+
+# load packages
+require(here) # relative file paths
+require(tidyverse) # data wrangling
+require(vegan) # community/diversity analyses
+```
+
+This script summarizes the coral and macroalgae subsets to be joinable with the full algae dataset
+
+# Bring in the data
+
+```{r}
+# algal cover 
+algae_raw <- read_csv(here("data/MCR benthic algae data cover RAW.csv")) 
+
+```
+
+
+
+```{r}
+algae_raw %>% 
+  filter(Taxonomy_Substrate_Functional_Group %in% c("Ascidian", "Sponge", "Millepora platyphylla", "Shell Debris", "Soft Coral", "Corallimorpharia", "Cyanophyta", "Coral Rubble", "No data", "Heteractis sp.", "Tridacna sp.", "Bare Space", "Sarcophyton sp.", "Zooxanthellae")) %>% 
+  group_by(Year, Site, Location, Taxonomy_Substrate_Functional_Group) %>% 
+  summarize(Total_other_cover = sum(Percent_Cover)) %>% 
+  mutate(Habitat = case_when(str_detect(string = Location, pattern = "Fring") ~ "Fringing",
+                              TRUE ~ "nawh")) %>% 
+  filter(Year == 2017,
+         Habitat == "Fringing",
+         Site == "LTER 1"
+         ) %>% view()
+
+
+```
+
+
