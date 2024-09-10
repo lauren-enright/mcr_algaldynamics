@@ -235,7 +235,7 @@ Plot
 
 ```{r cover CV vs. coral cover}
 alltime %>% 
-  ggplot(aes(x = coral_cover_hard_mean, y = algae_cover_hard_cv)) +
+  ggplot(aes(x = coral_cover_hard_mean, y = macroalgae_cover_hard_cv)) +
   geom_point(aes(color = island_side)) +
   facet_wrap(~habitat) +
   geom_smooth(method = "lm") +
@@ -244,7 +244,7 @@ alltime %>%
 
 ```{r cover CV vs. coral cover CV}
 alltime %>% 
-  ggplot(aes(x = coral_cover_hard_cv, y = algae_cover_hard_cv)) +
+  ggplot(aes(x = coral_cover_hard_cv, y = macroalgae_cover_hard_cv)) +
   geom_point(aes(color = island_side)) +
   facet_wrap(~habitat) +
   geom_smooth(method = "lm") +
