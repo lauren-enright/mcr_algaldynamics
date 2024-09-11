@@ -57,15 +57,15 @@ se <- function(x){
 
 ## Figure formatting
 ```{r figure formatting info}
-habitat_colours <- c("fringing" = "#D81B60",
-                     "backreef" = "#FFC107",
-                     "outer_10" = "#1E88E5",
-                     "outer_17" = "#004D40")
+habitat_colours <- c("Fringing" = "#D81B60",
+                     "Backreef" = "#FFC107",
+                     "Forereef 10m" = "#1E88E5",
+                     "Forereef 17m" = "#004D40")
 
 functional_group_colours <- c("Coral" = "darkmagenta",
                          "CCA" = "deeppink3",
-                         "Macroalgae" = "#004D40",
-                         "Turf" =  "chartreuse4")
+                         "Macroalgae" = "chartreuse4",
+                         "Turf" =  "#004D40")
 
 ```
 
@@ -80,7 +80,7 @@ not_algae <- c("ascidian", "bare_space", "coral", "coral_rubble", "corallimorpha
 
 
 algae <- data[ , -which(names(data) %in% not_algae)]
-algae$algal_turf <- data$coral_rubble + data$bare_space + data$algal_turf
+
 
 
 macroalgae <- algae %>% 
@@ -208,15 +208,20 @@ cover_long$functional_group <- factor(cover_long$functional_group,
 
 ```
 
+```{r}
+figure_1_data <- subset(cover_long, functional_group != "Sand" & functional_group != "Other")
+```
+
 ## plot
 
 
-```{r figure 1, fig.height = 10, fig.width=14}
-(figure_1 <- ggplot(data = subset(cover_long, functional_group != "Sand" & functional_group != "Other")) +
-  geom_line(aes(x = year, y = percent_cover, colour = functional_group), linewidth = 1) +
-  geom_ribbon( aes(x = year, ymin = percent_cover - se, ymax = percent_cover + se, fill = functional_group), alpha = 0.3) +
+```{r figure 1, fig.height = 10, fig.width=14, warning=FALSE}
+(figure_1 <- ggplot() +
+  geom_line(data = figure_1_data, aes(x = year, y = percent_cover, colour = functional_group), linewidth = 1) +
+  geom_ribbon(data = figure_1_data, aes(x = year, ymin = percent_cover - se, ymax = percent_cover + se, fill = functional_group), alpha = 0.3) +
   facet_wrap(~ habitat) +
-  geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
+  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
+  annotate("segment", x = 2006, xend = 2010, y = 75, yend = 75, linewidth = 2, colour = "grey") +
   scale_colour_manual(values = functional_group_colours) +
   scale_fill_manual(values = functional_group_colours) +
   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
@@ -233,11 +238,101 @@ cover_long$functional_group <- factor(cover_long$functional_group,
         panel.grid.minor = element_blank(),  #remove minor-grid labels
         plot.background = element_blank(),
         legend.text = element_text(size = rel(1)), # increase legend text
-        legend.title = element_text(size = rel(1)),
+        legend.title = element_blank(),
         legend.position = 'bottom', # move legend to bottom
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black")) )
 
-ggsave(filename = "output/figure_1.png", figure_1, height = 10, width = 14)
+#ggsave(filename = "output/figure_1.png", figure_1, height = 10, width = 14)
 ```
 
+# Figure 2
+
+## Create Data Frames
+```{r create data}
+alpha_diversity_quad_macro <-
+  data.frame(
+    year = macroalgae$year,
+    location = macroalgae$location,
+    shannon = diversity(macroalgae[ , -which(names(macroalgae) %in% meta_cols)], "shannon"),
+    richness = rowSums(macroalgae[ , -which(names(macroalgae) %in% meta_cols)] > 0)
+  )
+
+alpha_diversity_quad_macro <- merge(meta_df, alpha_diversity_quad_macro, by = c("location", "year"))
+
+macroalgal_cover <- cover_df[,c("year", "habitat", "site", "location", "macroalgae")]
+
+alpha_diversity_quad_macro_with_cover <- left_join(alpha_diversity_quad_macro, macroalgal_cover,by = join_by(location, year, site, habitat)) %>% 
+  mutate(macroalgal_prop_cover = macroalgae / 100) %>% 
+  select(-macroalgae)
+```
+
+# Functional Group Prep
+
+```{r richness df}
+richness_df <- alpha_diversity_quad_macro %>% 
+  group_by(year, habitat) %>% 
+  summarise(richness_mean = mean(richness),
+            richness_se = se(richness))
+```
+
+```{r richness factors}
+richness_df$habitat <- factor(richness_df$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
+
+## plot
+```{r figure 2}
+(figure_2 <- ggplot() +
+  geom_line(data = richness_df, aes(x = year, y = richness_mean, colour = habitat), linewidth = 1) +
+  geom_ribbon(data = richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se, fill = habitat), alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
+  annotate("segment", x = 2006, xend = 2010, y = 2, yend = 2, linewidth = 2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   scale_x_continuous(breaks = unique(richness_df$year)) +
+   labs(y = "Macroalgal Richness \n",
+        x = "Year") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+ggsave(filename = "output/figure_2.png", figure_2, height = 10, width = 14)
+```
+
+
+
+## SYNCHRONY CODE
+```{r calculate syncrony}
+# make er long
+macro_long_data <- pivot_longer(
+  data = macroalgae,
+  cols = grep("acanthophora_spicifera", colnames(macroalgae)):grep("valonia_ventricosa", colnames(macroalgae)),
+  names_to = "taxa",
+  values_to = "percent_cover") %>% 
+  mutate(prop_cover = percent_cover/100) %>% 
+  select(-percent_cover)
+
+# write_csv(macro_long_data, here("Data", "macro_long_data.csv"))
+
+# CALCULATE SYNCHRONY CODE
+lm_synchrony <- codyn::synchrony(df = macro_long_data,
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "prop_cover",
+                                   metric = "Loreau",
+                                   replicate.var = "location")
+```
