@@ -267,7 +267,9 @@ alpha_diversity_quad_macro_with_cover <- left_join(alpha_diversity_quad_macro, m
   select(-macroalgae)
 ```
 
-# Functional Group Prep
+# Figure 2 
+
+## prep
 
 ```{r richness df}
 richness_df <- alpha_diversity_quad_macro %>% 
@@ -313,9 +315,86 @@ richness_df$habitat <- factor(richness_df$habitat,
 ggsave(filename = "output/figure_2.png", figure_2, height = 10, width = 14)
 ```
 
+# Figure 3
+
+## model
+
+```{r figure 3 model}
+alpha_diversity_quad_macro_with_cover$cover_trans <- sv_trans(alpha_diversity_quad_macro_with_cover$macroalgal_prop_cover)
+
+cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro_with_cover)
+summary(cover_mod)
+hist(residuals(cover_mod)) # looks fine
+plot(residuals(cover_mod) ~ fitted(cover_mod)) # negative trend but it can't be less than 0 so not too concerned. some wave pattern
+r.squaredGLMM(cover_mod) # 0.631, 0.650
+emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not different from forereef, forereef also not different
 
 
-## SYNCHRONY CODE
+```
+
+## figure 3 plot setup
+
+```{r figure 3 setup}
+diversity_ranges_quad <- alpha_diversity_quad_macro_with_cover %>%
+  group_by(habitat) %>%
+  summarise(min_richness = min(richness),
+            max_richness = max(richness),
+            min_cover= min(cover_trans),
+            max_cover = max(cover_trans))
+
+cover_emm <- emmip(cover_mod,
+                        habitat ~ richness,
+                        at = list(richness = seq(0,10,1)), plotit = F, CIs = T)
+
+filtered_cover_effects <- cover_emm %>%
+  left_join(diversity_ranges_quad, by = c("habitat")) %>%
+  filter(richness >= min_richness & richness <= max_richness)
+
+alpha_diversity_quad_macro_with_cover$habitat <- factor(alpha_diversity_quad_macro_with_cover$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+
+filtered_cover_effects$habitat <- factor(filtered_cover_effects$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
+
+## figure 3 plot
+
+```{r figure 3 plot}
+(figure_3 <- 
+  ggplot() +
+  geom_point(data = alpha_diversity_quad_macro_with_cover,
+             aes(x = richness, y = cover_trans, colour = habitat), size = 1, alpha = 0.005) + 
+  geom_line(data = filtered_cover_effects, aes(x = richness, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_cover_effects, aes(x = richness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Cover (Proprtion)\n", x = "Macroalgal Richness") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+```
+
+```{r figure 3 v2}
+(figure_3_v2 <- figure_3 + facet_wrap(~habitat))
+```
+# Figure 4
+
+## Synchrony setup
 ```{r calculate syncrony}
 # make er long
 macro_long_data <- pivot_longer(
@@ -335,4 +414,135 @@ lm_synchrony <- codyn::synchrony(df = macro_long_data,
                                    abundance.var = "prop_cover",
                                    metric = "Loreau",
                                    replicate.var = "location")
+
+
+diversity_stability <- alpha_diversity_quad_macro_with_cover %>%
+  dplyr::group_by(location, habitat, site) %>%
+  dplyr::summarise(
+            richness_mean = mean(richness), 
+            shannon_mean = mean(shannon), 
+            cover_mean = mean(macroalgal_prop_cover),
+            cover_cv = CV(macroalgal_prop_cover),
+            cover_stability = 1/CV(macroalgal_prop_cover)) 
+
+diversity_stability_synchrony <- left_join(diversity_stability, lm_synchrony, by = join_by(location))
+diversity_stability_synchrony$synchrony_trans <- sv_trans(diversity_stability_synchrony$synchrony)
+diversity_stability_synchrony <- na.omit(diversity_stability_synchrony) # remove quads that never had algae --> NaN calcs
+
+
+dss_ranges<- diversity_stability_synchrony %>%
+  group_by(habitat) %>%
+  summarise(min_richness = min(richness_mean),
+            max_richness = max(richness_mean),
+            min_stability= min(cover_stability),
+            max_stability = max(cover_stability),
+            min_synchrony = min(synchrony_trans),
+            max_synchrony = max(synchrony_trans))
+```
+
+## figure 4a model - richness stability
+
+```{r richness synchrony mod}
+rich_stab_mod <- glmmTMB(cover_stability~ richness_mean*habitat + (1|site), family = Gamma(link = "log"), data = diversity_stability_synchrony)
+summary(rich_stab_mod)
+hist(residuals(rich_stab_mod)) # looks good
+plot(residuals(rich_stab_mod) ~ fitted(rich_stab_mod)) # heteroskedastic - bring to group
+r.squaredGLMM(rich_stab_mod) # 0.803, 0.808
+emtrends(rich_stab_mod, pairwise ~ habitat, var = "richness_mean") # fringing not diff from outer17, backreef not different from outer10
+```
+
+```{r figure 4a setup}
+
+
+rich_stab_emm <- emmip(rich_stab_mod,
+                        habitat ~ richness_mean,
+                        at = list(richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_rich_stab_effects <- rich_stab_emm %>%
+  left_join(dss_ranges, by = c("habitat")) %>%
+  filter(richness_mean >= min_richness & richness_mean <= max_richness)
+
+
+```
+
+
+## plot figure 4a
+
+```{r figure 4a}
+(figure_4a <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony,
+             aes(x = richness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_rich_stab_effects, aes(x = richness_mean, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_rich_stab_effects, aes(x = richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Stability\n", x = "Macroalgal Richness") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+```
+
+## figure 4c model - richness synchrony
+
+```{r richness synchrony mod}
+rich_synch_mod <- glmmTMB(synchrony_trans ~ richness_mean*habitat + (1|site), family = beta_family(), data = diversity_stability_synchrony)
+summary(rich_synch_mod)
+hist(residuals(rich_synch_mod)) # looks good
+plot(residuals(rich_synch_mod) ~ fitted(rich_synch_mod)) # same issue as always
+r.squaredGLMM(rich_synch_mod) # 0.701, 0.775
+emtrends(rich_synch_mod, pairwise ~ habitat, var = "richness_mean") # forereefs aren't different
+```
+
+```{r figure 4c setup}
+
+
+rich_synch_emm <- emmip(rich_synch_mod,
+                        habitat ~ richness_mean,
+                        at = list(richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_rich_synch_effects <- rich_synch_emm %>%
+  left_join(dss_ranges, by = c("habitat")) %>%
+  filter(richness_mean >= min_richness & richness_mean <= max_richness)
+
+
+```
+
+## plot figure 4c
+
+```{r figure 4c}
+(figure_4c <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony,
+             aes(x = richness_mean, y = synchrony_trans, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_rich_synch_effects, aes(x = richness_mean, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_rich_synch_effects, aes(x = richness_mean, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Synchrony\n", x = "Macroalgal Richness") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
 ```
