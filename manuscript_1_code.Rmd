@@ -1,0 +1,221 @@
+---
+title: "Manuscript 1 code"
+author: "Noam Altman-Kurosaki"
+date: "2024-09-11"
+output: html_document
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+library(here)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(vegan)
+library(glmmTMB)
+library(car)
+library(effects)
+library(DHARMa)
+library(stringr)
+library(MuMIn)
+library(codyn)
+library(nlme)
+library(mgcv)
+library(emmeans)
+```
+
+## functions
+
+```{r functions}
+# coefficient of variation
+CV<-function(x){
+  return(sd(x,na.rm=T)/mean(x,na.rm=T))
+}
+
+inv_logit <- function(x){
+  exp(x)/(1+exp(x))
+}
+
+# smithson verkuilen transformation for 0-1 continuous data
+sv_trans <- function(prop, s = 0.000005){
+  (prop*(length(prop) - 1) + s)/length(prop)
+  # where prop is the vector of the proportional value you're transforming, 
+  # N is the sample size, which is specified by taking the number of rows/observations from a given dataframe,
+  # and s is a small offset 
+}
+
+se <- function(x){
+  sd(x)/sqrt(n())
+}
+
+```
+
+
+## Figure formatting
+```{r figure formatting info}
+habitat_colours <- c("fringing" = "#D81B60",
+                     "backreef" = "#FFC107",
+                     "outer_10" = "#1E88E5",
+                     "outer_17" = "#004D40")
+
+functional_group_colours <- c("coral" = "coral",
+                         "cca" = "pink",
+                         "maroalgae" = "forestgreen",
+                         "turf" =  "darkolivegreen")
+
+```
+
+# read and clean data
+
+```{r read and clean data}
+data <- read.csv(here::here("data", "allbenthicdata_cleaned_colnames.csv"), stringsAsFactors = F) 
+
+
+not_algae <- c("ascidian", "bare_space", "coral", "coral_rubble", "corallimorpharia", "heteractis_sp", "millepora_platyphylla", "no_data", "sand", "sarcophyton_sp", "shell_debris", "soft_coral", "sponge", "tridacna_sp", "zooxanthellae", "row_sums")
+
+
+
+algae <- data[ , -which(names(data) %in% not_algae)]
+algae$algal_turf <- data$coral_rubble + data$bare_space + data$algal_turf
+
+
+macroalgae <- algae %>% 
+  select(-algal_turf, -crustose_corallines, -cyanophyta, -damselfish_turf, -lithophyllum_kotschyanum,
+         -neogoniolithon_brassica_florida, -sporolithon_sp)
+
+meta_cols <- c("year", "location", "site", "habitat", "site_habitat", "transect", "quadrat")
+
+meta_df <- algae[,which(names(algae) %in% meta_cols)]
+
+algae_species_cols <- algae[,-which(names(algae) %in% meta_cols)]
+
+macro_species_cols <- macroalgae[,-which(names(macroalgae) %in% meta_cols)]
+
+
+```
+
+# Figure 1
+
+## setup
+
+```{r cover plot setup}
+cover_df <- data.frame(
+  year = data$year,
+  habitat = data$habitat,
+  site = data$site,
+  location = data$location,
+  coral = data$coral,
+  cca = data$crustose_corallines + data$lithophyllum_kotschyanum + data$neogoniolithon_brassica_florida + data$sporolithon_sp,
+  macroalgae = rowSums(macro_species_cols),
+  turf = data$coral_rubble + data$algal_turf + data$bare_space + data$damselfish_turf + data$cyanophyta,
+  sand = data$sand,
+  other = data$ascidian + data$corallimorpharia + data$heteractis_sp + data$millepora_platyphylla + data$sarcophyton_sp + data$shell_debris +
+    data$soft_coral + data$sponge + data$tridacna_sp + data$zooxanthellae + data$no_data
+)
+
+cover_df$total <- rowSums(cover_df[,-which(names(cover_df) %in% meta_cols)])
+
+cover_means <- cover_df %>%
+  group_by(year, habitat) %>%
+  summarise(macroalgae_mean = mean(macroalgae),
+            coral_mean = mean(coral),
+            turf_mean = mean(turf),
+            cca_mean = mean(cca),
+            sand_mean = mean(sand),
+            other_mean = mean(other)
+            )
+
+cover_se <- cover_df %>%
+  group_by(year, habitat) %>%
+  summarise(macroalgae_se = se(macroalgae),
+            coral_se = se(coral),
+            turf_se = se(turf),
+            cca_se = se(cca),
+            sand_se = se(sand),
+            other_se = se(other)
+            )
+
+cover_long <- pivot_longer(
+  data = cover_means,
+  cols = 3:8,
+  names_to = "functional_group",
+  values_to = "percent_cover"
+)
+
+cover_long_se <- pivot_longer(
+  data = cover_se,
+  cols = 3:8,
+  names_to = "functional_group",
+  values_to = "se"
+)
+
+cover_long$se <- cover_long_se$se
+
+simplified_cover <- data.frame(
+  year = cover_df$year,
+  habitat = cover_df$habitat,
+  site = cover_df$site,
+  location = cover_df$location,
+  low_lying_algae = cover_df$cca + cover_df$turf + cover_df$cyanophyta,
+  coral = cover_df$coral,
+  macroalgae = cover_df$macroalgae
+)
+
+simplified_cover_means <- simplified_cover %>%
+  group_by(year, habitat) %>%
+  summarise(macroalgae_mean = mean(macroalgae),
+            low_lying_algae_mean = mean(low_lying_algae),
+            coral_mean = mean(coral),
+            macroalgae_se = sd(macroalgae)/sqrt(n()),
+            low_lying_algae_se = sd(low_lying_algae)/sqrt(n()),
+            coral_se = sd(coral)/sqrt(n())
+            )
+
+simplified_cover_long <- pivot_longer(
+  data = simplified_cover_means,
+  cols = 3:5,
+  names_to = "functional_group",
+  values_to = "percent_cover"
+)
+
+simplified_cover_long_se <- pivot_longer(
+  data = simplified_cover_means,
+  cols = 6:8,
+  names_to = "functional_group",
+  values_to = "se"
+)
+simplified_cover_long$se <- simplified_cover_long_se$se
+```
+
+## plot
+
+
+```{r figure 1, fig.height = 10, fig.width=14}
+(figure_1 <- ggplot(data = subset(cover_long, functional_group != "sand_mean" & functional_group != "other_mean")) +
+  geom_line( aes(x = year, y = percent_cover, colour = functional_group), size = 1) +
+  geom_ribbon( aes(x = year, ymin = percent_cover - se, ymax = percent_cover + se, fill = functional_group), alpha = 0.3) +
+  facet_wrap(~ habitat) +
+  geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
+#  scale_colour_manual(values = functional_group_colours) +
+#  scale_fill_manual(values = functional_group_colours) +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+```
+
