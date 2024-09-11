@@ -62,10 +62,10 @@ habitat_colours <- c("fringing" = "#D81B60",
                      "outer_10" = "#1E88E5",
                      "outer_17" = "#004D40")
 
-functional_group_colours <- c("coral" = "darkmagenta",
-                         "cca" = "pink",
-                         "macroalgae" = "#004D40",
-                         "turf" =  "#1E88E5")
+functional_group_colours <- c("Coral" = "darkmagenta",
+                         "CCA" = "deeppink3",
+                         "Macroalgae" = "#004D40",
+                         "Turf" =  "chartreuse4")
 
 ```
 
@@ -161,6 +161,10 @@ cover_long <- left_join(cover_long_means,cover_long_se)
 cover_long$habitat <- factor(cover_long$habitat, 
                              levels = c("fringing", "backreef", "outer_10","outer_17"),
                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+cover_long$functional_group <- factor(cover_long$functional_group, 
+                             levels = c("macroalgae", "coral", "turf","cca", "sand", "other"),
+                             labels = c("Macroalgae", "Coral", "Turf", "CCA", "Sand", "Other"))
 ```
 
 ```{r simplified cover - remove}
@@ -206,7 +210,7 @@ cover_long$habitat <- factor(cover_long$habitat,
 
 
 ```{r figure 1, fig.height = 10, fig.width=14}
-(figure_1 <- ggplot(data = subset(cover_long, functional_group != "sand" & functional_group != "other")) +
+(figure_1 <- ggplot(data = subset(cover_long, functional_group != "Sand" & functional_group != "Other")) +
   geom_line(aes(x = year, y = percent_cover, colour = functional_group), linewidth = 1) +
   geom_ribbon( aes(x = year, ymin = percent_cover - se, ymax = percent_cover + se, fill = functional_group), alpha = 0.3) +
   facet_wrap(~ habitat) +
