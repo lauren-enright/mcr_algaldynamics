@@ -386,7 +386,7 @@ filtered_cover_effects$habitat <- factor(filtered_cover_effects$habitat,
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black"))  # add box around legend
          )
-
+ggsave(filename = "output/figure_3.png", figure_3, height = 10, width = 14)
 ```
 
 ```{r figure 3 v2}
@@ -492,6 +492,8 @@ filtered_rich_stab_effects <- rich_stab_emm %>%
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black"))  # add box around legend
          )
+
+ggsave(filename = "output/figure_4a.png", figure_4a, height = 10, width = 14)
 ```
 
 ## figure 4c model - richness synchrony
@@ -545,4 +547,5 @@ filtered_rich_synch_effects <- rich_synch_emm %>%
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black"))  # add box around legend
          )
+ggsave(filename = "output/figure_4c.png", figure_4c, height = 10, width = 14)
 ```
