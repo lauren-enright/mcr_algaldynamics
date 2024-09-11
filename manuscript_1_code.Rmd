@@ -62,10 +62,10 @@ habitat_colours <- c("fringing" = "#D81B60",
                      "outer_10" = "#1E88E5",
                      "outer_17" = "#004D40")
 
-functional_group_colours <- c("coral" = "coral",
-                         "cca" = "pink",
-                         "maroalgae" = "forestgreen",
-                         "turf" =  "darkolivegreen")
+functional_group_colours <- c("coral_mean" = "#56B4E9",
+                         "cca_mean" = "#CC79A7",
+                         "macroalgae_mean" = "#009E73",
+                         "turf" =  "#D55E00")
 
 ```
 
@@ -155,40 +155,47 @@ cover_long_se <- pivot_longer(
 
 cover_long$se <- cover_long_se$se
 
-simplified_cover <- data.frame(
-  year = cover_df$year,
-  habitat = cover_df$habitat,
-  site = cover_df$site,
-  location = cover_df$location,
-  low_lying_algae = cover_df$cca + cover_df$turf + cover_df$cyanophyta,
-  coral = cover_df$coral,
-  macroalgae = cover_df$macroalgae
-)
+cover_long$habitat <- factor(cover_long$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
 
-simplified_cover_means <- simplified_cover %>%
-  group_by(year, habitat) %>%
-  summarise(macroalgae_mean = mean(macroalgae),
-            low_lying_algae_mean = mean(low_lying_algae),
-            coral_mean = mean(coral),
-            macroalgae_se = sd(macroalgae)/sqrt(n()),
-            low_lying_algae_se = sd(low_lying_algae)/sqrt(n()),
-            coral_se = sd(coral)/sqrt(n())
-            )
 
-simplified_cover_long <- pivot_longer(
-  data = simplified_cover_means,
-  cols = 3:5,
-  names_to = "functional_group",
-  values_to = "percent_cover"
-)
+# simplified_cover <- data.frame(
+#   year = cover_df$year,
+#   habitat = cover_df$habitat,
+#   site = cover_df$site,
+#   location = cover_df$location,
+#   low_lying_algae = cover_df$cca + cover_df$turf + cover_df$cyanophyta,
+#   coral = cover_df$coral,
+#   macroalgae = cover_df$macroalgae
+# )
+# 
+# simplified_cover_means <- simplified_cover %>%
+#   group_by(year, habitat) %>%
+#   summarise(macroalgae_mean = mean(macroalgae),
+#             low_lying_algae_mean = mean(low_lying_algae),
+#             coral_mean = mean(coral),
+#             macroalgae_se = sd(macroalgae)/sqrt(n()),
+#             low_lying_algae_se = sd(low_lying_algae)/sqrt(n()),
+#             coral_se = sd(coral)/sqrt(n())
+#             )
+# 
+# simplified_cover_long <- pivot_longer(
+#   data = simplified_cover_means,
+#   cols = 3:5,
+#   names_to = "functional_group",
+#   values_to = "percent_cover"
+# )
+# 
+# simplified_cover_long_se <- pivot_longer(
+#   data = simplified_cover_means,
+#   cols = 6:8,
+#   names_to = "functional_group",
+#   values_to = "se"
+# )
+# simplified_cover_long$se <- simplified_cover_long_se$se
 
-simplified_cover_long_se <- pivot_longer(
-  data = simplified_cover_means,
-  cols = 6:8,
-  names_to = "functional_group",
-  values_to = "se"
-)
-simplified_cover_long$se <- simplified_cover_long_se$se
+
 ```
 
 ## plot
@@ -196,16 +203,20 @@ simplified_cover_long$se <- simplified_cover_long_se$se
 
 ```{r figure 1, fig.height = 10, fig.width=14}
 (figure_1 <- ggplot(data = subset(cover_long, functional_group != "sand_mean" & functional_group != "other_mean")) +
-  geom_line( aes(x = year, y = percent_cover, colour = functional_group), size = 1) +
+  geom_line(aes(x = year, y = percent_cover, colour = functional_group), linewidth = 1) +
   geom_ribbon( aes(x = year, ymin = percent_cover - se, ymax = percent_cover + se, fill = functional_group), alpha = 0.3) +
   facet_wrap(~ habitat) +
   geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
-#  scale_colour_manual(values = functional_group_colours) +
-#  scale_fill_manual(values = functional_group_colours) +
+  scale_colour_manual(values = functional_group_colours) +
+  scale_fill_manual(values = functional_group_colours) +
   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   scale_x_continuous(breaks = unique(cover_long$year)) +
+   labs(y = "Percent Cover \n",
+        x = "Year") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
+        axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.y = element_text(size=18), 
         panel.background = element_blank(), 
         panel.grid.major = element_blank(),  #remove major-grid labels
@@ -216,6 +227,8 @@ simplified_cover_long$se <- simplified_cover_long_se$se
         legend.position = 'bottom', # move legend to bottom
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black")) )
+
+ggsave(filename = "output/figure_1.png", figure_1, height = 10, width = 14)
 
 ```
 
