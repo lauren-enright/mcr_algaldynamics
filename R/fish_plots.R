@@ -20,6 +20,7 @@ library(car)
 #data toime
 new_diversity <- read.csv(here("data", "algae_diversity_site.csv"))
 fish <- read.csv(here("data", "biomass_herb_summary.csv"))
+fish_fun <- read.csv(here("data", "biomass_functional_summary.csv"))
 
 #merge em
 #truly i will not forgive y'all for making all them things lowercase
@@ -122,10 +123,75 @@ herb_beta_model <- lmer(centroid_dist_habyear_mean ~ log10(Herbivore.Biomass) +
 
 Anova(herb_beta_model)
 
+
+### Repeat it with functional groups
+
+#merging
+#truly i will not forgive y'all for making all them things lowercase
+fish_fun[is.na(fish_fun)] <- 0
+fish_fun$year <- fish$Year
+fish_fun$habitat <- tolower(fish$Habitat)
+fish_fun$habitat <- gsub("outer 10", "outer_10", fish$habitat)
+fish_fun <- fish_fun %>% 
+  mutate(site = paste0("lter_", Site))
+alg_div_fun_fish <- left_join(new_diversity, fish_fun[,c(4:22)], by = join_by(year, site, habitat))
+merged_div <- alg_div_fun_fish[alg_div_fun_fish$habitat != "outer_17", ]
+
+
+axis_convert <- max(merged_div$Browser,na.rm = TRUE) / max(merged_div$algae_cover_hard_mean,na.rm = TRUE)
+browser_cover <- ggplot(merged_div, aes(x = year)) +
+  geom_line(aes(y = algae_cover_hard_mean, color = "Algae Cover of Hard Substrate")) +
+  geom_line(aes(y = Browser / axis_convert, color = "Herbivore Biomass")) + # Rescale Herbivore.Biomass
+  facet_grid(site ~ habitat) +
+  scale_y_continuous(
+    name = "Mean Algae Cover of Hard Substrate (%)",
+    sec.axis = sec_axis(~ . * axis_convert, name = "Browser Biomass") # Rescale back for labeling
+  ) +
+  scale_color_manual(values = c("Algae Cover of Hard Substrate" = "darkgreen", "Herbivore Biomass" = "darkblue")) +
+  labs(x = "Year", color = "Legend", title = "Trends in Algal Cover and Herbivore Biomass" # Add the plot title here
+  ) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+
+browser_cover
 #YOU THOUGHT I WAS DONE?
 #no
 
 new_diversity_stab <- read.csv(here("data", "algae_diversity_stability_metrics_alltime.csv"))
 
 #jk I don't really know what 'vibe' metric to use for fish to contrast this with
+
+
+# Define the combinations of variables
+y1_vars <- c("algae_cover_hard_mean", "algae_richness_mean", "algae_shannon_mean", "centroid_dist_habyear_mean")
+y2_vars <- c("Browser", "Brusher", "Concealed.Cropper", "Cropper", "Omnivore", "Scraper", "Herbivore.Detritivore")
+
+# Loop through each combination and create the plots
+for (y1 in y1_vars) {
+  for (y2 in y2_vars) {
+    # Calculate the conversion factor for the second y-axis
+    axis_convert <- max(merged_div[[y2]], na.rm = TRUE) / max(merged_div[[y1]], na.rm = TRUE)
+    
+    # Create the plot
+    p <- ggplot(merged_div, aes(x = year)) +
+      geom_line(aes_string(y = y1, color = "'Algae Cover'")) +
+      geom_line(aes_string(y = paste0(y2, " / axis_convert"), color = "'Herbivore Biomass'")) +
+      facet_grid(site ~ habitat) +
+      scale_y_continuous(
+        name = "Mean Algae Cover",
+        sec.axis = sec_axis(~ . * axis_convert, name = y2)
+      ) +
+      scale_color_manual(values = c("Algae Cover" = "darkgreen", "Herbivore Biomass" = "darkblue")) +
+      labs(x = "Year", color = "Legend", title = paste0("Trends in ", y1, " and ", y2)) +
+      theme_bw() +
+      theme(legend.position = "bottom")
+    
+    # Save the plot
+    ggsave(
+      filename = here::here("output", paste0("plot_", y1, "_vs_", y2, ".png")),
+      plot = p,
+      width = 8, height = 6
+    )
+  }
+}
 
