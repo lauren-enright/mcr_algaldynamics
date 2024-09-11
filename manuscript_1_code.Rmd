@@ -206,7 +206,7 @@ cover_long$habitat <- factor(cover_long$habitat,
 
 
 ```{r figure 1, fig.height = 10, fig.width=14}
-(figure_1 <- ggplot(data = subset(cover_long, functional_group != "sand_mean" & functional_group != "other_mean")) +
+(figure_1 <- ggplot(data = subset(cover_long, functional_group != "sand" & functional_group != "other")) +
   geom_line(aes(x = year, y = percent_cover, colour = functional_group), linewidth = 1) +
   geom_ribbon( aes(x = year, ymin = percent_cover - se, ymax = percent_cover + se, fill = functional_group), alpha = 0.3) +
   facet_wrap(~ habitat) +
@@ -233,6 +233,5 @@ cover_long$habitat <- factor(cover_long$habitat,
         legend.box.background = element_rect(colour = "black")) )
 
 #ggsave(filename = "output/figure_1.png", figure_1, height = 10, width = 14)
-
 ```
 
