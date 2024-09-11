@@ -111,10 +111,12 @@ cover_df <- data.frame(
   coral = data$coral,
   cca = data$crustose_corallines + data$lithophyllum_kotschyanum + data$neogoniolithon_brassica_florida + data$sporolithon_sp,
   macroalgae = rowSums(macro_species_cols),
-  turf = data$coral_rubble + data$algal_turf + data$bare_space + data$damselfish_turf + data$cyanophyta,
+  turf = data$algal_turf  + data$damselfish_turf, 
   sand = data$sand,
+  coral_rubble = data$coral_rubble,
+  cyanophyta = data$cyanophyta,
   other = data$ascidian + data$corallimorpharia + data$heteractis_sp + data$millepora_platyphylla + data$sarcophyton_sp + data$shell_debris +
-    data$soft_coral + data$sponge + data$tridacna_sp + data$zooxanthellae + data$no_data
+    data$soft_coral + data$sponge + data$tridacna_sp + data$zooxanthellae + data$no_data + data$bare_space
 )
 
 cover_df$total <- rowSums(cover_df[,-which(names(cover_df) %in% meta_cols)])
@@ -236,6 +238,6 @@ cover_long$functional_group <- factor(cover_long$functional_group,
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black")) )
 
-#ggsave(filename = "output/figure_1.png", figure_1, height = 10, width = 14)
+ggsave(filename = "output/figure_1.png", figure_1, height = 10, width = 14)
 ```
 
