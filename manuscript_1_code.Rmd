@@ -62,10 +62,10 @@ habitat_colours <- c("fringing" = "#D81B60",
                      "outer_10" = "#1E88E5",
                      "outer_17" = "#004D40")
 
-functional_group_colours <- c("coral_mean" = "#56B4E9",
-                         "cca_mean" = "#CC79A7",
-                         "macroalgae_mean" = "#009E73",
-                         "turf" =  "#D55E00")
+functional_group_colours <- c("coral" = "darkmagenta",
+                         "cca" = "pink",
+                         "macroalgae" = "#004D40",
+                         "turf" =  "#1E88E5")
 
 ```
 
@@ -121,25 +121,27 @@ cover_df$total <- rowSums(cover_df[,-which(names(cover_df) %in% meta_cols)])
 
 cover_means <- cover_df %>%
   group_by(year, habitat) %>%
-  summarise(macroalgae_mean = mean(macroalgae),
-            coral_mean = mean(coral),
-            turf_mean = mean(turf),
-            cca_mean = mean(cca),
-            sand_mean = mean(sand),
-            other_mean = mean(other)
+  summarise(macroalgae = mean(macroalgae),
+            coral = mean(coral),
+            turf = mean(turf),
+            cca = mean(cca),
+            sand = mean(sand),
+            other = mean(other)
             )
 
 cover_se <- cover_df %>%
   group_by(year, habitat) %>%
-  summarise(macroalgae_se = se(macroalgae),
-            coral_se = se(coral),
-            turf_se = se(turf),
-            cca_se = se(cca),
-            sand_se = se(sand),
-            other_se = se(other)
+  summarise(macroalgae = se(macroalgae),
+            coral = se(coral),
+            turf = se(turf),
+            cca = se(cca),
+            sand = se(sand),
+            other = se(other)
             )
+```
 
-cover_long <- pivot_longer(
+```{r cover long}
+cover_long_means <- pivot_longer(
   data = cover_means,
   cols = 3:8,
   names_to = "functional_group",
@@ -153,12 +155,15 @@ cover_long_se <- pivot_longer(
   values_to = "se"
 )
 
-cover_long$se <- cover_long_se$se
+cover_long <- left_join(cover_long_means,cover_long_se)
 
+#make levels for habitat for plotting
 cover_long$habitat <- factor(cover_long$habitat, 
                              levels = c("fringing", "backreef", "outer_10","outer_17"),
                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
 
+```{r simplified cover - remove}
 
 # simplified_cover <- data.frame(
 #   year = cover_df$year,
@@ -195,7 +200,6 @@ cover_long$habitat <- factor(cover_long$habitat,
 # )
 # simplified_cover_long$se <- simplified_cover_long_se$se
 
-
 ```
 
 ## plot
@@ -228,7 +232,7 @@ cover_long$habitat <- factor(cover_long$habitat,
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black")) )
 
-ggsave(filename = "output/figure_1.png", figure_1, height = 10, width = 14)
+#ggsave(filename = "output/figure_1.png", figure_1, height = 10, width = 14)
 
 ```
 
