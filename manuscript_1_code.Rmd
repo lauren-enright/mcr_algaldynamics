@@ -972,7 +972,7 @@ filtered_synch_stab_effects_site <- synch_stab_emm_site %>%
         panel.grid.minor = element_blank(),  #remove minor-grid labels
         plot.background = element_rect(fill = "white"),
         legend.text = element_text(size = rel(1)), # increase legend text
-        legend.title = element_text(size = rel(1)),
+        legend.title = element_blank(),
         legend.position = 'bottom', # move legend to bottom
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black"))  # add box around legend
