@@ -952,7 +952,7 @@ filtered_synch_stab_effects_site <- synch_stab_emm_site %>%
 
 ## plot figure 4f
 
-```{r figure 4c}
+```{r figure 4f}
 (figure_4f <- 
   ggplot() +
   geom_point(data = diversity_stability_synchrony_site,
