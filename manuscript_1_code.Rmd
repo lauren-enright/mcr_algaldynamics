@@ -499,24 +499,24 @@ ggsave(filename = "output/figure_4a.png", figure_4a, height = 10, width = 14)
 ## figure 4c model - richness synchrony
 
 ```{r richness synchrony mod}
-rich_synch_mod <- glmmTMB(synchrony_trans ~ richness_mean*habitat + (1|site), family = beta_family(), data = diversity_stability_synchrony)
-summary(rich_synch_mod)
-hist(residuals(rich_synch_mod)) # looks good
-plot(residuals(rich_synch_mod) ~ fitted(rich_synch_mod)) # same issue as always
-r.squaredGLMM(rich_synch_mod) # 0.701, 0.775
-emtrends(rich_synch_mod, pairwise ~ habitat, var = "richness_mean") # forereefs aren't different
+synch_stab_mod <- glmmTMB(cover_stability ~ synchrony*habitat + (1|site), family = Gamma("log"), data = diversity_stability_synchrony)
+summary(synch_stab_mod)
+hist(residuals(synch_stab_mod)) # looks good
+plot(residuals(synch_stab_mod) ~ fitted(synch_stab_mod)) # same issue as always
+r.squaredGLMM(synch_stab_mod) # 0.63, 0.71
+emtrends(synch_stab_mod, pairwise ~ habitat, var = "synchrony") # fringing and backreef not different
 ```
 
 ```{r figure 4c setup}
 
 
-rich_synch_emm <- emmip(rich_synch_mod,
-                        habitat ~ richness_mean,
-                        at = list(richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+synch_stab_emm <- emmip(synch_stab_mod,
+                        habitat ~ synchrony,
+                        at = list(synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
 
-filtered_rich_synch_effects <- rich_synch_emm %>%
+filtered_synch_stab_effects <- synch_stab_emm %>%
   left_join(dss_ranges, by = c("habitat")) %>%
-  filter(richness_mean >= min_richness & richness_mean <= max_richness)
+  filter(synchrony >= min_synchrony & synchrony <= max_synchrony)
 
 
 ```
@@ -527,13 +527,13 @@ filtered_rich_synch_effects <- rich_synch_emm %>%
 (figure_4c <- 
   ggplot() +
   geom_point(data = diversity_stability_synchrony,
-             aes(x = richness_mean, y = synchrony_trans, colour = habitat), size = 1, alpha = 0.5) + 
-  geom_line(data = filtered_rich_synch_effects, aes(x = richness_mean, y = inv_logit(yvar), colour = habitat)) +
-  geom_ribbon(data = filtered_rich_synch_effects, aes(x = richness_mean, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+             aes(x = synchrony, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_synch_stab_effects, aes(x = synchrony, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_synch_stab_effects, aes(x = synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Synchrony\n", x = "Macroalgal Richness") +
+  labs(x = "Synchrony", y = "Stability\n") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
