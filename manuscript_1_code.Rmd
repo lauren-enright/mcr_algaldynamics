@@ -771,12 +771,12 @@ ggsave(filename = "output/figure_4c.png", figure_4c, height = 10, width = 14)
 ```{r synchrony cover mod}
 synch_cov_mod <- glmmTMB(cover_mean ~ synchrony*habitat + (1|site), family = beta_family(), data = diversity_stability_synchrony)
 summary(synch_cov_mod)
-
-
+hist(residuals(synch_cov_mod)) # slight skew
+plot(residuals(synch_cov_mod) ~ fitted(synch_cov_mod)) # same issues as always
 emtrends(synch_cov_mod, pairwise ~ habitat, var = "synchrony") # forereef 17 distinct from all other habitats
 ```
 
-```{r synch cov mod setup}
+```{r synch cov plot setup}
 synch_cov_emm <- emmip(synch_cov_mod,
                         habitat ~ synchrony,
                         at = list(synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
@@ -816,6 +816,7 @@ filtered_synch_cov_effects <- synch_cov_emm %>%
 
 ggsave(filename = "output/figure_3c.png", figure_3c, height = 10, width = 14)
 ```
+
 
 
 
@@ -923,3 +924,112 @@ filtered_rich_stab_effects_site <- rich_stab_emm_site %>%
 ggsave(filename = "output/figure_4d.png", figure_4d, height = 10, width = 14)
 ```
 
+
+## figure 4f
+
+```{r synchrony staability mod site}
+synch_stab_mod_site <- glmmTMB(cover_stability ~ synchrony*habitat, family = Gamma("log"), data = diversity_stability_synchrony_site)
+summary(synch_stab_mod_site)
+hist(residuals(synch_stab_mod_site)) # almost uniform
+plot(residuals(synch_stab_mod_site) ~ fitted(synch_stab_mod_site)) # same issue as always
+r.squaredGLMM(synch_stab_mod_site) # 0.678
+emtrends(synch_stab_mod_site, pairwise ~ habitat, var = "synchrony") # fringing and backreef are different from forereef 17
+```
+
+```{r figure 4f setup}
+
+
+synch_stab_emm_site <- emmip(synch_stab_mod_site,
+                        habitat ~ synchrony,
+                        at = list(synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_synch_stab_effects_site <- synch_stab_emm_site %>%
+  left_join(dss_ranges_site, by = c("habitat")) %>%
+  filter(synchrony >= min_synchrony & synchrony <= max_synchrony)
+
+
+```
+
+## plot figure 4f
+
+```{r figure 4c}
+(figure_4f <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony_site,
+             aes(x = synchrony, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_synch_stab_effects_site, aes(x = synchrony, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_synch_stab_effects_site, aes(x = synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(x = "Synchrony", y = "Stability\n", main = "4f.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18),
+        plot.title = element_text(size=18),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+ggsave(filename = "output/figure_4f.png", figure_4f, height = 10, width = 14)
+```
+
+# figure 3f
+
+## model
+
+```{r synchrony cover mod}
+synch_cov_mod_site <- glmmTMB(cover_mean ~ synchrony*habitat, family = beta_family(), data = diversity_stability_synchrony_site)
+summary(synch_cov_mod_site)
+hist(residuals(synch_cov_mod_site)) # slight skew
+plot(residuals(synch_cov_mod_site) ~ fitted(synch_cov_mod_site)) # looks fine
+emtrends(synch_cov_mod_site, pairwise ~ habitat, var = "synchrony") # forereef 17 different from backreef
+```
+
+```{r synch cov site plot setup}
+synch_cov_emm_site<- emmip(synch_cov_mod_site,
+                        habitat ~ synchrony,
+                        at = list(synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_synch_cov_effects_site <- synch_cov_emm_site %>%
+  left_join(dss_ranges_site, by = c("habitat")) %>%
+  filter(synchrony >= min_synchrony & synchrony <= max_synchrony)
+```
+
+## plot figure 3f
+
+```{r synchrony cover plot site}
+(figure_3f <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony_site,
+             aes(x = synchrony, y = cover_mean, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_synch_cov_effects_site, aes(x = synchrony, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_synch_cov_effects_site, aes(x = synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(x = "Synchrony", y = "Cover\n", title = "3f.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_text(size = rel(1)),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+ggsave(filename = "output/figure_3f.png", figure_3f, height = 10, width = 14)
+```
