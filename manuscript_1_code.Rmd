@@ -1,0 +1,1488 @@
+---
+title: "Manuscript 1 code"
+author: "Noam Altman-Kurosaki, Callie Stephenson"
+date: "2024-09-11"
+output: html_document
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+library(here)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(vegan)
+library(glmmTMB)
+library(car)
+library(effects)
+library(DHARMa)
+library(stringr)
+library(MuMIn)
+library(codyn)
+library(nlme)
+library(mgcv)
+library(emmeans)
+```
+
+## functions
+
+```{r functions}
+# coefficient of variation
+CV<-function(x){
+  return(sd(x,na.rm=T)/mean(x,na.rm=T))
+}
+
+inv_logit <- function(x){
+  exp(x)/(1+exp(x))
+}
+
+# smithson verkuilen transformation for 0-1 continuous data
+sv_trans <- function(prop, s = 0.000005){
+  (prop*(length(prop) - 1) + s)/length(prop)
+  # where prop is the vector of the proportional value you're transforming, 
+  # N is the sample size, which is specified by taking the number of rows/observations from a given dataframe,
+  # and s is a small offset 
+}
+
+se <- function(x){
+  sd(x)/sqrt(n())
+}
+
+```
+
+
+## Figure formatting
+```{r figure formatting info}
+habitat_colours <- c("Fringing" = "#D81B60",
+                     "Backreef" = "#FFC107",
+                     "Forereef 10m" = "#1E88E5",
+                     "Forereef 17m" = "#004D40")
+
+functional_group_colours <- c("Coral" = "darkmagenta",
+                         "CCA" = "deeppink3",
+                         "Macroalgae" = "chartreuse4",
+                         "Turf" =  "#004D40")
+
+```
+
+# read and clean data
+
+```{r read and clean data}
+data <- read.csv(here::here("data", "allbenthicdata_cleaned_colnames.csv"), stringsAsFactors = F) 
+
+### if we want to make a missing or faulty data table
+# length(unique(data$location))
+# expected_data <- expand.grid(year = seq(2007,2023,1), location = unique(data$location))
+# missing_quadrats <- expected_data %>%
+#   anti_join(data, by = c("year", "location"))
+###
+
+# remove remaining backreef and fringing 2020 data because of covid extrapolation
+filtered_data <- data %>%
+  filter(!(year == 2020 & habitat %in% c("fringing", "backreef")))
+
+not_algae <- c("ascidian", "bare_space", "coral", "coral_rubble", "corallimorpharia", "heteractis_sp", "millepora_platyphylla", "no_data", "sand", "sarcophyton_sp", "shell_debris", "soft_coral", "sponge", "tridacna_sp", "zooxanthellae", "row_sums")
+
+
+
+algae <- filtered_data[ , -which(names(filtered_data) %in% not_algae)]
+
+
+
+macroalgae <- algae %>% 
+  select(-algal_turf, -crustose_corallines, -cyanophyta, -damselfish_turf, -lithophyllum_kotschyanum,
+         -neogoniolithon_brassica_florida, -sporolithon_sp)
+
+meta_cols <- c("year", "location", "site", "habitat", "site_habitat", "transect", "quadrat")
+
+meta_df <- algae[,which(names(algae) %in% meta_cols)]
+
+algae_species_cols <- algae[,-which(names(algae) %in% meta_cols)]
+
+macro_species_cols <- macroalgae[,-which(names(macroalgae) %in% meta_cols)]
+
+
+```
+
+
+```{r site macroalgal data}
+site_macro <- macroalgae %>%
+  dplyr::group_by(year, site, habitat,site_habitat) %>%
+  dplyr::summarize(across(acanthophora_spicifera:valonia_ventricosa, \(x) mean(x, na.rm = TRUE)))
+
+site_meta_cols <- c("year", "site", "habitat", "site_habitat")
+site_meta_df <- site_macro[,which(names(site_macro) %in% meta_cols)]
+```
+
+# Figure 1
+
+## setup
+
+```{r cover plot setup}
+cover_df <- data.frame(
+  year = filtered_data$year,
+  habitat = filtered_data$habitat,
+  site = filtered_data$site,
+  location = filtered_data$location,
+  coral = filtered_data$coral,
+  cca = filtered_data$crustose_corallines +
+    filtered_data$lithophyllum_kotschyanum +
+    filtered_data$neogoniolithon_brassica_florida +
+    filtered_data$sporolithon_sp,
+  macroalgae = rowSums(macro_species_cols),
+  turf = filtered_data$algal_turf  + filtered_data$damselfish_turf, 
+  sand = filtered_data$sand,
+  coral_rubble = filtered_data$coral_rubble,
+  cyanophyta = filtered_data$cyanophyta,
+  other = filtered_data$ascidian + 
+    filtered_data$corallimorpharia +
+    filtered_data$heteractis_sp + 
+    filtered_data$millepora_platyphylla +
+    filtered_data$sarcophyton_sp + filtered_data$shell_debris +
+    filtered_data$soft_coral + filtered_data$sponge + filtered_data$tridacna_sp +
+    filtered_data$zooxanthellae + filtered_data$no_data + filtered_data$bare_space
+)
+
+cover_df$total <- rowSums(cover_df[,-which(names(cover_df) %in% meta_cols)])
+
+cover_means <- cover_df %>%
+  group_by(year, habitat) %>%
+  summarise(macroalgae = mean(macroalgae),
+            coral = mean(coral),
+            turf = mean(turf),
+            cca = mean(cca),
+            sand = mean(sand),
+            other = mean(other)
+            )
+
+cover_se <- cover_df %>%
+  group_by(year, habitat) %>%
+  summarise(macroalgae = se(macroalgae),
+            coral = se(coral),
+            turf = se(turf),
+            cca = se(cca),
+            sand = se(sand),
+            other = se(other)
+            )
+```
+
+```{r cover long}
+cover_long_means <- pivot_longer(
+  data = cover_means,
+  cols = 3:8,
+  names_to = "functional_group",
+  values_to = "percent_cover"
+)
+
+cover_long_se <- pivot_longer(
+  data = cover_se,
+  cols = 3:8,
+  names_to = "functional_group",
+  values_to = "se"
+)
+
+cover_long <- left_join(cover_long_means,cover_long_se)
+
+#make levels for habitat for plotting
+cover_long$habitat <- factor(cover_long$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+cover_long$functional_group <- factor(cover_long$functional_group, 
+                             levels = c("macroalgae", "coral", "turf","cca", "sand", "other"),
+                             labels = c("Macroalgae", "Coral", "Turf", "CCA", "Sand", "Other"))
+```
+
+```{r simplified cover - remove}
+
+# simplified_cover <- data.frame(
+#   year = cover_df$year,
+#   habitat = cover_df$habitat,
+#   site = cover_df$site,
+#   location = cover_df$location,
+#   low_lying_algae = cover_df$cca + cover_df$turf + cover_df$cyanophyta,
+#   coral = cover_df$coral,
+#   macroalgae = cover_df$macroalgae
+# )
+# 
+# simplified_cover_means <- simplified_cover %>%
+#   group_by(year, habitat) %>%
+#   summarise(macroalgae_mean = mean(macroalgae),
+#             low_lying_algae_mean = mean(low_lying_algae),
+#             coral_mean = mean(coral),
+#             macroalgae_se = sd(macroalgae)/sqrt(n()),
+#             low_lying_algae_se = sd(low_lying_algae)/sqrt(n()),
+#             coral_se = sd(coral)/sqrt(n())
+#             )
+# 
+# simplified_cover_long <- pivot_longer(
+#   data = simplified_cover_means,
+#   cols = 3:5,
+#   names_to = "functional_group",
+#   values_to = "percent_cover"
+# )
+# 
+# simplified_cover_long_se <- pivot_longer(
+#   data = simplified_cover_means,
+#   cols = 6:8,
+#   names_to = "functional_group",
+#   values_to = "se"
+# )
+# simplified_cover_long$se <- simplified_cover_long_se$se
+
+```
+
+```{r}
+figure_1_data <- subset(cover_long, functional_group != "Sand" & functional_group != "Other")
+```
+
+## plot
+```{r figure 1, fig.height = 10, fig.width=14, warning=FALSE}
+(figure_1 <- ggplot() +
+  geom_point(data = figure_1_data, aes(x = year, y = percent_cover, colour = functional_group), size = 3) +
+  geom_errorbar(data = figure_1_data, aes(x = year, ymin = percent_cover - se, ymax = percent_cover + se, colour = functional_group),
+                width = 0, size = 1.3) +
+   geom_line(data = figure_1_data, aes(x = year, y = percent_cover, colour = functional_group), size = 1) +
+  facet_wrap(~ habitat) +
+  annotate("segment", x = 2006, xend = 2010, y = 75, yend = 75, linewidth = 2, colour = "grey") +
+  scale_colour_manual(values = functional_group_colours) +
+  # scale_fill_manual(values = functional_group_colours) +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   scale_x_continuous(breaks = unique(cover_long$year)) +
+   labs(y = "Percent Cover \n",
+        x = "Year") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+# ggsave(filename = "output/figure_1.png", figure_1, height = 10, width = 14)
+```
+
+# Figure 2
+
+## Create Data Frames
+```{r create data for figure 2 quad}
+alpha_diversity_quad_macro <-
+  data.frame(
+    year = macroalgae$year,
+    location = macroalgae$location,
+    shannon = diversity(macroalgae[, -which(names(macroalgae) %in% meta_cols)], "shannon"),
+    richness = rowSums(macroalgae[, -which(names(macroalgae) %in% meta_cols)] > 0)
+  )
+
+#JG Add Evenness
+alpha_diversity_quad_macro$ev <- alpha_diversity_quad_macro$shannon /
+  (log(alpha_diversity_quad_macro$richness))
+
+#makes 1 species 0 and 0 species NA for evenness metric
+alpha_diversity_quad_macro$evenness <- ifelse(
+  alpha_diversity_quad_macro$richness == 0,
+  NA,
+  # If richness == 0, ev is NA
+  ifelse(
+    alpha_diversity_quad_macro$richness == 1,
+    0,
+    # If richness == 1, ev is 0
+    alpha_diversity_quad_macro$ev
+  )
+)  
+
+alpha_diversity_quad_macro <- merge(meta_df, alpha_diversity_quad_macro, by = c("location", "year"))
+```
+
+```{r site level richness df}
+alpha_diversity_site_macro <-
+  data.frame(
+    year = site_macro$year,
+    site_habitat = site_macro$site_habitat,
+    shannon = diversity(site_macro[ , -which(names(site_macro) %in% meta_cols)], "shannon"),
+    richness = rowSums(site_macro[ , -which(names(site_macro) %in% meta_cols)] > 0)
+  ) %>% 
+  left_join(site_meta_df, alpha_diversity_site_macro, by = c("site_habitat", "year"))
+```
+
+```{r site level evenness}
+#JG Add Evenness
+alpha_diversity_site_macro$ev <- alpha_diversity_site_macro$shannon /
+  (log(alpha_diversity_site_macro$richness))
+
+#makes 1 species 0 and 0 species NA for evenness metric
+alpha_diversity_site_macro$evenness <- ifelse(
+  alpha_diversity_site_macro$richness == 0,
+  NA,
+  # If richness == 0, ev is NA
+  ifelse(
+    alpha_diversity_site_macro$richness == 1,
+    0,
+    # If richness == 1, ev is 0
+    alpha_diversity_site_macro$ev
+  )
+)  
+
+alpha_diversity_site_macro <- left_join(site_meta_df, alpha_diversity_site_macro,by = join_by(year, site, habitat, site_habitat))
+```
+
+```{r}
+macroalgal_cover <- cover_df[,c("year", "habitat", "site", "location", "macroalgae")]
+
+alpha_diversity_quad_macro_with_cover <- left_join(alpha_diversity_quad_macro, macroalgal_cover,by = join_by(location, year, site, habitat)) %>% 
+  mutate(macroalgal_prop_cover = macroalgae / 100) %>% 
+  select(-macroalgae)
+```
+
+
+## Figure 2a Richness @ Quad by Year
+
+### prep
+```{r richness df}
+quad_richness_df <- alpha_diversity_quad_macro %>% 
+  group_by(year, habitat) %>% 
+  summarise(richness_mean = mean(richness),
+            richness_se = se(richness))
+```
+
+```{r richness factors}
+quad_richness_df$habitat <- factor(quad_richness_df$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
+
+### plot
+```{r figure 2}
+(figure_2a <- ggplot() +
+  geom_point(data = quad_richness_df, aes(x = year, y = richness_mean, colour = habitat), size = 3) +
+  geom_line(data = quad_richness_df, aes(x = year, y = richness_mean, colour = habitat), linewidth = 1) +
+  geom_errorbar(data = quad_richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se,
+                                             colour = habitat), width = 0, size = 1.3) +
+  scale_colour_manual(values = habitat_colours) +
+  # scale_fill_manual(values = habitat_colours) +
+  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
+  annotate("segment", x = 2006, xend = 2010, y = 2, yend = 2, linewidth = 2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   scale_x_continuous(breaks = unique(quad_richness_df$year)) +
+   labs(y = "Macroalgal Richness \n",
+        x = "Year",
+        title = "a. Quadrat-level Richness") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+# ggsave(filename = "output/figure_2a.png", figure_2a, height = 10, width = 14)
+```
+
+## Figure 2b Richness @ Site by Year
+
+### prep
+
+```{r richness df}
+site_richness_df <- alpha_diversity_site_macro %>% 
+  group_by(year, habitat) %>% 
+  summarise(richness_mean = mean(richness),
+            richness_se = se(richness))
+
+```
+
+```{r richness factors}
+site_richness_df$habitat <- factor(site_richness_df$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+```
+
+### plot
+```{r}
+(figure_2b <- ggplot() +
+  geom_point(data = site_richness_df, aes(x = year, y = richness_mean, colour = habitat), size = 3) +
+  geom_line(data = site_richness_df, aes(x = year, y = richness_mean, colour = habitat), linewidth = 1) +
+  geom_errorbar(data = site_richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se, colour = habitat), size = 1.3, width = 0) +
+  scale_colour_manual(values = habitat_colours) +
+  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
+  annotate("segment", x = 2006, xend = 2010, y = 11, yend = 11, linewidth = 2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   scale_x_continuous(breaks = unique(site_richness_df$year)) +
+   labs(y = "Macroalgal Richness \n",
+        x = "Year",
+        title = "b. Site-level Richness") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+# ggsave(filename = "output/figure_2b.png", figure_2b, height = 10, width = 14)
+```
+
+## 2c Evenness @ Quad by Year
+### prep
+```{r calculate evennes}
+#dear callie, why is this here?
+site_richness_df <- alpha_diversity_site_macro %>% 
+  group_by(year, habitat) %>% 
+  summarise(richness_mean = mean(richness),
+            richness_se = se(richness))
+
+quad_evenness_df <- alpha_diversity_quad_macro_with_cover %>% 
+  drop_na(evenness) %>%
+  group_by(year, habitat) %>% 
+  summarise(evenness_mean = mean(evenness),
+            evenness_se = se(evenness))
+
+quad_evenness_df$habitat <- factor(quad_evenness_df$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
+
+### plot
+```{r}
+(figure_2c <- ggplot() +
+  geom_point(data = quad_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), size = 3) +
+  geom_line(data = quad_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), linewidth = 1) +
+  geom_errorbar(data = quad_evenness_df, aes(x = year, ymin = evenness_mean - evenness_se, ymax = evenness_mean + evenness_se,
+                                             colour = habitat), width = 0, size = 1.3) +
+  scale_colour_manual(values = habitat_colours) +
+  # scale_fill_manual(values = habitat_colours) +
+  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
+  annotate("segment", x = 2006, xend = 2010, y = .7, yend = .7, linewidth = 2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   scale_x_continuous(breaks = unique(quad_evenness_df$year)) +
+   labs(y = "Macroalgal evenness \n",
+        x = "Year",
+        title = "c. Quadrat-level evenness") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+# ggsave(filename = "output/figure_2c.png", figure_2c, height = 10, width = 14)
+```
+
+## 2d Evenness @ Site by Year
+### prep
+```{r set up evenness}
+site_evenness_df <- alpha_diversity_site_macro %>% 
+  drop_na(evenness) %>%
+  group_by(year, habitat) %>% 
+  summarise(evenness_mean = mean(evenness),
+            evenness_se = se(evenness))
+
+site_evenness_df$habitat <- factor(site_evenness_df$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
+
+### plot
+```{r plot evenness site}
+(figure_2d <- ggplot() +
+  geom_point(data = site_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), size = 3) +
+  geom_line(data = site_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), linewidth = 1) +
+  geom_errorbar(data = site_evenness_df, aes(x = year, ymin = evenness_mean - evenness_se, ymax = evenness_mean + evenness_se, colour = habitat), size = 1.3, width = 0) +
+  scale_colour_manual(values = habitat_colours) +
+  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
+  annotate("segment", x = 2006, xend = 2010, y = 1, yend = 1, linewidth = 2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   scale_x_continuous(breaks = unique(site_evenness_df$year)) +
+   labs(y = "Macroalgal evenness \n",
+        x = "Year",
+        title = "d. Site-level evenness") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+# ggsave(filename = "output/figure_2d.png", figure_2d, height = 10, width = 14)
+```
+
+# Figure 3
+
+## set up site-level data for model
+```{r site cover by diversity data setup}
+# alpha_diversity_site_macro_with_cover <- alpha_diversity_site_macro %>% 
+#   dplyr::mutate(percent_cover = rowSums(site_macro[,-which(names(site_macro)  %in% colnames(site_meta_df))])) %>% 
+#   mutate(prop_cover = percent_cover / 100) %>% 
+#   select(-percent_cover) %>% 
+#   mutate(cover_trans = sv_trans(prop_cover))
+
+#there is no reasonable reason why the above chunk doesn't work, but it doesn't, so we did it this way
+alpha_diversity_site_macro$percent_cover <- rowSums(site_macro[,-which(names(site_macro)  %in% colnames(site_meta_df))]) 
+
+alpha_diversity_site_macro_with_cover <- alpha_diversity_site_macro %>% 
+  dplyr::mutate(prop_cover = percent_cover / 100) %>%
+  select(-percent_cover)
+  
+alpha_diversity_site_macro_with_cover$cover_trans <- sv_trans(alpha_diversity_site_macro_with_cover$prop_cover)
+```
+
+
+## models
+
+### quad
+```{r figure 3a richness quad model}
+alpha_diversity_quad_macro_with_cover$cover_trans <- sv_trans(alpha_diversity_quad_macro_with_cover$macroalgal_prop_cover)
+
+cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro_with_cover)
+summary(cover_mod)
+Anova(cover_mod)
+#                     Chisq Df Pr(>Chisq)    
+# richness         30916.73  1  < 2.2e-16 ***
+# habitat            141.78  3  < 2.2e-16 ***
+# richness:habitat   294.54  3  < 2.2e-16 ***
+hist(residuals(cover_mod)) # looks fine
+plot(residuals(cover_mod) ~ fitted(cover_mod)) # negative trend but it can't be less than 0 so not too concerned. some wave pattern
+r.squaredGLMM(cover_mod) # 0.631, 0.650
+emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not different from forereef, forereef also not different
+```
+
+```{r 3b evenness quad level model}
+alpha_diversity_quad_macro_with_cover_evenness_mod <- alpha_diversity_quad_macro_with_cover %>% 
+  drop_na(evenness)
+
+evenness_cover_mod_quad <- glmmTMB(cover_trans ~ evenness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro_with_cover_evenness_mod)
+summary(evenness_cover_mod_quad)
+Anova(evenness_cover_mod_quad)
+#                     Chisq Df Pr(>Chisq)    
+# richness         30916.73  1  < 2.2e-16 ***
+# habitat            141.78  3  < 2.2e-16 ***
+# richness:habitat   294.54  3  < 2.2e-16 ***
+hist(residuals(evenness_cover_mod_quad)) # slight pos skeq
+plot(residuals(evenness_cover_mod_quad) ~ fitted(evenness_cover_mod_quad)) # negative trend but it can't be less than 0 so not too concerned. some wave pattern
+r.squaredGLMM(evenness_cover_mod_quad) # 0.1749907, 0.4042826
+emtrends(evenness_cover_mod_quad, pairwise ~ habitat, var = "evenness") #backreef is different from everything except outer 17, but just barely. everyone else is same same xoxo
+
+```
+
+### site richness
+```{r site richness mod}
+site_cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover)
+summary(site_cover_mod)
+Anova(site_cover_mod)
+#                    Chisq Df Pr(>Chisq)    
+# richness         58.9195  1  1.643e-14 ***
+# habitat           6.6247  3    0.08487 .  
+# richness:habitat  3.2967  3    0.34811    
+hist(residuals(site_cover_mod)) # some positive skew, not the worst thing ever
+plot(residuals(site_cover_mod) ~ fitted(site_cover_mod)) # a little heteroscedastic but can't be less than 0
+r.squaredGLMM(site_cover_mod) # 0.2212534, 0.5990825
+emtrends(site_cover_mod, pairwise ~ habitat, var = "richness") # no difference between the habitats
+```
+
+### site evenness 
+```{r}
+alpha_diversity_site_macro_with_cover_evenness_mod <- alpha_diversity_site_macro_with_cover %>% 
+  drop_na(evenness)
+
+evenness_site_cover_mod <- glmmTMB(cover_trans ~ evenness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover_evenness_mod)
+summary(evenness_site_cover_mod)
+Anova(evenness_site_cover_mod)
+#                    Chisq Df Pr(>Chisq)    
+# richness         58.9195  1  1.643e-14 ***
+# habitat           6.6247  3    0.08487 .  
+# richness:habitat  3.2967  3    0.34811    
+hist(residuals(evenness_site_cover_mod)) # some positive skew, not the worst thing ever
+plot(residuals(evenness_site_cover_mod) ~ fitted(evenness_site_cover_mod)) # a little heteroscedastic but can't be less than 0
+r.squaredGLMM(evenness_site_cover_mod) #0.1206569, 0.5852773
+emtrends(evenness_site_cover_mod, pairwise ~ habitat, var = "evenness") # only the outers are different from each other
+```
+
+## figure 3a plot setup
+```{r figure 3a setup}
+diversity_ranges_quad <- alpha_diversity_quad_macro_with_cover %>%
+  group_by(habitat) %>%
+  summarise(min_richness = min(richness),
+            max_richness = max(richness),
+            min_cover= min(cover_trans),
+            max_cover = max(cover_trans))
+
+cover_emm <- emmip(cover_mod,
+                        habitat ~ richness,
+                        at = list(richness = seq(0,10,1)), plotit = F, CIs = T)
+
+filtered_cover_effects <- cover_emm %>%
+  left_join(diversity_ranges_quad, by = c("habitat")) %>%
+  filter(richness >= min_richness & richness <= max_richness)
+
+alpha_diversity_quad_macro_with_cover$habitat <- factor(alpha_diversity_quad_macro_with_cover$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+
+filtered_cover_effects$habitat <- factor(filtered_cover_effects$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
+
+## figure 3a quad level richness versus cover
+
+```{r figure 3a plot}
+(figure_3a <- 
+  ggplot() +
+  geom_point(data = alpha_diversity_quad_macro_with_cover,
+             aes(x = richness, y = cover_trans, colour = habitat), size = 1, alpha = 0.005) + 
+  geom_line(data = filtered_cover_effects, aes(x = richness, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_cover_effects, aes(x = richness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Cover\n", x = "Macroalgal Richness", title = "3a.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+# ggsave(filename = "output/figure_3a.png", figure_3a, height = 10, width = 14)
+```
+
+## Figure 3B quad level evenness versus cover
+```{r COME BACK HERE figure 3b setup}
+diversity_ranges_quad_evenness <- alpha_diversity_quad_macro_with_cover_evenness_mod %>%
+  group_by(habitat) %>%
+  summarise(min_evenness = min(evenness),
+            max_evenness = max(evenness),
+            min_cover= min(cover_trans),
+            max_cover = max(cover_trans))
+
+cover_emm_evenness <- emmip(evenness_cover_mod_quad,
+                        habitat ~ evenness,
+                        at = list(evenness = seq(0,10,1)), plotit = F, CIs = T)
+
+filtered_cover_effects_evenness <- cover_emm_evenness %>%
+  left_join(diversity_ranges_quad_evenness, by = c("habitat")) %>%
+  filter(evenness >= min_evenness & evenness <= max_evenness)
+
+alpha_diversity_quad_macro_with_cover_evenness_mod$habitat <- factor(alpha_diversity_quad_macro_with_cover_evenness_mod$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+
+filtered_cover_effects_evenness$habitat <- factor(filtered_cover_effects_evenness$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
+
+```{r}
+(figure_3b <- 
+  ggplot() +
+  geom_point(data = alpha_diversity_quad_macro_with_cover_evenness_mod,
+             aes(x = evenness, y = cover_trans, colour = habitat), size = 1, alpha = 0.005) + 
+  geom_line(data = filtered_cover_effects_evenness, aes(x = evenness, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_cover_effects_evenness, aes(x = evenness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Cover\n", x = "Macroalgal evenness", title = "3b.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+#ggsave(filename = "output/figure_3b.png", figure_3b, height = 10, width = 14)
+```
+
+## Figure 3E site level richness versus cover
+
+### setup
+```{r}
+diversity_ranges_site <- alpha_diversity_site_macro_with_cover %>%
+  group_by(habitat) %>%
+  summarise(min_richness = min(richness),
+            max_richness = max(richness),
+            min_cover= min(cover_trans),
+            max_cover = max(cover_trans))
+
+site_cover_emm <- emmip(site_cover_mod,
+                        habitat ~ richness,
+                        at = list(richness = seq(0,17,1)), plotit = F, CIs = T)
+
+filtered_site_cover_effects <- site_cover_emm %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(richness >= min_richness & richness <= max_richness)
+
+alpha_diversity_site_macro_with_cover$habitat <- factor(alpha_diversity_site_macro_with_cover$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+
+filtered_site_cover_effects$habitat <- factor(filtered_site_cover_effects$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
+
+### plot
+
+```{r}
+(figure_3d <- 
+  ggplot() +
+  geom_point(data = alpha_diversity_site_macro_with_cover,
+             aes(x = richness, y = cover_trans, colour = habitat), size = 1, alpha = 0.3) + 
+  geom_line(data = filtered_site_cover_effects, aes(x = richness, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_site_cover_effects, aes(x = richness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Cover\n", x = "Macroalgal Richness", title = "3d.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+# ggsave(filename = "output/figure_3d.png", figure_3d, height = 10, width = 14)
+```
+
+# Figure 3f site level evenness versus cover
+
+## model
+
+```{r evenness cover model site level}
+evenness_cover_mod_site <- glmmTMB(cover_trans ~ evenness*habitat + (1|site) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover_evenness_mod)
+summary(evenness_cover_mod_site)
+hist(residuals(evenness_cover_mod_site)) # little wonky but not the worst
+plot(residuals(evenness_cover_mod_site) ~ fitted(evenness_cover_mod_site))
+Anova(evenness_cover_mod_site)
+#                   Chisq Df Pr(>Chisq)    
+# evenness         14.395  1  0.0001482 ***
+# habitat          45.636  3  6.777e-10 ***
+# evenness:habitat 16.126  3  0.0010687 ** 
+r.squaredGLMM(evenness_cover_mod_site) # 0.166, 0.258
+
+emtrends(evenness_cover_mod_site, pairwise ~ habitat, var = "evenness") # fringing different from backreef and outer10
+```
+
+## plot
+
+### setup
+
+```{r figure 3f evenness site plot setup}
+diversity_ranges_site_evenness <- alpha_diversity_site_macro_with_cover_evenness_mod %>%
+  group_by(habitat) %>%
+  summarise(min_evenness = min(evenness),
+            max_evenness = max(evenness),
+            min_cover= min(cover_trans),
+            max_cover = max(cover_trans))
+
+cover_emm_evenness_site <- emmip(evenness_cover_mod_site,
+                        habitat ~ evenness,
+                        at = list(evenness = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_cover_effects_evenness_site <- cover_emm_evenness_site %>%
+  left_join(diversity_ranges_site_evenness, by = c("habitat")) %>%
+  filter(evenness >= min_evenness & evenness <= max_evenness)
+
+alpha_diversity_site_macro_with_cover_evenness_mod$habitat <- factor(alpha_diversity_site_macro_with_cover_evenness_mod$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+
+
+
+```
+
+### plot
+
+```{r evenness cover plot site }
+(figure_3f <- 
+  ggplot() +
+  geom_point(data = alpha_diversity_site_macro_with_cover_evenness_mod,
+             aes(x = evenness, y = cover_trans, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_cover_effects_evenness_site, aes(x = evenness, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_cover_effects_evenness_site, aes(x = evenness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Cover\n", x = "Macroalgal evenness", title = "3f. Site Level Evenness") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+# ggsave(filename = "output/figure_3f.png", figure_3f, height = 10, width = 14)
+```
+
+
+# Figure 4
+
+## Synchrony setup
+```{r calculate syncrony}
+# make er long
+macro_long_data <- pivot_longer(
+  data = macroalgae,
+  cols = grep("acanthophora_spicifera", colnames(macroalgae)):grep("valonia_ventricosa", colnames(macroalgae)),
+  names_to = "taxa",
+  values_to = "percent_cover") %>% 
+  mutate(prop_cover = percent_cover/100) %>% 
+  select(-percent_cover)
+
+# write_csv(macro_long_data, here("Data", "macro_long_data.csv"))
+
+# CALCULATE SYNCHRONY CODE
+lm_synchrony <- codyn::synchrony(df = macro_long_data,
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "prop_cover",
+                                   metric = "Loreau",
+                                   replicate.var = "location")
+
+
+diversity_stability <- alpha_diversity_quad_macro_with_cover %>%
+  dplyr::group_by(location, habitat, site) %>%
+  dplyr::summarise(
+            richness_mean = mean(richness), 
+            shannon_mean = mean(shannon), 
+            cover_mean = mean(macroalgal_prop_cover),
+            evenness_mean = mean(evenness, na.rm = T),
+            cover_cv = CV(macroalgal_prop_cover),
+            cover_stability = 1/CV(macroalgal_prop_cover)) 
+
+diversity_stability_synchrony <- left_join(diversity_stability, lm_synchrony, by = join_by(location))
+diversity_stability_synchrony$synchrony_trans <- sv_trans(diversity_stability_synchrony$synchrony)
+# diversity_stability_synchrony <- na.omit(diversity_stability_synchrony) # remove quads that never had algae --> NaN calcs
+
+
+dss_ranges<- diversity_stability_synchrony %>%
+  group_by(habitat) %>%
+  summarise(min_richness = min(richness_mean),
+            max_richness = max(richness_mean),
+            min_evenness = min(richness_mean, na.rm = TRUE),
+            max_evenness = max(richness_mean, na.rm = TRUE),
+            min_stability= min(cover_stability, na.rm = TRUE),
+            max_stability = max(cover_stability, na.rm = TRUE),
+            min_synchrony = min(synchrony_trans, na.rm = TRUE),
+            max_synchrony = max(synchrony_trans, na.rm = TRUE))
+```
+
+
+## figure 4a model - richness stability
+
+```{r richness synchrony mod}
+rich_stab_mod <- glmmTMB(cover_stability~ richness_mean*habitat + (1|site), family = Gamma(link = "log"), data = diversity_stability_synchrony)
+summary(rich_stab_mod)
+Anova(rich_stab_mod)
+#                          Chisq Df Pr(>Chisq)    
+# richness_mean         2721.438  1  < 2.2e-16 ***
+# habitat                325.876  3  < 2.2e-16 ***
+# richness_mean:habitat   33.926  3  2.054e-07 ***
+hist(residuals(rich_stab_mod)) # looks good
+plot(residuals(rich_stab_mod) ~ fitted(rich_stab_mod)) # heteroskedastic - bring to group
+r.squaredGLMM(rich_stab_mod) # 0.803, 0.808
+emtrends(rich_stab_mod, pairwise ~ habitat, var = "richness_mean") # fringing not diff from outer17, backreef not different from outer10
+```
+
+```{r figure 4a setup}
+
+
+rich_stab_emm <- emmip(rich_stab_mod,
+                        habitat ~ richness_mean,
+                        at = list(richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_rich_stab_effects <- rich_stab_emm %>%
+  left_join(dss_ranges, by = c("habitat")) %>%
+  filter(richness_mean >= min_richness & richness_mean <= max_richness)
+
+
+```
+
+
+## plot figure 4a
+
+```{r figure 4a}
+(figure_4a <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony,
+             aes(x = richness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_rich_stab_effects, aes(x = richness_mean, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_rich_stab_effects, aes(x = richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Stability\n", x = "Macroalgal Richness", title = "4a.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18),
+        plot.title = element_text(size=18),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+# ggsave(filename = "output/figure_4a.png", figure_4a, height = 10, width = 14)
+```
+
+## figure 4a no habitat
+
+```{r richness stability no hab}
+# rich_stab_mod_2 <- glmmTMB(cover_stability~ richness_mean + (1|site), family = Gamma(link = "log"), data = # diversity_stability_synchrony)
+# summary(rich_stab_mod_2)
+# hist(residuals(rich_stab_mod_2)) # a chunkier version
+# plot(residuals(rich_stab_mod_2) ~ fitted(rich_stab_mod_2)) # heteroskedastic - bring to group
+# r.squaredGLMM(rich_stab_mod_2) # 0.750, 0.757
+
+
+```
+
+```{r 4a no hab setup}
+# rich_stab_emm_2 <-as.data.frame(emmeans(rich_stab_mod_2, ~richness_mean,
+#                                      at = list(richness_mean = seq(min(diversity_stability_synchrony$richness_mean),
+#                                                             max(diversity_stability_synchrony$richness_mean),
+#                                                             0.01)))) 
+# 
+```
+
+## figure 4a no habitat plot
+
+```{r figure 4a no habitat}
+# (figure_4a_no_hab <- 
+#   ggplot() +
+#   geom_point(data = diversity_stability_synchrony,
+#              aes(x = richness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+#   geom_line(data = filtered_rich_stab_effects, aes(x = richness_mean, y = exp(yvar), colour = habitat)) +
+#   geom_ribbon(data = filtered_rich_stab_effects, aes(x = richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+#               alpha = 0.3) +
+#   geom_line(data = rich_stab_emm_2, aes(x = richness_mean, y = exp(emmean)), size = 2, colour = "black") +
+#   geom_ribbon(data = rich_stab_emm_2, aes(x = richness_mean, ymin = exp(asymp.LCL), ymax = exp(asymp.UCL)), fill = "black",
+#               alpha = 0.3) +
+#   scale_colour_manual(values = habitat_colours) +
+#   scale_fill_manual(values = habitat_colours) +
+#   labs(y = "Stability\n", x = "Macroalgal Richness") +
+#   theme_bw() + 
+#   theme(axis.title.x = element_text(size=18), 
+#         axis.title.y = element_text(size=18), 
+#         panel.background = element_blank(), 
+#         panel.grid.major = element_blank(),  #remove major-grid labels
+#         panel.grid.minor = element_blank(),  #remove minor-grid labels
+#         plot.background = element_rect(fill = "white"),
+#         legend.text = element_text(size = rel(1)), # increase legend text
+#         legend.title = element_blank(),
+#         legend.position = 'bottom', # move legend to bottom
+#         legend.box = 'horizontal', # make legend horizontal
+#         legend.box.background = element_rect(colour = "black"))  # add box around legend
+#          )
+# 
+# ggsave(filename = "output/figure_4a_with_no_hab.png", figure_4a_no_hab, height = 10, width = 14)
+```
+
+## figure 4c model -  synchrony staability
+
+```{r synchrony staability mod}
+synch_stab_mod <- glmmTMB(cover_stability ~ synchrony*habitat + (1|site), family = Gamma("log"), data = diversity_stability_synchrony)
+summary(synch_stab_mod)
+Anova(synch_stab_mod)
+#                     Chisq Df Pr(>Chisq)    
+# synchrony         1308.33  1  < 2.2e-16 ***
+# habitat            103.13  3  < 2.2e-16 ***
+# synchrony:habitat  327.97  3  < 2.2e-16 ***
+hist(residuals(synch_stab_mod)) # looks good
+plot(residuals(synch_stab_mod) ~ fitted(synch_stab_mod)) # same issue as always
+r.squaredGLMM(synch_stab_mod) # 0.63, 0.71
+emtrends(synch_stab_mod, pairwise ~ habitat, var = "synchrony") # fringing and backreef not different
+```
+
+```{r figure 4c setup}
+
+
+synch_stab_emm <- emmip(synch_stab_mod,
+                        habitat ~ synchrony,
+                        at = list(synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_synch_stab_effects <- synch_stab_emm %>%
+  left_join(dss_ranges, by = c("habitat")) %>%
+  filter(synchrony >= min_synchrony & synchrony <= max_synchrony)
+
+
+```
+
+## plot figure 4c
+
+```{r figure 4c}
+(figure_4c <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony,
+             aes(x = synchrony, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_synch_stab_effects, aes(x = synchrony, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_synch_stab_effects, aes(x = synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(x = "Synchrony", y = "Stability\n", title = "4c.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18),
+        plot.title = element_text(size=18),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+# ggsave(filename = "output/figure_4c.png", figure_4c, height = 10, width = 14)
+```
+
+
+
+# Figure 3c
+
+## synchrony and cover model
+
+```{r synchrony cover mod}
+synch_cov_mod <- glmmTMB(cover_mean ~ synchrony*habitat + (1|site), family = beta_family(), data = diversity_stability_synchrony)
+summary(synch_cov_mod)
+Anova(synch_cov_mod)
+#                     Chisq Df Pr(>Chisq)    
+# synchrony         209.545  1  < 2.2e-16 ***
+# habitat            52.512  3  2.330e-11 ***
+# synchrony:habitat  54.632  3  8.227e-12 ***
+hist(residuals(synch_cov_mod)) # slight skew
+plot(residuals(synch_cov_mod) ~ fitted(synch_cov_mod)) # same issues as always
+emtrends(synch_cov_mod, pairwise ~ habitat, var = "synchrony") # forereef 17 distinct from all other habitats
+```
+
+```{r synch cov plot setup}
+synch_cov_emm <- emmip(synch_cov_mod,
+                        habitat ~ synchrony,
+                        at = list(synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_synch_cov_effects <- synch_cov_emm %>%
+  left_join(dss_ranges, by = c("habitat")) %>%
+  filter(synchrony >= min_synchrony & synchrony <= max_synchrony)
+```
+
+## plot
+
+```{r synchrony cover plot}
+(figure_3c <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony,
+             aes(x = synchrony, y = cover_mean, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_synch_cov_effects, aes(x = synchrony, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_synch_cov_effects, aes(x = synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(x = "Synchrony", y = "Cover\n", title = "3c.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18),
+        plot.title = element_text(size=18),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+# ggsave(filename = "output/figure_3c.png", figure_3c, height = 10, width = 14)
+```
+
+
+
+
+## Synchrony setup site level
+```{r calculate syncrony site_level}
+# make er long
+macro_long_data_site <- pivot_longer(
+  data = site_macro,
+  cols = grep("acanthophora_spicifera", colnames(site_macro)):grep("valonia_ventricosa", colnames(site_macro)),
+  names_to = "taxa",
+  values_to = "percent_cover") %>% 
+  mutate(prop_cover = percent_cover/100) %>% 
+  select(-percent_cover)
+
+# write_csv(macro_long_data, here("Data", "macro_long_data.csv"))
+
+# CALCULATE SYNCHRONY CODE
+lm_synchrony_site <- codyn::synchrony(df = macro_long_data_site,
+                                   time.var = "year",
+                                   species.var = "taxa",
+                                   abundance.var = "prop_cover",
+                                   metric = "Loreau",
+                                   replicate.var = "site_habitat")
+
+
+diversity_stability_site <- alpha_diversity_site_macro_with_cover %>%
+  dplyr::group_by(site_habitat, habitat, site) %>%
+  dplyr::summarise(
+            richness_mean = mean(richness), 
+            shannon_mean = mean(shannon), 
+            cover_mean = mean(prop_cover),
+            evenness_mean = mean(evenness),
+            cover_cv = CV(prop_cover),
+            cover_stability = 1/CV(prop_cover)) 
+
+diversity_stability_synchrony_site <- left_join(diversity_stability_site, lm_synchrony_site, by = join_by(site_habitat))
+diversity_stability_synchrony_site$synchrony_trans <- sv_trans(diversity_stability_synchrony_site$synchrony)
+# diversity_stability_synchrony_site <- na.omit(diversity_stability_synchrony_site) # remove quads that never had algae --> NaN calcs
+# write_csv(diversity_stability_synchrony_site, here("data", "diversity_stability_synchrony_site.csv"))
+
+dss_ranges_site <- diversity_stability_synchrony_site %>%
+  group_by(habitat) %>%
+  summarise(min_richness = min(richness_mean),
+            max_richness = max(richness_mean),
+            min_evenness = min(evenness_mean, na.rm = T),
+            max_evenness = max(evenness_mean, na.rm = T),
+            min_stability= min(cover_stability),
+            max_stability = max(cover_stability),
+            min_synchrony = min(synchrony_trans),
+            max_synchrony = max(synchrony_trans))
+```
+
+
+## figure 4d model - richness stability
+
+```{r richness synchrony mod}
+rich_stab_mod_site <- glmmTMB(cover_stability~ richness_mean*habitat, family = Gamma(link = "log"), data = diversity_stability_synchrony_site)
+summary(rich_stab_mod_site)
+Anova(rich_stab_mod_site)
+
+#                        Chisq Df Pr(>Chisq)    
+# richness_mean         17.645  1  2.662e-05 ***
+# habitat               32.229  3  4.682e-07 ***
+# richness_mean:habitat  8.075  3    0.04449 *  
+hist(residuals(rich_stab_mod_site)) # blocky but fine
+plot(residuals(rich_stab_mod_site) ~ fitted(rich_stab_mod_site)) # heteroskedastic - bring to group
+r.squaredGLMM(rich_stab_mod_site) # 0.671
+emtrends(rich_stab_mod_site, pairwise ~ habitat, var = "richness_mean") # no differences across habitats
+```
+
+```{r figure 4d setup}
+
+
+rich_stab_emm_site <- emmip(rich_stab_mod_site,
+                        habitat ~ richness_mean,
+                        at = list(richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_rich_stab_effects_site <- rich_stab_emm_site %>%
+  left_join(dss_ranges_site, by = c("habitat")) %>%
+  filter(richness_mean >= min_richness & richness_mean <= max_richness)
+
+
+```
+
+
+## plot figure 4d
+
+```{r figure 4d}
+(figure_4d <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony_site,
+             aes(x = richness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_rich_stab_effects_site, aes(x = richness_mean, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_rich_stab_effects_site, aes(x = richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Stability\n", x = "Macroalgal Richness", title = "4d.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+# ggsave(filename = "output/figure_4d.png", figure_4d, height = 10, width = 14)
+```
+
+
+## figure 4f
+
+```{r synchrony staability mod site}
+synch_stab_mod_site <- glmmTMB(cover_stability ~ synchrony*habitat, family = Gamma("log"), data = diversity_stability_synchrony_site)
+summary(synch_stab_mod_site)
+Anova(synch_stab_mod_site)
+#                     Chisq Df Pr(>Chisq)    
+# synchrony         22.0686  1  2.631e-06 ***
+# habitat            9.3333  3    0.02517 *  
+# synchrony:habitat 10.5561  3    0.01439 *  
+hist(residuals(synch_stab_mod_site)) # almost uniform
+plot(residuals(synch_stab_mod_site) ~ fitted(synch_stab_mod_site)) # same issue as always
+r.squaredGLMM(synch_stab_mod_site) # 0.678
+emtrends(synch_stab_mod_site, pairwise ~ habitat, var = "synchrony") # backreef is different from forereef 17, fringing is a p = 0.05
+```
+
+```{r figure 4f setup}
+
+
+synch_stab_emm_site <- emmip(synch_stab_mod_site,
+                        habitat ~ synchrony,
+                        at = list(synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_synch_stab_effects_site <- synch_stab_emm_site %>%
+  left_join(dss_ranges_site, by = c("habitat")) %>%
+  filter(synchrony >= min_synchrony & synchrony <= max_synchrony)
+
+
+```
+
+## plot figure 4f
+
+```{r figure 4f}
+(figure_4f <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony_site,
+             aes(x = synchrony, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_synch_stab_effects_site, aes(x = synchrony, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_synch_stab_effects_site, aes(x = synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(x = "Synchrony", y = "Stability\n", main = "4f.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18),
+        plot.title = element_text(size=18),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+# ggsave(filename = "output/figure_4f.png", figure_4f, height = 10, width = 14)
+```
+
+# figure 3f
+
+## model
+
+```{r synchrony cover mod}
+synch_cov_mod_site <- glmmTMB(cover_mean ~ synchrony*habitat, family = beta_family(), data = diversity_stability_synchrony_site)
+summary(synch_cov_mod_site)
+Anova(synch_cov_mod_site)
+#                    Chisq Df Pr(>Chisq)  
+# synchrony         2.4184  1    0.11992  
+# habitat           7.8002  3    0.05033 .
+# synchrony:habitat 8.8866  3    0.03084 *
+hist(residuals(synch_cov_mod_site)) # slight skew
+plot(residuals(synch_cov_mod_site) ~ fitted(synch_cov_mod_site)) # looks fine
+emtrends(synch_cov_mod_site, pairwise ~ habitat, var = "synchrony") # forereef 17 different from backreef
+```
+
+```{r synch cov site plot setup}
+synch_cov_emm_site<- emmip(synch_cov_mod_site,
+                        habitat ~ synchrony,
+                        at = list(synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_synch_cov_effects_site <- synch_cov_emm_site %>%
+  left_join(dss_ranges_site, by = c("habitat")) %>%
+  filter(synchrony >= min_synchrony & synchrony <= max_synchrony)
+```
+
+## plot figure 3f
+
+```{r synchrony cover plot site}
+(figure_3f <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony_site,
+             aes(x = synchrony, y = cover_mean, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_synch_cov_effects_site, aes(x = synchrony, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_synch_cov_effects_site, aes(x = synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(x = "Synchrony", y = "Cover\n", title = "3f.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+
+# ggsave(filename = "output/figure_3f.png", figure_3f, height = 10, width = 14)
+```
+
+# evenness stability site
+
+## mod
+
+```{r evenness synchrony mod}
+even_stab_mod_site <- glmmTMB(cover_stability~ evenness_mean*habitat, family = Gamma(link = "log"), data = diversity_stability_synchrony_site)
+summary(even_stab_mod_site)
+Anova(even_stab_mod_site)
+
+#                         Chisq Df Pr(>Chisq)   
+# evenness_mean          0.1035  1   0.747623   
+# habitat               11.8743  3   0.007827 **
+# evenness_mean:habitat  9.6254  3   0.022034 *   
+hist(residuals(even_stab_mod_site)) # blocky with some pos skew
+plot(residuals(even_stab_mod_site) ~ fitted(even_stab_mod_site)) # heteroskedastic 
+r.squaredGLMM(even_stab_mod_site) # 0.505
+emtrends(even_stab_mod_site, pairwise ~ habitat, var = "evenness_mean") # no differences across habitats
+```
+
+```{r figure 4d setup}
+
+
+even_stab_emm_site <- emmip(even_stab_mod_site,
+                        habitat ~ evenness_mean,
+                        at = list(evenness_mean = seq(0,1,0.01)), plotit = F, CIs = T)
+#make levels for habitat for plotting
+
+
+filtered_even_stab_effects_site <- even_stab_emm_site %>%
+  left_join(dss_ranges_site, by = c("habitat")) %>%
+  filter(evenness_mean >= min_evenness & evenness_mean <= max_evenness)
+
+#make levels for habitat for plotting
+diversity_stability_synchrony_site$habitat <- factor(diversity_stability_synchrony_site$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+
+```
+
+
+## plot figure 4d
+
+```{r figure 4d}
+(figure_4_evenness <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony_site,
+             aes(x = evenness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_even_stab_effects_site, aes(x = evenness_mean, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_even_stab_effects_site, aes(x = evenness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Stability\n", x = "Macroalgal evenness", title = "4f. Evenness site") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+ggsave(filename = "output/figure_4_evenness_site.png", figure_4_evenness, height = 10, width = 14)
+```
