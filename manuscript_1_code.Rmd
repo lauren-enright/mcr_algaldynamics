@@ -915,22 +915,25 @@ diversity_stability <- alpha_diversity_quad_macro_with_cover %>%
             richness_mean = mean(richness), 
             shannon_mean = mean(shannon), 
             cover_mean = mean(macroalgal_prop_cover),
+            evenness_mean = mean(evenness, na.rm = T),
             cover_cv = CV(macroalgal_prop_cover),
             cover_stability = 1/CV(macroalgal_prop_cover)) 
 
 diversity_stability_synchrony <- left_join(diversity_stability, lm_synchrony, by = join_by(location))
 diversity_stability_synchrony$synchrony_trans <- sv_trans(diversity_stability_synchrony$synchrony)
-diversity_stability_synchrony <- na.omit(diversity_stability_synchrony) # remove quads that never had algae --> NaN calcs
+# diversity_stability_synchrony <- na.omit(diversity_stability_synchrony) # remove quads that never had algae --> NaN calcs
 
 
 dss_ranges<- diversity_stability_synchrony %>%
   group_by(habitat) %>%
   summarise(min_richness = min(richness_mean),
             max_richness = max(richness_mean),
-            min_stability= min(cover_stability),
-            max_stability = max(cover_stability),
-            min_synchrony = min(synchrony_trans),
-            max_synchrony = max(synchrony_trans))
+            min_evenness = min(richness_mean, na.rm = TRUE),
+            max_evenness = max(richness_mean, na.rm = TRUE),
+            min_stability= min(cover_stability, na.rm = TRUE),
+            max_stability = max(cover_stability, na.rm = TRUE),
+            min_synchrony = min(synchrony_trans, na.rm = TRUE),
+            max_synchrony = max(synchrony_trans, na.rm = TRUE))
 ```
 
 
