@@ -416,6 +416,7 @@ site_richness_df$habitat <- factor(site_richness_df$habitat,
 
 ```
 
+### plot
 ```{r}
 (figure_2b <- ggplot() +
   geom_point(data = site_richness_df, aes(x = year, y = richness_mean, colour = habitat), size = 3) +
@@ -449,7 +450,7 @@ site_richness_df$habitat <- factor(site_richness_df$habitat,
 ```
 
 ## 2c Evenness @ Quad by Year
-
+### prep
 ```{r calculate evennes}
 #dear callie, why is this here?
 site_richness_df <- alpha_diversity_site_macro %>% 
@@ -468,7 +469,7 @@ quad_evenness_df$habitat <- factor(quad_evenness_df$habitat,
                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
 ```
 
-
+### plot
 ```{r}
 (figure_2c <- ggplot() +
   geom_point(data = quad_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), size = 3) +
@@ -504,7 +505,7 @@ quad_evenness_df$habitat <- factor(quad_evenness_df$habitat,
 ```
 
 ## 2d Evenness @ Site by Year
-
+### prep
 ```{r set up evenness}
 site_evenness_df <- alpha_diversity_site_macro %>% 
   drop_na(evenness) %>%
@@ -517,6 +518,7 @@ site_evenness_df$habitat <- factor(site_evenness_df$habitat,
                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
 ```
 
+### plot
 ```{r plot evenness site}
 (figure_2d <- ggplot() +
   geom_point(data = site_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), size = 3) +
