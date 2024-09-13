@@ -503,7 +503,7 @@ evenness_df$habitat <- factor(evenness_df$habitat,
 
 ## 2d Evenness @ Site by Year
 
-```{r COME BACK HERE set up evenness}
+```{r set up evenness}
 site_evenness_df <- alpha_diversity_site_macro %>% 
   drop_na(evenness) %>%
   group_by(year, habitat) %>% 
@@ -547,22 +547,29 @@ site_evenness_df$habitat <- factor(site_evenness_df$habitat,
 
 # Figure 3
 
-## set up data for model
+## set up site-level data for model
+```{r site cover by diversity data setup}
+# alpha_diversity_site_macro_with_cover <- alpha_diversity_site_macro %>% 
+#   dplyr::mutate(percent_cover = rowSums(site_macro[,-which(names(site_macro)  %in% colnames(site_meta_df))])) %>% 
+#   mutate(prop_cover = percent_cover / 100) %>% 
+#   select(-percent_cover) %>% 
+#   mutate(cover_trans = sv_trans(prop_cover))
 
-```{r site data setup}
+#there is no reasonable reason why the above chunk doesn't work, but it doesn't, so we did it this way
+alpha_diversity_site_macro$percent_cover <- rowSums(site_macro[,-which(names(site_macro)  %in% colnames(site_meta_df))]) 
+
 alpha_diversity_site_macro_with_cover <- alpha_diversity_site_macro %>% 
-  mutate(percent_cover = rowSums(site_macro[,-which(names(site_macro)  %in% colnames(site_meta_df))])) %>% 
-  mutate(prop_cover = percent_cover / 100) %>% 
-  select(-percent_cover) %>% 
-  mutate(cover_trans = sv_trans(prop_cover))
+  dplyr::mutate(prop_cover = percent_cover / 100) %>%
+  select(-percent_cover)
+  
+alpha_diversity_site_macro_with_cover$cover_trans <- sv_trans(alpha_diversity_site_macro_with_cover$prop_cover)
 ```
 
 
 ## models
 
 ### quad
-
-```{r figure 3a model}
+```{r figure 3a richness quad model}
 alpha_diversity_quad_macro_with_cover$cover_trans <- sv_trans(alpha_diversity_quad_macro_with_cover$macroalgal_prop_cover)
 
 cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro_with_cover)
@@ -578,8 +585,26 @@ r.squaredGLMM(cover_mod) # 0.631, 0.650
 emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not different from forereef, forereef also not different
 ```
 
-### site
-```{r site mod}
+```{r 3b evenness quad level model}
+alpha_diversity_quad_macro_with_cover_evenness_mod <- alpha_diversity_quad_macro_with_cover %>% 
+  drop_na(evenness)
+
+evenness_cover_mod_quad <- glmmTMB(cover_trans ~ evenness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro_with_cover_evenness_mod)
+summary(evenness_cover_mod_quad)
+Anova(evenness_cover_mod_quad)
+#                     Chisq Df Pr(>Chisq)    
+# richness         30916.73  1  < 2.2e-16 ***
+# habitat            141.78  3  < 2.2e-16 ***
+# richness:habitat   294.54  3  < 2.2e-16 ***
+hist(residuals(evenness_cover_mod_quad)) # slight pos skeq
+plot(residuals(evenness_cover_mod_quad) ~ fitted(evenness_cover_mod_quad)) # negative trend but it can't be less than 0 so not too concerned. some wave pattern
+r.squaredGLMM(evenness_cover_mod_quad) # 0.1749907, 0.4042826
+emtrends(evenness_cover_mod_quad, pairwise ~ habitat, var = "evenness") #backreef is different from everything except outer 17, but just barely. everyone else is same same xoxo
+
+```
+
+### site richness
+```{r site richness mod}
 site_cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover)
 summary(site_cover_mod)
 Anova(site_cover_mod)
@@ -593,10 +618,25 @@ r.squaredGLMM(site_cover_mod) # 0.2212534, 0.5990825
 emtrends(site_cover_mod, pairwise ~ habitat, var = "richness") # no difference between the habitats
 ```
 
+### site evenness 
+```{r}
+alpha_diversity_site_macro_with_cover_evenness_mod <- alpha_diversity_site_macro_with_cover %>% 
+  drop_na(evenness)
 
+evenness_site_cover_mod <- glmmTMB(cover_trans ~ evenness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover_evenness_mod)
+summary(evenness_site_cover_mod)
+Anova(evenness_site_cover_mod)
+#                    Chisq Df Pr(>Chisq)    
+# richness         58.9195  1  1.643e-14 ***
+# habitat           6.6247  3    0.08487 .  
+# richness:habitat  3.2967  3    0.34811    
+hist(residuals(evenness_site_cover_mod)) # some positive skew, not the worst thing ever
+plot(residuals(evenness_site_cover_mod) ~ fitted(evenness_site_cover_mod)) # a little heteroscedastic but can't be less than 0
+r.squaredGLMM(evenness_site_cover_mod) #0.1206569, 0.5852773
+emtrends(evenness_site_cover_mod, pairwise ~ habitat, var = "evenness") # only the outers are different from each other
+```
 
 ## figure 3a plot setup
-
 ```{r figure 3a setup}
 diversity_ranges_quad <- alpha_diversity_quad_macro_with_cover %>%
   group_by(habitat) %>%
@@ -623,7 +663,7 @@ filtered_cover_effects$habitat <- factor(filtered_cover_effects$habitat,
                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
 ```
 
-## figure 3a plot
+## figure 3a quad level richness versus cover
 
 ```{r figure 3a plot}
 (figure_3a <- 
@@ -652,7 +692,62 @@ filtered_cover_effects$habitat <- factor(filtered_cover_effects$habitat,
 # ggsave(filename = "output/figure_3a.png", figure_3a, height = 10, width = 14)
 ```
 
-## Figure 3d
+## Figure 3B quad level evenness versus cover
+```{r COME BACK HERE figure 3b setup}
+diversity_ranges_quad_evenness <- alpha_diversity_quad_macro_with_cover_evenness_mod %>%
+  group_by(habitat) %>%
+  summarise(min_evenness = min(evenness),
+            max_evenness = max(evenness),
+            min_cover= min(cover_trans),
+            max_cover = max(cover_trans))
+
+cover_emm_evenness <- emmip(evenness_cover_mod_quad,
+                        habitat ~ evenness,
+                        at = list(evenness = seq(0,10,1)), plotit = F, CIs = T)
+
+filtered_cover_effects_evenness <- cover_emm %>%
+  left_join(diversity_ranges_quad_evenness, by = c("habitat")) %>%
+  filter(evenness >= min_evenness & evenness <= max_evenness)
+
+alpha_diversity_quad_macro_with_cover_evenness_mod$habitat <- factor(alpha_diversity_quad_macro_with_cover_evenness_mod$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+
+filtered_cover_effects_evenness$habitat <- factor(filtered_cover_effects_evenness$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
+
+```{r}
+(figure_3b <- 
+  ggplot() +
+  geom_point(data = alpha_diversity_quad_macro_with_cover_evenness_mod,
+             aes(x = evenness, y = cover_trans, colour = habitat), size = 1, alpha = 0.005) + 
+  geom_line(data = filtered_cover_effects_evenness, aes(x = evenness, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_cover_effects_evenness, aes(x = evenness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Cover\n", x = "Macroalgal evenness", title = "3a.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+#ggsave(filename = "output/figure_3b.png", figure_3b, height = 10, width = 14)
+```
+
+## Figure 3E site level richness versus cover
 
 ### setup
 ```{r}
