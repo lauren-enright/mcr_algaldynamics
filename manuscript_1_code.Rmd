@@ -705,7 +705,7 @@ cover_emm_evenness <- emmip(evenness_cover_mod_quad,
                         habitat ~ evenness,
                         at = list(evenness = seq(0,10,1)), plotit = F, CIs = T)
 
-filtered_cover_effects_evenness <- cover_emm %>%
+filtered_cover_effects_evenness <- cover_emm_evenness %>%
   left_join(diversity_ranges_quad_evenness, by = c("habitat")) %>%
   filter(evenness >= min_evenness & evenness <= max_evenness)
 
@@ -806,6 +806,84 @@ filtered_site_cover_effects$habitat <- factor(filtered_site_cover_effects$habita
 # ggsave(filename = "output/figure_3d.png", figure_3d, height = 10, width = 14)
 ```
 
+# Figure 3f site level evenness versus cover
+
+## model
+
+```{r evenness cover model site level}
+evenness_cover_mod_site <- glmmTMB(cover_trans ~ evenness*habitat + (1|site) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover_evenness_mod)
+summary(evenness_cover_mod_site)
+hist(residuals(evenness_cover_mod_site)) # little wonky but not the worst
+plot(residuals(evenness_cover_mod_site) ~ fitted(evenness_cover_mod_site))
+Anova(evenness_cover_mod_site)
+#                   Chisq Df Pr(>Chisq)    
+# evenness         14.395  1  0.0001482 ***
+# habitat          45.636  3  6.777e-10 ***
+# evenness:habitat 16.126  3  0.0010687 ** 
+r.squaredGLMM(evenness_cover_mod_site) # 0.166, 0.258
+
+emtrends(evenness_cover_mod_site, pairwise ~ habitat, var = "evenness") # fringing different from backreef and outer10
+```
+
+## plot
+
+### setup
+
+```{r figure 3f evenness site plot setup}
+diversity_ranges_site_evenness <- alpha_diversity_site_macro_with_cover_evenness_mod %>%
+  group_by(habitat) %>%
+  summarise(min_evenness = min(evenness),
+            max_evenness = max(evenness),
+            min_cover= min(cover_trans),
+            max_cover = max(cover_trans))
+
+cover_emm_evenness_site <- emmip(evenness_cover_mod_site,
+                        habitat ~ evenness,
+                        at = list(evenness = seq(0,1,0.01)), plotit = F, CIs = T)
+
+filtered_cover_effects_evenness_site <- cover_emm_evenness_site %>%
+  left_join(diversity_ranges_site_evenness, by = c("habitat")) %>%
+  filter(evenness >= min_evenness & evenness <= max_evenness)
+
+alpha_diversity_site_macro_with_cover_evenness_mod$habitat <- factor(alpha_diversity_site_macro_with_cover_evenness_mod$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+
+
+
+```
+
+### plot
+
+```{r evenness cover plot site }
+(figure_3f <- 
+  ggplot() +
+  geom_point(data = alpha_diversity_site_macro_with_cover_evenness_mod,
+             aes(x = evenness, y = cover_trans, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_cover_effects_evenness_site, aes(x = evenness, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_cover_effects_evenness_site, aes(x = evenness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Cover\n", x = "Macroalgal evenness", title = "3f. Site Level Evenness") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+# ggsave(filename = "output/figure_3f.png", figure_3f, height = 10, width = 14)
+```
+
 
 # Figure 4
 
@@ -854,6 +932,7 @@ dss_ranges<- diversity_stability_synchrony %>%
             min_synchrony = min(synchrony_trans),
             max_synchrony = max(synchrony_trans))
 ```
+
 
 ## figure 4a model - richness stability
 
