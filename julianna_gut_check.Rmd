@@ -1,0 +1,58 @@
+---
+title: "Gut check: site-level analyses"
+output: html_document
+date: "2024-09-13"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# clean up
+rm(list=ls()) 
+
+# load packages
+require(here) # relative file paths
+require(tidyverse) # data wrangling
+require(vegan) # community/diversity analyses
+```
+
+# Load Callie's data
+
+```{r}
+synchrony <- read_csv(here("data/diversity_stability_synchrony.csv"))
+alpha <- read_csv(here("data/alpha_diversity_quad_macro_with_cover.csv"))
+```
+
+
+# Summarize
+
+```{r synchrony summary}
+synchrony %>% 
+  group_by(habitat, site) %>% 
+  summarize(richness_mean_mean = mean(richness_mean), 
+            cover_mean_mean = mean(cover_mean), 
+            cover_cv_mean = mean(cover_cv), 
+            cover_stability_mean = mean(cover_stability), 
+            synchrony_trans_mean = mean(synchrony_trans)) -> synchrony_mean
+```
+
+```{r alpha summary}
+alpha %>% 
+  group_by(year, habitat, site) %>% 
+  summarize(richness_mean = mean(richness), 
+            macroalgal_prop_cover_mean = mean(macroalgal_prop_cover), 
+            cover_trans_mean = mean(cover_trans)) -> alpha_mean
+```
+
+# Plot synchrony
+
+```{r}
+synchrony_mean
+```
+
+
+
+
+
