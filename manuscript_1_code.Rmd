@@ -1201,6 +1201,7 @@ diversity_stability_site <- alpha_diversity_site_macro_with_cover %>%
             richness_mean = mean(richness), 
             shannon_mean = mean(shannon), 
             cover_mean = mean(prop_cover),
+            evenness_mean = mean(evenness),
             cover_cv = CV(prop_cover),
             cover_stability = 1/CV(prop_cover)) 
 
@@ -1209,10 +1210,12 @@ diversity_stability_synchrony_site$synchrony_trans <- sv_trans(diversity_stabili
 # diversity_stability_synchrony_site <- na.omit(diversity_stability_synchrony_site) # remove quads that never had algae --> NaN calcs
 # write_csv(diversity_stability_synchrony_site, here("data", "diversity_stability_synchrony_site.csv"))
 
-dss_ranges_site<- diversity_stability_synchrony_site %>%
+dss_ranges_site <- diversity_stability_synchrony_site %>%
   group_by(habitat) %>%
   summarise(min_richness = min(richness_mean),
             max_richness = max(richness_mean),
+            min_evenness = min(evenness_mean, na.rm = T),
+            max_evenness = max(evenness_mean, na.rm = T),
             min_stability= min(cover_stability),
             max_stability = max(cover_stability),
             min_synchrony = min(synchrony_trans),
@@ -1401,4 +1404,76 @@ filtered_synch_cov_effects_site <- synch_cov_emm_site %>%
 
 
 # ggsave(filename = "output/figure_3f.png", figure_3f, height = 10, width = 14)
+```
+
+# evenness stability site
+
+## mod
+
+```{r evenness synchrony mod}
+even_stab_mod_site <- glmmTMB(cover_stability~ evenness_mean*habitat, family = Gamma(link = "log"), data = diversity_stability_synchrony_site)
+summary(even_stab_mod_site)
+Anova(even_stab_mod_site)
+
+#                         Chisq Df Pr(>Chisq)   
+# evenness_mean          0.1035  1   0.747623   
+# habitat               11.8743  3   0.007827 **
+# evenness_mean:habitat  9.6254  3   0.022034 *   
+hist(residuals(even_stab_mod_site)) # blocky with some pos skew
+plot(residuals(even_stab_mod_site) ~ fitted(even_stab_mod_site)) # heteroskedastic 
+r.squaredGLMM(even_stab_mod_site) # 0.505
+emtrends(even_stab_mod_site, pairwise ~ habitat, var = "evenness_mean") # no differences across habitats
+```
+
+```{r figure 4d setup}
+
+
+even_stab_emm_site <- emmip(even_stab_mod_site,
+                        habitat ~ evenness_mean,
+                        at = list(evenness_mean = seq(0,1,0.01)), plotit = F, CIs = T)
+#make levels for habitat for plotting
+
+
+filtered_even_stab_effects_site <- even_stab_emm_site %>%
+  left_join(dss_ranges_site, by = c("habitat")) %>%
+  filter(evenness_mean >= min_evenness & evenness_mean <= max_evenness)
+
+#make levels for habitat for plotting
+diversity_stability_synchrony_site$habitat <- factor(diversity_stability_synchrony_site$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+
+```
+
+
+## plot figure 4d
+
+```{r figure 4d}
+(figure_4_evenness <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony_site,
+             aes(x = evenness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_even_stab_effects_site, aes(x = evenness_mean, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_even_stab_effects_site, aes(x = evenness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Stability\n", x = "Macroalgal evenness", title = "4f. Evenness site") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+ggsave(filename = "output/figure_4_evenness_site.png", figure_4_evenness, height = 10, width = 14)
 ```
