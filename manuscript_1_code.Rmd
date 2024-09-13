@@ -422,7 +422,6 @@ site_richness_df$habitat <- factor(site_richness_df$habitat,
   geom_line(data = site_richness_df, aes(x = year, y = richness_mean, colour = habitat), linewidth = 1) +
   geom_errorbar(data = site_richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se, colour = habitat), size = 1.3, width = 0) +
   scale_colour_manual(values = habitat_colours) +
-  scale_fill_manual(values = habitat_colours) +
   #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
   annotate("segment", x = 2006, xend = 2010, y = 11, yend = 11, linewidth = 2, colour = "grey") +
   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
@@ -458,47 +457,50 @@ site_richness_df <- alpha_diversity_site_macro %>%
   summarise(richness_mean = mean(richness),
             richness_se = se(richness))
 
-evenness_df <- alpha_diversity_quad_macro_with_cover %>% 
+quad_evenness_df <- alpha_diversity_quad_macro_with_cover %>% 
   drop_na(evenness) %>%
   group_by(year, habitat) %>% 
-  summarise(eveness_mean = mean(evenness),
-            eveness_se = se(evenness))
+  summarise(evenness_mean = mean(evenness),
+            evenness_se = se(evenness))
 
-evenness_df$habitat <- factor(evenness_df$habitat, 
+quad_evenness_df$habitat <- factor(quad_evenness_df$habitat, 
                              levels = c("fringing", "backreef", "outer_10","outer_17"),
                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
 ```
 
-```{r plot evenness}
+
+```{r}
 (figure_2c <- ggplot() +
-  geom_line(data = evenness_df, aes(x = year, y = eveness_mean, colour = habitat), linewidth = 1) +
-  geom_ribbon(data = evenness_df, aes(x = year, ymin = eveness_mean - eveness_se, ymax = eveness_mean + eveness_se, fill = habitat), alpha = 0.3) +
+  geom_point(data = quad_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), size = 3) +
+  geom_line(data = quad_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), linewidth = 1) +
+  geom_errorbar(data = quad_evenness_df, aes(x = year, ymin = evenness_mean - evenness_se, ymax = evenness_mean + evenness_se,
+                                             colour = habitat), width = 0, size = 1.3) +
   scale_colour_manual(values = habitat_colours) +
-  scale_fill_manual(values = habitat_colours) +
+  # scale_fill_manual(values = habitat_colours) +
   #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
-  annotate("segment", x = 2006, xend = 2010, y = 0.7, yend = 0.7, linewidth = 2, colour = "grey") +
+  annotate("segment", x = 2006, xend = 2010, y = .7, yend = .7, linewidth = 2, colour = "grey") +
   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
-   scale_x_continuous(breaks = unique(evenness_df$year)) +
-   labs(y = "Macroalgal Evenness \n",
-        x = "Year") +
+   scale_x_continuous(breaks = unique(quad_evenness_df$year)) +
+   labs(y = "Macroalgal evenness \n",
+        x = "Year",
+        title = "c. Quadrat-level evenness") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18),
         panel.background = element_blank(), 
         panel.grid.major = element_blank(),  #remove major-grid labels
         panel.grid.minor = element_blank(),  #remove minor-grid labels
-        plot.background = element_blank(),
+        plot.background = element_rect(fill = "white"),
         legend.text = element_text(size = rel(1)), # increase legend text
         legend.title = element_blank(),
         legend.position = 'bottom', # move legend to bottom
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black")) )
 
-#ggsave(filename = "output/figure_2c.png", figure_2c, height = 10, width = 14)
-
-#hist(eveness_df$eveness_mean)
+# ggsave(filename = "output/figure_2c.png", figure_2c, height = 10, width = 14)
 ```
 
 ## 2d Evenness @ Site by Year
@@ -507,42 +509,44 @@ evenness_df$habitat <- factor(evenness_df$habitat,
 site_evenness_df <- alpha_diversity_site_macro %>% 
   drop_na(evenness) %>%
   group_by(year, habitat) %>% 
-  summarise(eveness_mean = mean(evenness),
-            eveness_se = se(evenness))
+  summarise(evenness_mean = mean(evenness),
+            evenness_se = se(evenness))
 
 site_evenness_df$habitat <- factor(site_evenness_df$habitat, 
                              levels = c("fringing", "backreef", "outer_10","outer_17"),
                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
 ```
 
-```{r plot evenness}
+```{r plot evenness site}
 (figure_2d <- ggplot() +
-  geom_line(data = site_evenness_df, aes(x = year, y = eveness_mean, colour = habitat), linewidth = 1) +
-  geom_ribbon(data = site_evenness_df, aes(x = year, ymin = eveness_mean - eveness_se, ymax = eveness_mean + eveness_se, fill = habitat), alpha = 0.3) +
+  geom_point(data = site_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), size = 3) +
+  geom_line(data = site_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), linewidth = 1) +
+  geom_errorbar(data = site_evenness_df, aes(x = year, ymin = evenness_mean - evenness_se, ymax = evenness_mean + evenness_se, colour = habitat), size = 1.3, width = 0) +
   scale_colour_manual(values = habitat_colours) +
-  scale_fill_manual(values = habitat_colours) +
   #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
   annotate("segment", x = 2006, xend = 2010, y = 1, yend = 1, linewidth = 2, colour = "grey") +
   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
-   scale_x_continuous(breaks = unique(evenness_df$year)) +
-   labs(y = "Macroalgal Evenness \n",
-        x = "Year") +
+   scale_x_continuous(breaks = unique(site_evenness_df$year)) +
+   labs(y = "Macroalgal evenness \n",
+        x = "Year",
+        title = "d. Site-level evenness") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.text.x = element_text(angle = 45, hjust = 1),
         axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18),
         panel.background = element_blank(), 
         panel.grid.major = element_blank(),  #remove major-grid labels
         panel.grid.minor = element_blank(),  #remove minor-grid labels
-        plot.background = element_blank(),
+        plot.background = element_rect(fill = "white"),
         legend.text = element_text(size = rel(1)), # increase legend text
         legend.title = element_blank(),
         legend.position = 'bottom', # move legend to bottom
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black")) )
 
-#ggsave(filename = "output/figure_2d.png", figure_2d, height = 10, width = 14)
+# ggsave(filename = "output/figure_2d.png", figure_2d, height = 10, width = 14)
 ```
 
 # Figure 3
@@ -729,7 +733,7 @@ filtered_cover_effects_evenness$habitat <- factor(filtered_cover_effects_evennes
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Cover\n", x = "Macroalgal evenness", title = "3a.") +
+  labs(y = "Cover\n", x = "Macroalgal evenness", title = "3b.") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=18), 
         axis.title.y = element_text(size=18), 
