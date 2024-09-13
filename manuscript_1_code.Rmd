@@ -241,8 +241,6 @@ figure_1_data <- subset(cover_long, functional_group != "Sand" & functional_grou
 ```
 
 ## plot
-
-
 ```{r figure 1, fig.height = 10, fig.width=14, warning=FALSE}
 (figure_1 <- ggplot() +
   geom_point(data = figure_1_data, aes(x = year, y = percent_cover, colour = functional_group), size = 3) +
@@ -252,7 +250,7 @@ figure_1_data <- subset(cover_long, functional_group != "Sand" & functional_grou
   facet_wrap(~ habitat) +
   annotate("segment", x = 2006, xend = 2010, y = 75, yend = 75, linewidth = 2, colour = "grey") +
   scale_colour_manual(values = functional_group_colours) +
-  scale_fill_manual(values = functional_group_colours) +
+  # scale_fill_manual(values = functional_group_colours) +
   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
    scale_x_continuous(breaks = unique(cover_long$year)) +
@@ -278,14 +276,31 @@ figure_1_data <- subset(cover_long, functional_group != "Sand" & functional_grou
 # Figure 2
 
 ## Create Data Frames
-```{r create data}
+```{r create data for figure 2 quad}
 alpha_diversity_quad_macro <-
   data.frame(
     year = macroalgae$year,
     location = macroalgae$location,
-    shannon = diversity(macroalgae[ , -which(names(macroalgae) %in% meta_cols)], "shannon"),
-    richness = rowSums(macroalgae[ , -which(names(macroalgae) %in% meta_cols)] > 0)
+    shannon = diversity(macroalgae[, -which(names(macroalgae) %in% meta_cols)], "shannon"),
+    richness = rowSums(macroalgae[, -which(names(macroalgae) %in% meta_cols)] > 0)
   )
+
+#JG Add Evenness
+alpha_diversity_quad_macro$ev <- alpha_diversity_quad_macro$shannon /
+  (log(alpha_diversity_quad_macro$richness))
+
+#makes 1 species 0 and 0 species NA for evenness metric
+alpha_diversity_quad_macro$evenness <- ifelse(
+  alpha_diversity_quad_macro$richness == 0,
+  NA,
+  # If richness == 0, ev is NA
+  ifelse(
+    alpha_diversity_quad_macro$richness == 1,
+    0,
+    # If richness == 1, ev is 0
+    alpha_diversity_quad_macro$ev
+  )
+)  
 
 alpha_diversity_quad_macro <- merge(meta_df, alpha_diversity_quad_macro, by = c("location", "year"))
 ```
@@ -301,13 +316,39 @@ alpha_diversity_site_macro <-
   left_join(site_meta_df, alpha_diversity_site_macro, by = c("site_habitat", "year"))
 ```
 
+```{r site level evenness}
+#JG Add Evenness
+alpha_diversity_site_macro$ev <- alpha_diversity_site_macro$shannon /
+  (log(alpha_diversity_site_macro$richness))
 
-# Figure 2
+#makes 1 species 0 and 0 species NA for evenness metric
+alpha_diversity_site_macro$evenness <- ifelse(
+  alpha_diversity_site_macro$richness == 0,
+  NA,
+  # If richness == 0, ev is NA
+  ifelse(
+    alpha_diversity_site_macro$richness == 1,
+    0,
+    # If richness == 1, ev is 0
+    alpha_diversity_site_macro$ev
+  )
+)  
 
-## Figure 2a
+alpha_diversity_site_macro <- left_join(site_meta_df, alpha_diversity_site_macro,by = join_by(year, site, habitat, site_habitat))
+```
+
+```{r}
+macroalgal_cover <- cover_df[,c("year", "habitat", "site", "location", "macroalgae")]
+
+alpha_diversity_quad_macro_with_cover <- left_join(alpha_diversity_quad_macro, macroalgal_cover,by = join_by(location, year, site, habitat)) %>% 
+  mutate(macroalgal_prop_cover = macroalgae / 100) %>% 
+  select(-macroalgae)
+```
+
+
+## Figure 2a Richness @ Quad by Year
 
 ### prep
-
 ```{r richness df}
 quad_richness_df <- alpha_diversity_quad_macro %>% 
   group_by(year, habitat) %>% 
@@ -329,7 +370,7 @@ quad_richness_df$habitat <- factor(quad_richness_df$habitat,
   geom_errorbar(data = quad_richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se,
                                              colour = habitat), width = 0, size = 1.3) +
   scale_colour_manual(values = habitat_colours) +
-  scale_fill_manual(values = habitat_colours) +
+  # scale_fill_manual(values = habitat_colours) +
   #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
   annotate("segment", x = 2006, xend = 2010, y = 2, yend = 2, linewidth = 2, colour = "grey") +
   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
@@ -356,7 +397,8 @@ quad_richness_df$habitat <- factor(quad_richness_df$habitat,
 # ggsave(filename = "output/figure_2a.png", figure_2a, height = 10, width = 14)
 ```
 
-## Figure 2b
+## Figure 2b Richness @ Site by Year
+
 ### prep
 
 ```{r richness df}
@@ -371,7 +413,6 @@ site_richness_df <- alpha_diversity_site_macro %>%
 site_richness_df$habitat <- factor(site_richness_df$habitat, 
                              levels = c("fringing", "backreef", "outer_10","outer_17"),
                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
-
 
 ```
 
@@ -408,17 +449,105 @@ site_richness_df$habitat <- factor(site_richness_df$habitat,
 # ggsave(filename = "output/figure_2b.png", figure_2b, height = 10, width = 14)
 ```
 
+## 2c Evenness @ Quad by Year
+
+```{r calculate evennes}
+#dear callie, why is this here?
+site_richness_df <- alpha_diversity_site_macro %>% 
+  group_by(year, habitat) %>% 
+  summarise(richness_mean = mean(richness),
+            richness_se = se(richness))
+
+evenness_df <- alpha_diversity_quad_macro_with_cover %>% 
+  drop_na(evenness) %>%
+  group_by(year, habitat) %>% 
+  summarise(eveness_mean = mean(evenness),
+            eveness_se = se(evenness))
+
+evenness_df$habitat <- factor(evenness_df$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
+
+```{r plot evenness}
+(figure_2c <- ggplot() +
+  geom_line(data = evenness_df, aes(x = year, y = eveness_mean, colour = habitat), linewidth = 1) +
+  geom_ribbon(data = evenness_df, aes(x = year, ymin = eveness_mean - eveness_se, ymax = eveness_mean + eveness_se, fill = habitat), alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
+  annotate("segment", x = 2006, xend = 2010, y = 0.7, yend = 0.7, linewidth = 2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   scale_x_continuous(breaks = unique(evenness_df$year)) +
+   labs(y = "Macroalgal Evenness \n",
+        x = "Year") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+#ggsave(filename = "output/figure_2c.png", figure_2c, height = 10, width = 14)
+
+#hist(eveness_df$eveness_mean)
+```
+
+## 2d Evenness @ Site by Year
+
+```{r COME BACK HERE set up evenness}
+site_evenness_df <- alpha_diversity_site_macro %>% 
+  drop_na(evenness) %>%
+  group_by(year, habitat) %>% 
+  summarise(eveness_mean = mean(evenness),
+            eveness_se = se(evenness))
+
+site_evenness_df$habitat <- factor(site_evenness_df$habitat, 
+                             levels = c("fringing", "backreef", "outer_10","outer_17"),
+                             labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+```
+
+```{r plot evenness}
+(figure_2d <- ggplot() +
+  geom_line(data = site_evenness_df, aes(x = year, y = eveness_mean, colour = habitat), linewidth = 1) +
+  geom_ribbon(data = site_evenness_df, aes(x = year, ymin = eveness_mean - eveness_se, ymax = eveness_mean + eveness_se, fill = habitat), alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
+  annotate("segment", x = 2006, xend = 2010, y = 1, yend = 1, linewidth = 2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   scale_x_continuous(breaks = unique(evenness_df$year)) +
+   labs(y = "Macroalgal Evenness \n",
+        x = "Year") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) )
+
+#ggsave(filename = "output/figure_2d.png", figure_2d, height = 10, width = 14)
+```
 
 # Figure 3
 
 ## set up data for model
-```{r quad data setup}
-macroalgal_cover <- cover_df[,c("year", "habitat", "site", "location", "macroalgae")]
-
-alpha_diversity_quad_macro_with_cover <- left_join(alpha_diversity_quad_macro, macroalgal_cover,by = join_by(location, year, site, habitat)) %>% 
-  mutate(macroalgal_prop_cover = macroalgae / 100) %>% 
-  select(-macroalgae)
-```
 
 ```{r site data setup}
 alpha_diversity_site_macro_with_cover <- alpha_diversity_site_macro %>% 
