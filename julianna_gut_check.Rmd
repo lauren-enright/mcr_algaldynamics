@@ -31,28 +31,60 @@ alpha <- read_csv(here("data/alpha_diversity_quad_macro_with_cover.csv"))
 ```{r synchrony summary}
 synchrony %>% 
   group_by(habitat, site) %>% 
-  summarize(richness_mean_mean = mean(richness_mean), 
-            cover_mean_mean = mean(cover_mean), 
-            cover_cv_mean = mean(cover_cv), 
-            cover_stability_mean = mean(cover_stability), 
-            synchrony_trans_mean = mean(synchrony_trans)) -> synchrony_mean
+  summarize(richness_mean_mean = mean(richness_mean, na.rm = TRUE), 
+            cover_mean_mean = mean(cover_mean, na.rm = TRUE), 
+            cover_cv_mean = mean(cover_cv, na.rm = TRUE), 
+            cover_stability_mean = mean(cover_stability, na.rm = TRUE), 
+            synchrony_trans_mean = mean(synchrony_trans, na.rm = TRUE)) -> synchrony_mean
 ```
 
 ```{r alpha summary}
 alpha %>% 
   group_by(year, habitat, site) %>% 
-  summarize(richness_mean = mean(richness), 
-            macroalgal_prop_cover_mean = mean(macroalgal_prop_cover), 
-            cover_trans_mean = mean(cover_trans)) -> alpha_mean
+  summarize(richness_mean = mean(richness, na.rm = TRUE), 
+            macroalgal_prop_cover_mean = mean(macroalgal_prop_cover, na.rm = TRUE), 
+            cover_trans_mean = mean(cover_trans, na.rm = TRUE)) -> alpha_mean
 ```
 
-# Plot synchrony
+# Fig 3
 
 ```{r}
-synchrony_mean
+synchrony_mean %>% 
+  ggplot(aes(x = richness_mean_mean, y = cover_mean_mean, color = habitat, fill = habitat)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic()
+```
+
+```{r}
+synchrony_mean %>% 
+  ggplot(aes(x = synchrony_trans_mean, y = cover_mean_mean, color = habitat, fill = habitat)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic()
 ```
 
 
+
+# Fig 4
+
+Stability on y, richness/synchrony on x
+
+```{r richness}
+synchrony_mean %>% 
+  ggplot(aes(x = richness_mean_mean, y = 1/cover_cv_mean, color = habitat, fill = habitat)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic()
+```
+
+```{r synchrony}
+synchrony_mean %>% 
+  ggplot(aes(x = synchrony_trans_mean, y = 1/cover_cv_mean, color = habitat, fill = habitat)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  theme_classic()
+```
 
 
 
