@@ -1134,6 +1134,8 @@ Anova(synch_cov_mod)
 # synchrony:habitat  54.632  3  8.227e-12 ***
 hist(residuals(synch_cov_mod)) # slight skew
 plot(residuals(synch_cov_mod) ~ fitted(synch_cov_mod)) # same issues as always
+
+r.squaredGLMM(synch_cov_mod) # error??
 emtrends(synch_cov_mod, pairwise ~ habitat, var = "synchrony") # forereef 17 distinct from all other habitats
 ```
 
