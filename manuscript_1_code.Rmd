@@ -11,7 +11,6 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 rm(list = ls())
 library(here)
-library(dplyr)
 library(tidyverse)
 library(ggplot2)
 library(ggpubr)
@@ -26,6 +25,7 @@ library(codyn)
 library(nlme)
 library(mgcv)
 library(emmeans)
+library(dplyr)
 ```
 
 ## functions
@@ -57,6 +57,20 @@ se <- function(x){
 
 ## Figure formatting
 ```{r figure formatting info}
+mytheme <- theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size=18), 
+        panel.background = element_rect(fill = "white"), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) 
+
 habitat_colours <- c("Fringing" = "#D81B60",
                      "Backreef" = "#FFC107",
                      "Forereef 10m" = "#1E88E5",
@@ -218,22 +232,12 @@ figure_1_data <- subset(cover_long, functional_group != "Sand" & functional_grou
    labs(y = "Percent Cover \n",
         x = "Year") +
   theme_bw() + 
-  theme(axis.title.x = element_text(size=18), 
-        axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.y = element_text(size=18), 
-        panel.background = element_blank(), 
-        panel.grid.major = element_blank(),  #remove major-grid labels
-        panel.grid.minor = element_blank(),  #remove minor-grid labels
-        plot.background = element_rect(fill = "white"),
-        legend.text = element_text(size = rel(1)), # increase legend text
-        legend.title = element_blank(),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal', # make legend horizontal
-        legend.box.background = element_rect(colour = "black")) )
+  mytheme)
 
 # ggsave(filename = "output/figure_1.png", figure_1, height = 10, width = 14)
 ```
 
+## plot after aes changes
 ```{r Figure 1 v2}
 plot_list <- lapply(levels(figure_1_data$habitat), function(hab) {
   ggplot(data = subset(figure_1_data, habitat == hab)) +
@@ -250,16 +254,7 @@ plot_list <- lapply(levels(figure_1_data$habitat), function(hab) {
          x = "Year",
          title = hab) +  # Add habitat as title
     theme_bw() +
-    theme(axis.title.x = element_text(size = 18),
-          axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
-          axis.title.y = element_text(size = 18),
-          axis.text.y = element_text(size = 12),
-          plot.title = element_text(size = 20, hjust = 0),
-          legend.text = element_text(size = 14), 
-          legend.title = element_blank(),
-          legend.position = 'bottom',
-          legend.box = 'horizontal',
-          legend.box.background = element_rect(colour = "black"))
+    mytheme
 })
 
 figure_1 <- ggarrange(plotlist = plot_list, 
@@ -379,20 +374,10 @@ quad_richness_df <- alpha_diversity_quad_macro %>%
         x = "Year",
         title = "Quadrat-level Richness") +
   theme_bw() + 
-  theme(axis.title.x = element_text(size=18), 
-        axis.text.x = element_text(angle = 45, hjust = 1, size=14),
+  mytheme +
+  theme(axis.text.x = element_text(size=14),
         axis.text.y = element_text(size=12),
-        axis.title.y = element_text(size=18), 
-        plot.title = element_text(size=18),
-        panel.background = element_blank(), 
-        panel.grid.major = element_blank(),  #remove major-grid labels
-        panel.grid.minor = element_blank(),  #remove minor-grid labels
-        plot.background = element_rect(fill = "white"),
-        legend.text = element_text(size = rel(1)), # increase legend text
-        legend.title = element_blank(),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal', # make legend horizontal
-        legend.box.background = element_rect(colour = "black")) )
+        plot.title = element_text(size=18)))
 
 # ggsave(filename = "output/figure_2a.png", figure_2a, height = 10, width = 14)
 ```
@@ -426,21 +411,11 @@ site_richness_df <- alpha_diversity_site_macro %>%
    labs(y = "Macroalgal Richness",
         x = "Year",
         title = "Site-level Richness") +
-  theme_bw() + 
-  theme(axis.title.x = element_text(size=18), 
-        axis.text.x = element_text(angle = 45, hjust = 1, size=14),
-        axis.title.y = element_text(size=18), 
-        axis.text.y = element_text(size=14),
-        plot.title = element_text(size=18),
-        panel.background = element_blank(), 
-        panel.grid.major = element_blank(),  #remove major-grid labels
-        panel.grid.minor = element_blank(),  #remove minor-grid labels
-        plot.background = element_rect(fill = "white"),
-        legend.text = element_text(size = rel(1)), # increase legend text
-        legend.title = element_blank(),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal', # make legend horizontal
-        legend.box.background = element_rect(colour = "black")) )
+  mytheme +
+   theme(axis.text.x = element_text(size=14),
+      axis.text.y = element_text(size=14),
+      plot.title = element_text(size=18),
+      ))
 
 # ggsave(filename = "output/figure_2b.png", figure_2b, height = 10, width = 14)
 ```
