@@ -335,7 +335,7 @@ quad_richness_df <- alpha_diversity_quad_macro %>%
 
 
 ### plot
-```{r figure 2}
+```{r figure 2a}
 (figure_2a <- ggplot() +
   geom_point(data = quad_richness_df, aes(x = year, y = richness_mean, colour = habitat), size = 4) +
   geom_line(data = quad_richness_df, aes(x = year, y = richness_mean, colour = habitat), linewidth = 1) +
@@ -350,12 +350,16 @@ quad_richness_df <- alpha_diversity_quad_macro %>%
    scale_x_continuous(breaks = unique(quad_richness_df$year)) +
    labs(y = "Macroalgal Richness",
         x = "Year",
-        title = "Quadrat-level Richness") +
+        title = "a. Quadrat-level Richness") +
   theme_bw() + 
   mytheme +
-  theme(axis.text.x = element_text(size=14),
-        axis.text.y = element_text(size=12),
-        plot.title = element_text(size=18)))
+   theme(axis.text.x = element_text(size=20),
+         axis.title.x = element_text(size=22),
+         axis.title.y = element_text(size=22),
+      axis.text.y = element_text(size=20),
+      plot.title = element_text(size=24),
+      legend.text = element_text(size=20),
+      legend.title = element_text(size=22)))
 
 # ggsave(filename = "output/figure_2a.png", figure_2a, height = 10, width = 14)
 ```
@@ -364,7 +368,7 @@ quad_richness_df <- alpha_diversity_quad_macro %>%
 
 ### prep
 
-```{r richness df}
+```{r site level richness df}
 site_richness_df <- alpha_diversity_site_macro %>% 
   group_by(year, habitat) %>% 
   summarise(richness_mean = mean(richness),
@@ -374,10 +378,11 @@ site_richness_df <- alpha_diversity_site_macro %>%
 
 
 ### plot
-```{r}
+```{r plot figure 2b}
 (figure_2b <- ggplot() +
   geom_point(data = site_richness_df, aes(x = year, y = richness_mean, colour = habitat), size = 4) +
-  geom_jitter(data = alpha_diversity_site_macro, aes(x = year, y = richness, colour = habitat, alpha = 0.05), size = 2, width = 0.4, height = 0) +
+#  geom_jitter(data = alpha_diversity_site_macro, 
+#  aes(x = year, y = richness, colour = habitat, alpha = 0.05), size = 2, width = 0.4, height = 0) +
   geom_line(data = site_richness_df, aes(x = year, y = richness_mean, colour = habitat), linewidth = 1) +
   geom_errorbar(data = site_richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se, colour = habitat), size = 1.3, width = 0) +
   scale_colour_manual(values = habitat_colours) +
@@ -386,29 +391,31 @@ site_richness_df <- alpha_diversity_site_macro %>%
   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
    scale_x_continuous(breaks = unique(site_richness_df$year)) +
-   labs(y = "Macroalgal Richness",
+   labs(y = "",
         x = "Year",
-        title = "Site-level Richness") +
+        title = "b. Site-level Richness") +
   mytheme +
-   theme(axis.text.x = element_text(size=14),
-      axis.text.y = element_text(size=14),
-      plot.title = element_text(size=18),
+   theme(axis.text.x = element_text(size=20),
+         axis.title.x = element_text(size=22),
+      axis.text.y = element_text(size=20),
+      plot.title = element_text(size=24),
+      legend.text = element_text(size=20),
+      legend.title = element_text(size=22),
       ))
 
 # ggsave(filename = "output/figure_2b.png", figure_2b, height = 10, width = 14)
 ```
 
 ## Figure 2 Full Plot
-```{r ggpubr fig2}
+```{r ggpubr fig2, fig.height = 10, fig.width=20}
 fig2_plot_list <- list(figure_2a, figure_2b)
-figure_2 <- ggarrange(plotlist = fig2_plot_list, 
+(figure_2 <- ggarrange(plotlist = fig2_plot_list, 
                       ncol = 2, nrow = 1, 
-                      labels = c("a.", "b."),
                       common.legend = TRUE,
                       legend = "bottom", 
-                      font.label = list(size = 20, color = "black", face = "plain"))
+                      font.label = list(size = 20, color = "black", face = "plain")))
 
-#ggsave(filename = "output/figure_2.png", figure_2, height = 10, width = 20)
+# ggsave(filename = "output/figure_2v2.png", figure_2, height = 10, width = 20)
 ```
 
 
