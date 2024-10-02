@@ -574,13 +574,6 @@ fg_summary_site_SUM <- macro_functional_groups %>%
   group_by(site, year, habitat, functional_group) %>%
   summarise(sum_fg_cover = sum(prop_cover))
 
-#don't need to use this, was just to check both methods
-#fg_summary_site_AVG <- macro_functional_groups %>%
-  #group_by(site, year, habitat, functional_group) %>%
-  #summarise(mean_fg_cover = mean(prop_cover))
-
-#fg_summary %>%
-  #filter(sum_fg_cover==1)
 
 
 #QAQC
@@ -615,8 +608,7 @@ fg_summary_site_wide_SUM <- fg_summary_site_SUM %>%
 #richness at every site/year combination ---> NOT AVERAGED,
 fg_summary_site_wide_SUM$fg_richness_site <- vegan::specnumber(fg_summary_site_wide_SUM[4:13])
 
-fg_summary_site_wide <- fg_summary_site_wide_SUM %>%
-   mutate(site_habitat = paste(site, habitat, sep = "_"))
+fg_summary_site_wide <- fg_summary_site_wide_SUM 
 ```
 
 ### model
@@ -673,7 +665,7 @@ filtered_cover_effects <- cover_emm %>%
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "", x = "Functional Richness", title = "3b.") +
+  labs(y = "", x = "", title = "3b.") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -933,6 +925,84 @@ filtered_site_cover_effects <- site_cover_emm %>%
 # ggsave(filename = "output/figure_3d.png", figure_3d, height = 10, width = 14)
 ```
 
+## Figure 3e - functional richness at site level
+### model
+
+```{r site level fg richness model}
+#merge site level cover with site functional group richness
+
+functional_richness_site_cover<- merge(alpha_diversity_site_macro_with_cover, fg_summary_site_wide,
+                                by = c("year", "site",  "habitat"))
+
+
+site_cover_mod_fg <- glmmTMB(cover_trans ~ fg_richness_site*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = functional_richness_site_cover)
+
+summary(site_cover_mod_fg)
+Anova(site_cover_mod_fg)
+
+#                            Chisq Df Pr(>Chisq)    
+# fg_richness_site         30.9412  1   2.66e-08 ***
+# habitat                   4.8929  3     0.1798    
+# fg_richness_site:habitat  4.2193  3     0.2387  
+
+
+hist(residuals(site_cover_mod_fg)) # positive skew
+plot(residuals(site_cover_mod_fg) ~ fitted(site_cover_mod_fg)) # a little heteroscedastic but can't be less than 0
+r.squaredGLMM(site_cover_mod_fg) # 0.180, 0.563
+emtrends(site_cover_mod_fg, pairwise ~ habitat, var = "fg_richness_site") # no difference between the habitats
+
+
+```
+```{r site fg richness cover plot setup}
+diversity_ranges_site <- functional_richness_site_cover %>%
+  group_by(habitat) %>%
+  summarise(min_fg_richness_site = min(fg_richness_site),
+            max_fg_richness_site = max(fg_richness_site),
+            min_cover= min(cover_trans),
+            max_cover = max(cover_trans))
+
+site_cover_emm <- emmip(site_cover_mod_fg,
+                        habitat ~ fg_richness_site,
+                        at = list(fg_richness_site = seq(0,17,1)), plotit = F, CIs = T)
+
+filtered_site_cover_effects <- site_cover_emm %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(fg_richness_site >= min_fg_richness_site & fg_richness_site <= max_fg_richness_site)
+```
+
+### 3e plot
+
+```{r figure 3e plot }
+(figure_3e <- 
+  ggplot() +
+  geom_point(data = functional_richness_site_cover,
+             aes(x = fg_richness_site, y = cover_trans, colour = habitat), size = 1, alpha = 0.3) + 
+  geom_line(data = filtered_site_cover_effects, aes(x = fg_richness_site, y = inv_logit(yvar), colour = habitat),
+            size = 1.5) +
+  geom_ribbon(data = filtered_site_cover_effects, aes(x = fg_richness_site, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "", x = "Functional Richness", title = "3e.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=24), 
+        axis.title.y = element_text(size=24), 
+        axis.text.x = element_text(size=22), 
+        axis.text.y = element_text(size=22),
+        legend.text = element_text(size=22),
+        plot.title = element_text(size=26), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+#ggsave(filename = "output/figure_3e_v2.png", figure_3e, height = 10, width = 14)
+```
+
 ## figure 3f - synchrony site level
 
 ### model
@@ -994,6 +1064,17 @@ filtered_synch_cov_effects_site <- synch_cov_emm_site %>%
 # ggsave(filename = "output/figure_3f.png", figure_3f, height = 10, width = 14)
 ```
 
+## Figure 3 Full Plot
+```{r ggpubr fig3, fig.height = 8, fig.width=16}
+
+(figure_3 <- ggarrange(figure_3a, figure_3b, figure_3c, figure_3d, figure_3e, figure_3f, 
+                      ncol = 3, nrow = 2, 
+                      common.legend = TRUE,
+                      legend = "bottom", 
+                      font.label = list(size = 20, color = "black", face = "plain")))
+
+# ggsave(filename = "output/figure_3.png", figure_3, height = 8, width = 16)
+```
 
 # Figure 4
 
