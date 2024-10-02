@@ -1,0 +1,716 @@
+---
+title: "functional_groups"
+author: "L. Enright"
+date: "2024-09-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(here)
+library(tidyverse)
+library(janitor)
+library(stringr)
+library(vegan)
+library(car)
+library(glmmTMB)
+library(MuMIn)
+library(emmeans)
+library(performance)
+library(lme4)
+library(DHARMa)
+library(ggplot2)
+```
+
+```{r}
+#read in groupings
+#these are the OG groupings 
+algae_fg_raw <- read_csv(here("data","algae_functional_groupings.csv"))
+
+#these are our best guesses based on Bob's feedback (subject to change)
+algae_fg_raw2 <- read_csv(here("data","algae_functional_groupings_092724.csv"))
+
+
+#clean column names
+algae_fg <- algae_fg_raw2 %>%
+  clean_names()
+
+#change species names to be lowercase & have underscore 
+algae_fg$species <- gsub(" ", "_", tolower(algae_fg$species))
+algae_fg$morphology <- trimws(algae_fg$morphology)
+algae_fg$morphology <- gsub(" ", "_", algae_fg$morphology)
+
+#rename species column to taxa
+
+algae_fg <- algae_fg %>%
+  select(species, morphology) %>%
+  dplyr::rename(taxa = species) %>%
+   dplyr::rename(functional_group = morphology)
+ 
+unique(algae_fg$functional_group)
+
+#9 fg in v1 (8 excluding turf)
+#12 fg in v2 (10 excluding turf), added spherical and branched calcareous 
+  
+```
+
+```{r species distribution across functional groups}
+algae_fg_raw %>%
+  group_by(Morphology) %>%
+  summarise(count = n())
+
+algae_fg_raw2 %>%
+  group_by(Morphology) %>%
+  summarise(count = n())
+```
+
+```{r functions}
+#this is needed for figures 
+
+inv_logit <- function(x){
+  exp(x)/(1+exp(x))
+}
+```
+
+
+
+```{r read in macroalgal data}
+#read in long macro data 
+macro_long <- read_csv(here("data", "macro_long_data.csv"))
+
+#merge functional groups with 
+macro_functional_groups <- merge(macro_long, algae_fg, all.x = TRUE)
+
+unique(macro_functional_groups$taxa)
+
+#macro_functional_groups$functional_group[NA]
+
+#look for mistakes in merging 
+macro_functional_groups %>% filter(is.na(functional_group))
+#none, should be fine! 
+
+```
+
+```{r summarizing long macroalgae data}
+
+taxa_sum_check <- macro_functional_groups %>%
+  group_by(location, year) %>%
+  summarise(sum_macrocover = sum(prop_cover))
+
+macro_functional_groups %>%
+  filter(location == "lter_2_backreef_algae_transect_1_quad_1") %>%
+  filter(year == "2022")
+
+#summarizing functional groups at the quad level
+fg_summary <- macro_functional_groups %>%
+  group_by(location, year, functional_group, habitat, site) %>%
+  summarise(sum_fg_cover = sum(prop_cover))
+
+max(fg_summary$sum_fg_cover)
+
+#summarizing functional groups at the site level
+#NOTE that this is ADDED and not averaged. This data is only used to find richness at the site level. LE did this as adding and as a sum, both end up the same from a richness perspective. 
+fg_summary_site_SUM <- macro_functional_groups %>%
+  group_by(site, year, habitat, functional_group) %>%
+  summarise(sum_fg_cover = sum(prop_cover))
+
+#don't need to use this, was just to check both methods
+#fg_summary_site_AVG <- macro_functional_groups %>%
+  #group_by(site, year, habitat, functional_group) %>%
+  #summarise(mean_fg_cover = mean(prop_cover))
+
+#fg_summary %>%
+  #filter(sum_fg_cover==1)
+
+
+#QAQC
+fg_summary_qaqc <- macro_functional_groups %>%
+  group_by(location, year, functional_group) %>%
+  summarise(sum_fg_cover = sum(prop_cover))
+
+fg_qaqc <- fg_summary_qaqc %>%
+  group_by(location, year) %>%
+  summarise(sum_fg_check = sum(sum_fg_cover))
+  
+check_them <- merge(taxa_sum_check, fg_qaqc)
+
+check_them %>%
+  filter(all.equal(sum_macrocover, sum_fg_check) != TRUE)
+
+#should be 0 :)   
+
+  
+```
+
+```{r info for themes and colors for figures}
+mytheme <- theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.title.y = element_text(size=18), 
+        panel.background = element_rect(fill = "white"), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black")) 
+
+habitat_colours <- c("Fringing" = "#D81B60",
+                     "Backreef" = "#FFC107",
+                     "Forereef 10m" = "#1E88E5",
+                     "Forereef 17m" = "#004D40")
+```
+
+
+```{r functional group data, pivot wide for quad}
+#pivot wide at quad level
+fg_summary_wide <- fg_summary %>%
+  pivot_wider(names_from = "functional_group", values_from = "sum_fg_cover")
+
+#richness at every quad/year combination 
+fg_summary_wide$fg_richness_quad <- vegan::specnumber(fg_summary_wide[5:14])
+
+unique(fg_summary_wide$fg_richness_quad)
+#0 to 4
+
+#pull out the habitat and site, still at quad level 
+fg_summary_wide_meta <- fg_summary_wide %>%
+  mutate(habitat = str_extract(location, 
+                                 "(fringing|outer_10|outer_17|backreef)")) %>%
+  mutate(site = str_extract(location, "lter_[123456]"))
+```
+
+```{r functional group data, pivot wide for site}
+#SUM
+#pivot wide at site level
+fg_summary_site_wide_SUM <- fg_summary_site_SUM %>%
+  pivot_wider(names_from = "functional_group", values_from = "sum_fg_cover")
+  
+#richness at every site/year combination ---> NOT AVERAGED,
+fg_summary_site_wide_SUM$fg_richness_site <- vegan::specnumber(fg_summary_site_wide_SUM[4:13])
+
+fg_summary_site_wide <- fg_summary_site_wide_SUM %>%
+   mutate(site_habitat = paste(site, habitat, sep = "_"))
+
+#AVG -- don't need to use this, just was checking both methods 
+#fg_summary_site_wide_AVG <- fg_summary_site_AVG %>%
+  #pivot_wider(names_from = "functional_group", values_from = "mean_fg_cover")
+
+#richness at every site/year combination ---> NOT AVERAGED 
+#fg_summary_site_wide_AVG$fg_richness_site <- vegan::specnumber(fg_summary_site_wide_AVG[4:13])
+
+#setdiff(fg_summary_site_wide_SUM$fg_richness_site, fg_summary_site_wide_AVG$fg_richness_site)
+
+```
+
+```{r functional richness through time at quad level}
+fg_summary_wide_meta_through_time <- fg_summary_wide_meta %>%
+  group_by(location, habitat, site) %>%
+  summarise(fg_richness_mean = mean(fg_richness_quad),
+            fg_richness_se = sd(fg_richness_quad)/n())
+
+#each quad only has ONE value, averaged through time 
+#1200 quads in this data set
+#this is used in figure 4 things
+```
+
+# Figure 3
+
+```{r figure 3b - setup dataframe quad}
+
+#read in Noam's cover data 
+alpha_div_cover <- read_csv(here("data", "alpha_diversity_quad_macro_with_cover_updated.csv"))
+
+#merge Noam's data with functional group summary 
+fig3df_quad <- merge(alpha_div_cover, fg_summary_wide, by = c("location", "year", "site"))
+
+#choose habitat column & rename from Noam's cover data
+
+fig3df_quad <- fig3df_quad %>%
+  select(-habitat.y) %>%
+  rename(habitat = habitat.x)
+  
+
+```
+
+
+## Figure 3b model (functional group)
+
+```{r figure 3b model - fg VS cover - quad}
+cover_mod_fg <- glmmTMB(cover_trans ~ fg_richness_quad*habitat + (1|site/location) + (1|year), family = beta_family(), data = fig3df_quad)
+
+hist(fig3df_quad$cover_trans)
+
+summary(cover_mod_fg)
+car::Anova(cover_mod_fg)
+#                            Chisq Df Pr(>Chisq)    
+#fg_richness_quad         31615.090  1  < 2.2e-16 ***
+#habitat                     71.048  3  2.546e-15 ***
+#fg_richness_quad:habitat   383.667  3  < 2.2e-16 ***
+hist(residuals(cover_mod_fg)) # looks fine
+
+# Let's check model diagnostics 
+#step 1: linearity
+#flat and horizontal --> linearity 
+scatter.smooth(residuals(cover_mod_fg) ~ fitted(cover_mod_fg), col = "red")
+
+#looks... fine? 
+
+#step 2: homosketadicity.. 
+
+#standarized pearson's residualizuals 
+
+standard_mod3b <- (resid(cover_mod_fg, type = 'pearson')/sd(resid(cover_mod_fg, type = 'pearson')))
+
+#took sqrt
+
+sqrt_residuals_mod3b <-  sqrt(abs(standard_mod3b))
+
+#plotted against fitted 
+scatter.smooth(sqrt_residuals_mod3b ~ fitted(cover_mod_fg), col = "red")
+
+#we have determined that this is ok, despite small hump and upward trend 
+
+#step 3: check uniformity of residuals plot
+
+plot(performance::simulate_residuals(cover_mod_fg))
+
+#gosh, these seems ... questionsable 
+
+r.squaredGLMM(cover_mod_fg) # 0.625, 0.645
+emtrends(cover_mod_fg, pairwise ~ habitat, var = "fg_richness_quad") 
+#all pairwise comparisons are different 
+
+```
+
+## figure 3b plot setup
+```{r figure 3b setup}
+diversity_ranges_quad_fg <- fig3df_quad %>%
+  group_by(habitat) %>%
+  summarise(min_fg_richness_quad = min(fg_richness_quad),
+            max_fg_richness_quad = max(fg_richness_quad),
+            min_cover= min(cover_trans),
+            max_cover = max(cover_trans))
+
+cover_emm <- emmip(cover_mod_fg,
+                        habitat ~ fg_richness_quad,
+                        at = list(fg_richness_quad = seq(0,10,1)), plotit = F, CIs = T)
+
+filtered_cover_effects <- cover_emm %>%
+  left_join(diversity_ranges_quad_fg, by = c("habitat")) %>%
+  filter(fg_richness_quad >= min_fg_richness_quad & fg_richness_quad <= max_fg_richness_quad)
+
+```
+
+## figure 3b plot
+
+```{r figure 3b plot}
+(figure_3b <- 
+  ggplot() +
+  geom_point(data = fig3df_quad,
+             aes(x = fg_richness_quad, y = cover_trans, colour = habitat), size = 1, alpha = 0.005) + 
+  geom_line(data = filtered_cover_effects, aes(x = fg_richness_quad, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_cover_effects, aes(x = fg_richness_quad, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Macroalgal Cover\n", x = "Functional Richness", title = "3b.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+   
+
+#ggsave(filename = "output/figure_3b_quad_v2.png", figure_3b, height = 10, width = 14)
+```
+
+
+
+```{r figure 3e - setup dataframe site}
+
+#read in Noam's site cover data 
+
+alpha_div_site_macro <- read_csv(here("data", "alpha_diversity_site_macro_with_cover.csv"))
+
+#merge site level cover with site functional group richness
+
+site_cover_fg_richness <- merge(alpha_div_site_macro, fg_summary_site_wide, by = c("year", "site_habitat", "site"))
+
+#choose habitat column & rename from Noam's cover data
+
+site_cover_fg_richness_df <- site_cover_fg_richness %>%
+  select(-habitat.y) %>%
+  rename(habitat = habitat.x)
+
+```
+
+### fig 3e site functional richness mod 
+
+```{r site functional richness mod - fig3e}
+site_cover_mod_fg <- glmmTMB(cover_trans ~ fg_richness_site*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = site_cover_fg_richness_df)
+
+summary(site_cover_mod_fg)
+Anova(site_cover_mod_fg)
+
+#                           Chisq Df Pr(>Chisq)    
+#fg_richness_site         31.5959  1  1.898e-08 ***
+#habitat                   4.9665  3     0.1743    
+#fg_richness_site:habitat  4.3903  3     0.2223    
+
+
+hist(residuals(site_cover_mod_fg)) #looks bad
+plot(residuals(site_cover_mod_fg) ~ fitted(site_cover_mod_fg)) # a little heteroscedastic but can't be less than 0
+r.squaredGLMM(site_cover_mod_fg) # 0.1826, 0.5729
+emtrends(site_cover_mod_fg, pairwise ~ habitat, var = "fg_richness_site") # no difference between the habitats
+
+#step 1: linearity
+
+#flat and horizontal --> linearity 
+scatter.smooth(residuals(site_cover_mod_fg) ~ fitted(site_cover_mod_fg), col = "red")
+#scatter.smooth(resid(site_cover_mod_fg, type = 'pearson') ~ fitted(site_cover_mod_fg), col = "red")
+
+#looks good
+
+#step 2: homosketadicity.. 
+
+#standarized residualized 
+
+standard_mod3e <- (resid(site_cover_mod_fg, type = 'pearson')/sd(resid(site_cover_mod_fg, type = 'pearson')))
+
+#took sqrt
+#https://boostedml.com/2019/03/linear-regression-plots-scale-location-plot.html
+
+sqrt_residuals_mod3e <- sqrt(abs(standard_mod3e))
+
+#plotted against fitted 
+scatter.smooth(sqrt_residuals_mod3e ~ fitted(site_cover_mod_fg), col = "red")
+
+#this is ok 
+
+#tells us these are uniform
+plot(performance::simulate_residuals(site_cover_mod_fg))
+
+#looks okay?
+
+```
+
+
+### 3e plot setup
+```{r figure 3e setup }
+diversity_ranges_site <- site_cover_fg_richness_df %>%
+  group_by(habitat) %>%
+  summarise(min_fg_richness_site = min(fg_richness_site),
+            max_fg_richness_site = max(fg_richness_site),
+            min_cover= min(cover_trans),
+            max_cover = max(cover_trans))
+
+site_cover_emm <- emmip(site_cover_mod_fg,
+                        habitat ~ fg_richness_site,
+                        at = list(fg_richness_site = seq(0,17,1)), plotit = F, CIs = T)
+
+filtered_site_cover_effects <- site_cover_emm %>%
+  left_join(diversity_ranges_site, by = c("habitat")) %>%
+  filter(fg_richness_site >= min_fg_richness_site & fg_richness_site <= max_fg_richness_site)
+
+```
+
+
+### 3e plot
+
+```{r figure 3e plot }
+(figure_3e <- 
+  ggplot() +
+  geom_point(data = site_cover_fg_richness_df,
+             aes(x = fg_richness_site, y = cover_trans, colour = habitat), size = 1, alpha = 0.3) + 
+  geom_line(data = filtered_site_cover_effects, aes(x = fg_richness_site, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_site_cover_effects, aes(x = fg_richness_site, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Cover\n", x = "Functional Richness", title = "3e.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+#ggsave(filename = "output/figure_3e_v2.png", figure_3e, height = 10, width = 14)
+```
+#FIGURE 4
+
+#Stability Quad Level 
+
+```{r figure 4b stabililty quad level}
+#read in noam's stability data 
+stability_data <- read_csv(here("data", "diversity_stability_synchrony.csv"))
+
+#merge with fg data 
+stability_quad_level <- merge(fg_summary_wide_meta_through_time, stability_data, 
+                              by = 
+                                c("location","site"))
+
+#choose habitat column & rename from Noam's cover data
+
+stability_quad_level_df <- stability_quad_level %>%
+  select(-habitat.x) %>%
+  rename(habitat = habitat.y)
+
+#we lose 16 quads for this, 1184 instead of 1200 
+```
+
+```{r DSS - Stability}
+dss_ranges_fg <- stability_quad_level_df %>%
+  group_by(habitat) %>%
+  summarise(min_richness_fg = min(fg_richness_mean),
+            max_richness_fg = max(fg_richness_mean),
+            min_stability= min(cover_stability, na.rm = TRUE),
+            max_stability = max(cover_stability, na.rm = TRUE))
+```
+
+#figure 4b model
+```{r fig4b fg richness stability mod}
+
+rich_stab_mod_fg <- glmmTMB(cover_stability ~ fg_richness_mean*habitat + (1|site), family = Gamma(link = "log"), data = stability_quad_level_df)
+
+summary(rich_stab_mod_fg)
+car::Anova(rich_stab_mod_fg)
+
+#                            Chisq Df Pr(>Chisq)    
+#fg_richness_mean         3025.235  1  < 2.2e-16 ***
+#habitat                   122.635  3  < 2.2e-16 ***
+#fg_richness_mean:habitat   20.721  3  0.0001203 ***
+
+
+hist(residuals(rich_stab_mod_fg)) # ??
+plot(residuals(rich_stab_mod_fg) ~ fitted(rich_synch_mod_fg)) #ugh 
+r.squaredGLMM(rich_stab_mod_fg) # 0.815, 0.823
+emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "fg_richness_mean") 
+# backreef and fringing are different, fringing and outer10 are different, fringing and outer17 are different. (so, fringing is always differnt )
+
+
+#step 1: linearity
+
+#flat and horizontal --> linearity 
+scatter.smooth(residuals(rich_stab_mod_fg) ~ fitted(rich_stab_mod_fg), col = "red")
+#scatter.smooth(resid(site_cover_mod_fg, type = 'pearson') ~ fitted(site_cover_mod_fg), col = "red")
+
+#looks good
+
+#step 2: homosketadicity.. 
+
+#standarized residualized 
+
+standard_mod4b <- (resid(rich_stab_mod_fg, type = 'pearson')/sd(resid(rich_stab_mod_fg, type = 'pearson')))
+
+#took sqrt
+#https://boostedml.com/2019/03/linear-regression-plots-scale-location-plot.html
+
+sqrt_residuals_mod4b <- sqrt(abs(standard_mod4b))
+
+#plotted against fitted 
+scatter.smooth(sqrt_residuals_mod4b ~ fitted(rich_stab_mod_fg), col = "red")
+
+#this is ok 
+
+#tells us these are uniform
+plot(performance::simulate_residuals(rich_stab_mod_fg))
+
+#yay, looks good! 
+
+performance::check_model(rich_stab_mod_fg)
+
+
+
+```
+
+```{r figure 4b setup}
+rich_stab_emm_fg <- emmip(rich_stab_mod_fg,
+                        habitat ~ fg_richness_mean,
+                        at = list(fg_richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_rich_stab_effects_fg <- rich_stab_emm_fg %>%
+  left_join(dss_ranges_fg, by = c("habitat")) %>%
+  filter(fg_richness_mean >= min_richness_fg & fg_richness_mean <= max_richness_fg)
+```
+
+```{r}
+(figure_4b <- 
+  ggplot() +
+  geom_point(data = stability_quad_level_df,
+             aes(x = fg_richness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_rich_stab_effects_fg, aes(x = fg_richness_mean, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_rich_stab_effects_fg, aes(x = fg_richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Stability\n", x = "Functional Richness", title = "4b.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18),
+        plot.title = element_text(size=18),
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+#ggsave(filename = "output/figure_4b_v2.png", figure_4b, height = 10, width = 14)
+```
+
+```{r functional group -- stability site}
+
+stability_site <- read_csv(here("data", "diversity_stability_synchrony_site.csv"))
+#n = 24
+
+
+#need to get average functional richness through time! 
+fg_summary_site_wide_summary <- fg_summary_site_wide %>%
+  group_by(habitat, site, site_habitat) %>%
+  summarize(avg_richness_fg = mean(fg_richness_site),
+            se_richness_fg = sd(fg_richness_site)/sqrt(n()),
+            n = n())
+
+#n = 24! 
+
+
+stability_site_level_fg <- merge(stability_site, fg_summary_site_wide_summary, by = c("site_habitat", "site"))
+
+#need to remove my habitat column and rename Noam's 
+
+stability_site_level_fg_df <- stability_site_level_fg %>%
+  select(-habitat.y) %>%
+  rename(habitat = habitat.x)
+
+
+```
+
+```{r}
+dss_ranges_site_fg_stab <- stability_site_level_fg_df %>%
+  group_by(habitat) %>%
+  summarise(min_richness_fg = min(avg_richness_fg),
+            max_richness_fg = max(avg_richness_fg),
+            min_stability= min(cover_stability),
+            max_stability = max(cover_stability))
+```
+
+
+```{r fig 4e fg richness stability mod - site level }
+
+rich_stab_mod_site_fg <- glmmTMB(cover_stability~ avg_richness_fg*habitat, family = Gamma(link = "log"), data = stability_site_level_fg_df)
+summary(rich_stab_mod_site_fg)
+Anova(rich_stab_mod_site_fg)
+
+#                          Chisq Df Pr(>Chisq)   
+#avg_richness_fg          3.8463  1   0.049856 * 
+#habitat                 12.5935  3   0.005603 **
+#avg_richness_fg:habitat  7.8799  3   0.048560 * 
+
+hist(residuals(rich_stab_mod_site_fg)) # blocky but fine
+plot(residuals(rich_stab_mod_site_fg) ~ fitted(rich_stab_mod_site_fg)) # heteroskedastic - bring to group
+r.squaredGLMM(rich_stab_mod_site_fg) # 0.671
+emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "avg_richness_fg") 
+# forereef 10 and fringing are different 
+
+#step 1: linearity
+
+#flat and horizontal --> linearity 
+scatter.smooth(residuals(rich_stab_mod_site_fg) ~ fitted(rich_stab_mod_site_fg), col = "red")
+#scatter.smooth(resid(site_cover_mod_fg, type = 'pearson') ~ fitted(site_cover_mod_fg), col = "red")
+
+#looks good
+
+#step 2: homosketadicity.. 
+
+#standarized residualized 
+
+standard_mod4e <- (resid(rich_stab_mod_site_fg, type = 'pearson')/sd(resid(rich_stab_mod_site_fg, type = 'pearson')))
+
+#took sqrt
+#https://boostedml.com/2019/03/linear-regression-plots-scale-location-plot.html
+
+sqrt_residuals_mod4e <- sqrt(abs(standard_mod4e))
+
+#plotted against fitted 
+scatter.smooth(sqrt_residuals_mod4e ~ fitted(rich_stab_mod_site_fg), col = "red")
+
+#this is ok 
+
+#tells us these are uniform
+plot(performance::simulate_residuals(rich_stab_mod_site_fg))
+
+#yay, looks good! 
+
+performance::check_model(rich_stab_mod_site_fg)
+
+
+```
+
+```{r figure 4e setup}
+rich_stab_emm_site_fg <- emmip(rich_stab_mod_site_fg,
+                        habitat ~ avg_richness_fg,
+                        at = list(avg_richness_fg = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_rich_stab_effects_site <- rich_stab_emm_site_fg %>%
+  left_join(dss_ranges_site_fg_stab, by = c("habitat")) %>%
+  filter((avg_richness_fg >= min_richness_fg) & (avg_richness_fg <= max_richness_fg))
+
+```
+
+```{r figure 4e}
+(figure_4e <- 
+  ggplot() +
+  geom_point(data = stability_site_level_fg_df,
+             aes(x = avg_richness_fg, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_rich_stab_effects_site, aes(x = avg_richness_fg, y = exp(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_rich_stab_effects_site, aes(x = avg_richness_fg, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Stability\n", x = "Functional Richness", title = "4e.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=18), 
+        axis.title.y = element_text(size=18), 
+        plot.title = element_text(size=18), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+#ggsave(filename = "output/figure_4e_v2.png", figure_4e, height = 10, width = 14)
+```
+
+
+#STOP HERE
+
+
