@@ -26,6 +26,7 @@ library(nlme)
 library(mgcv)
 library(emmeans)
 library(dplyr)
+library(janitor)
 ```
 
 ## Functions
@@ -462,38 +463,8 @@ emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not differe
 ```
 
 
-### site richness
-```{r site richness mod}
-site_cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover)
-summary(site_cover_mod)
-Anova(site_cover_mod)
-#                    Chisq Df Pr(>Chisq)    
-# richness         58.9195  1  1.643e-14 ***
-# habitat           6.6247  3    0.08487 .  
-# richness:habitat  3.2967  3    0.34811    
-hist(residuals(site_cover_mod)) # some positive skew, not the worst thing ever
-plot(residuals(site_cover_mod) ~ fitted(site_cover_mod)) # a little heteroscedastic but can't be less than 0
-r.squaredGLMM(site_cover_mod) # 0.2212534, 0.5990825
-emtrends(site_cover_mod, pairwise ~ habitat, var = "richness") # no difference between the habitats
-```
 
-### site evenness 
-```{r site level evenness}
-alpha_diversity_site_macro_with_cover_evenness_mod <- alpha_diversity_site_macro_with_cover %>% 
-  drop_na(evenness)
 
-evenness_site_cover_mod <- glmmTMB(cover_trans ~ evenness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover_evenness_mod)
-summary(evenness_site_cover_mod)
-Anova(evenness_site_cover_mod)
-#                    Chisq Df Pr(>Chisq)    
-# richness         58.9195  1  1.643e-14 ***
-# habitat           6.6247  3    0.08487 .  
-# richness:habitat  3.2967  3    0.34811    
-hist(residuals(evenness_site_cover_mod)) # some positive skew, not the worst thing ever
-plot(residuals(evenness_site_cover_mod) ~ fitted(evenness_site_cover_mod)) # a little heteroscedastic but can't be less than 0
-r.squaredGLMM(evenness_site_cover_mod) #0.1206569, 0.5852773
-emtrends(evenness_site_cover_mod, pairwise ~ habitat, var = "evenness") # only the outers are different from each other
-```
 
 ## figure 3a plot setup
 ```{r figure 3a setup}
@@ -554,7 +525,175 @@ filtered_cover_effects <- cover_emm %>%
 # ggsave(filename = "output/figure_3a.png", figure_3a, height = 10, width = 14)
 ```
 
+## Figure 3b - functional groups
 
+### Setup
+```{r read and prep functional group data}
+algae_fg_raw2 <- read_csv(here("data","algae_functional_groupings_092724.csv"))
+
+
+#clean column names
+algae_fg <- algae_fg_raw2 %>%
+  janitor::clean_names()
+
+#change species names to be lowercase & have underscore 
+algae_fg$species <- gsub(" ", "_", tolower(algae_fg$species))
+algae_fg$morphology <- trimws(algae_fg$morphology)
+algae_fg$morphology <- gsub(" ", "_", algae_fg$morphology)
+
+#rename species column to taxa
+
+algae_fg <- algae_fg %>%
+  select(species, morphology) %>%
+  dplyr::rename(taxa = species) %>%
+   dplyr::rename(functional_group = morphology)
+ 
+unique(algae_fg$functional_group)
+
+#merge functional groups with 
+macro_functional_groups <- merge(macro_long_data, algae_fg, all.x = TRUE)
+
+taxa_sum_check <- macro_functional_groups %>%
+  group_by(location, year) %>%
+  summarise(sum_macrocover = sum(prop_cover))
+
+macro_functional_groups %>%
+  filter(location == "lter_2_backreef_algae_transect_1_quad_1") %>%
+  filter(year == "2022")
+
+#summarizing functional groups at the quad level
+fg_summary <- macro_functional_groups %>%
+  group_by(location, year, functional_group, habitat, site) %>%
+  summarise(sum_fg_cover = sum(prop_cover))
+
+max(fg_summary$sum_fg_cover)
+
+#summarizing functional groups at the site level
+#NOTE that this is ADDED and not averaged. This data is only used to find richness at the site level. LE did this as adding and as a sum, both end up the same from a richness perspective. 
+fg_summary_site_SUM <- macro_functional_groups %>%
+  group_by(site, year, habitat, functional_group) %>%
+  summarise(sum_fg_cover = sum(prop_cover))
+
+#don't need to use this, was just to check both methods
+#fg_summary_site_AVG <- macro_functional_groups %>%
+  #group_by(site, year, habitat, functional_group) %>%
+  #summarise(mean_fg_cover = mean(prop_cover))
+
+#fg_summary %>%
+  #filter(sum_fg_cover==1)
+
+
+#QAQC
+fg_summary_qaqc <- macro_functional_groups %>%
+  group_by(location, year, functional_group) %>%
+  summarise(sum_fg_cover = sum(prop_cover))
+
+fg_qaqc <- fg_summary_qaqc %>%
+  group_by(location, year) %>%
+  summarise(sum_fg_check = sum(sum_fg_cover))
+  
+check_them <- merge(taxa_sum_check, fg_qaqc)
+
+check_them %>%
+  filter(all.equal(sum_macrocover, sum_fg_check) != TRUE)
+
+#pivot wide at quad level
+fg_summary_wide <- fg_summary %>%
+  pivot_wider(names_from = "functional_group", values_from = "sum_fg_cover")
+
+#richness at every quad/year combination 
+fg_summary_wide$fg_richness_quad <- vegan::specnumber(fg_summary_wide[5:14])
+
+unique(fg_summary_wide$fg_richness_quad)
+#0 to 4
+
+##### REPEAT AT SITE LEVEL
+#pivot wide at site level
+fg_summary_site_wide_SUM <- fg_summary_site_SUM %>%
+  pivot_wider(names_from = "functional_group", values_from = "sum_fg_cover")
+  
+#richness at every site/year combination ---> NOT AVERAGED,
+fg_summary_site_wide_SUM$fg_richness_site <- vegan::specnumber(fg_summary_site_wide_SUM[4:13])
+
+fg_summary_site_wide <- fg_summary_site_wide_SUM %>%
+   mutate(site_habitat = paste(site, habitat, sep = "_"))
+```
+
+### model
+```{r functional richness cover mod quad}
+#merge Noam's data with functional group summary 
+functional_richness_quad_cover <- merge(alpha_diversity_quad_macro_with_cover, fg_summary_wide,
+                                        by = c("location", "year", "site", "habitat"))
+
+cover_mod_fg <- glmmTMB(cover_trans ~ fg_richness_quad*habitat + (1|site/location) + (1|year), data = functional_richness_quad_cover)
+
+
+summary(cover_mod_fg)
+car::Anova(cover_mod_fg)
+#                              Chisq Df Pr(>Chisq)    
+# fg_richness_quad         10323.133  1  < 2.2e-16 ***
+# habitat                     87.166  3  < 2.2e-16 ***
+# fg_richness_quad:habitat    77.758  3  < 2.2e-16 ***
+hist(residuals(cover_mod_fg)) # a little positive skew, not the worst
+
+r.squaredGLMM(cover_mod_fg) # 0.39, 0.51
+emtrends(cover_mod_fg, pairwise ~ habitat, var = "fg_richness_quad") 
+#all habitats are different from forereef 17
+
+```
+
+## figure 3b plot setup
+```{r figure 3b setup}
+diversity_ranges_quad_fg <- functional_richness_quad_cover %>%
+  group_by(habitat) %>%
+  summarise(min_fg_richness_quad = min(fg_richness_quad),
+            max_fg_richness_quad = max(fg_richness_quad),
+            min_cover= min(cover_trans),
+            max_cover = max(cover_trans))
+
+cover_emm <- emmip(cover_mod_fg,
+                        habitat ~ fg_richness_quad,
+                        at = list(fg_richness_quad = seq(0,10,1)), plotit = F, CIs = T)
+
+filtered_cover_effects <- cover_emm %>%
+  left_join(diversity_ranges_quad_fg, by = c("habitat")) %>%
+  filter(fg_richness_quad >= min_fg_richness_quad & fg_richness_quad <= max_fg_richness_quad)
+
+```
+
+## figure 3b plot
+
+```{r figure 3b plot}
+(figure_3b <- 
+  ggplot() +
+  geom_point(data = functional_richness_quad_cover,
+             aes(x = fg_richness_quad, y = cover_trans, colour = habitat), size = 1, alpha = 0.005) + 
+  geom_line(data = filtered_cover_effects, aes(x = fg_richness_quad, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_cover_effects, aes(x = fg_richness_quad, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "", x = "Functional Richness", title = "3b.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=24), 
+        axis.title.y = element_text(size=24), 
+        axis.text.x = element_text(size=22), 
+        axis.text.y = element_text(size=22),
+        legend.text = element_text(size=22),
+        plot.title = element_text(size=26), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+   
+
+#ggsave(filename = "output/figure_3b_quad_v2.png", figure_3b, height = 10, width = 14)
+```
 
 ## Figure 3c
 
@@ -719,6 +858,21 @@ dss_ranges_site <- diversity_stability_synchrony_site %>%
 ```
 
 ## Figure 3d site level richness versus cover
+
+### model at site level
+```{r site richness mod}
+site_cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover)
+summary(site_cover_mod)
+Anova(site_cover_mod)
+#                    Chisq Df Pr(>Chisq)    
+# richness         58.9195  1  1.643e-14 ***
+# habitat           6.6247  3    0.08487 .  
+# richness:habitat  3.2967  3    0.34811    
+hist(residuals(site_cover_mod)) # some positive skew, not the worst thing ever
+plot(residuals(site_cover_mod) ~ fitted(site_cover_mod)) # a little heteroscedastic but can't be less than 0
+r.squaredGLMM(site_cover_mod) # 0.2212534, 0.5990825
+emtrends(site_cover_mod, pairwise ~ habitat, var = "richness") # no difference between the habitats
+```
 
 ### setup
 ```{r site richness cover setup}
@@ -957,6 +1111,20 @@ filtered_rich_stab_effects <- rich_stab_emm %>%
 #          )
 # 
 # ggsave(filename = "output/figure_4a_with_no_hab.png", figure_4a_no_hab, height = 10, width = 14)
+```
+
+## Figure 4b - functional group richness stability
+### Setup
+```{r functional richness through time at quad level}
+fg_summary_wide_meta <- merge(fg_summary_wide, meta_df, by = c("location", "site", "habitat", "year") )
+fg_summary_wide_meta_through_time <- fg_summary_wide_meta %>%
+  group_by(location, habitat, site) %>%
+  summarise(fg_richness_mean = mean(fg_richness_quad),
+            fg_richness_se = sd(fg_richness_quad)/n())
+
+#each quad only has ONE value, averaged through time 
+#1200 quads in this data set
+#this is used in figure 4 things
 ```
 
 ## figure 4c 
@@ -1331,6 +1499,25 @@ filtered_cover_effects_evenness <- cover_emm_evenness %>%
 ## site level evenness versus cover
 
 ### model
+
+
+### site evenness 
+```{r site level evenness}
+alpha_diversity_site_macro_with_cover_evenness_mod <- alpha_diversity_site_macro_with_cover %>% 
+  drop_na(evenness)
+
+evenness_site_cover_mod <- glmmTMB(cover_trans ~ evenness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover_evenness_mod)
+summary(evenness_site_cover_mod)
+Anova(evenness_site_cover_mod)
+#                    Chisq Df Pr(>Chisq)    
+# richness         58.9195  1  1.643e-14 ***
+# habitat           6.6247  3    0.08487 .  
+# richness:habitat  3.2967  3    0.34811    
+hist(residuals(evenness_site_cover_mod)) # some positive skew, not the worst thing ever
+plot(residuals(evenness_site_cover_mod) ~ fitted(evenness_site_cover_mod)) # a little heteroscedastic but can't be less than 0
+r.squaredGLMM(evenness_site_cover_mod) #0.1206569, 0.5852773
+emtrends(evenness_site_cover_mod, pairwise ~ habitat, var = "evenness") # only the outers are different from each other
+```
 
 ```{r evenness cover model site level}
 evenness_cover_mod_site <- glmmTMB(cover_trans ~ evenness*habitat + (1|site) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover_evenness_mod)
