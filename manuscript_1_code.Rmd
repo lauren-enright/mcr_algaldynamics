@@ -1206,6 +1206,83 @@ fg_summary_wide_meta_through_time <- fg_summary_wide_meta %>%
 #each quad only has ONE value, averaged through time 
 #1200 quads in this data set
 #this is used in figure 4 things
+
+#merge with fg data 
+fg_stability_quad_level <- merge(fg_summary_wide_meta_through_time, diversity_stability_synchrony, 
+                              by = 
+                                c("location","site", "habitat"))
+
+dss_ranges_fg <- fg_stability_quad_level %>%
+  group_by(habitat) %>%
+  summarise(min_richness_fg = min(fg_richness_mean),
+            max_richness_fg = max(fg_richness_mean),
+            min_stability= min(cover_stability, na.rm = TRUE),
+            max_stability = max(cover_stability, na.rm = TRUE))
+```
+
+### figure 4b model
+```{r fig4b fg richness stability mod}
+
+rich_stab_mod_fg <- glmmTMB(cover_stability ~ fg_richness_mean*habitat + (1|site), family = Gamma(link = "log"), data = fg_stability_quad_level)
+
+summary(rich_stab_mod_fg)
+car::Anova(rich_stab_mod_fg)
+
+#                             Chisq Df Pr(>Chisq)    
+# fg_richness_mean         3079.229  1  < 2.2e-16 ***
+# habitat                   118.605  3  < 2.2e-16 ***
+# fg_richness_mean:habitat   25.692  3  1.107e-05 ***
+
+
+hist(residuals(rich_stab_mod_fg)) # looks fine
+plot(residuals(rich_stab_mod_fg) ~ fitted(rich_stab_mod_fg)) # same as usual 
+r.squaredGLMM(rich_stab_mod_fg) # 0.819, 0.828
+emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "fg_richness_mean") 
+#  fringing different from all others
+
+
+```
+```{r figure 4b plot setup}
+rich_stab_emm_fg <- emmip(rich_stab_mod_fg,
+                        habitat ~ fg_richness_mean,
+                        at = list(fg_richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_rich_stab_effects_fg <- rich_stab_emm_fg %>%
+  left_join(dss_ranges_fg, by = c("habitat")) %>%
+  filter(fg_richness_mean >= min_richness_fg & fg_richness_mean <= max_richness_fg)
+```
+
+### plot fig 4b
+
+```{r plot figure 4b}
+(figure_4b <- 
+  ggplot() +
+  geom_point(data = fg_stability_quad_level,
+             aes(x = fg_richness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_rich_stab_effects_fg, aes(x = fg_richness_mean, y = exp(yvar), colour = habitat), size = 1.5) +
+  geom_ribbon(data = filtered_rich_stab_effects_fg, aes(x = fg_richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "", x = "", title = "4b.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=24), 
+        axis.title.y = element_text(size=24), 
+        axis.text.x = element_text(size=22), 
+        axis.text.y = element_text(size=22),
+        legend.text = element_text(size=22),
+        plot.title = element_text(size=26), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+#ggsave(filename = "output/figure_4b_v2.png", figure_4b, height = 10, width = 14)
 ```
 
 ## figure 4c 
@@ -1330,6 +1407,94 @@ filtered_rich_stab_effects_site <- rich_stab_emm_site %>%
 # ggsave(filename = "output/figure_4d.png", figure_4d, height = 10, width = 14)
 ```
 
+## figure 4e
+
+### setup and model
+
+```{r functional group -- stability site}
+
+
+#need to get average functional richness through time! 
+fg_summary_site_wide_summary <- fg_summary_site_wide %>%
+  group_by(habitat, site) %>%
+  summarize(avg_richness_fg = mean(fg_richness_site),
+            se_richness_fg = sd(fg_richness_site)/sqrt(n()))
+
+#n = 24! 
+
+# merge
+stability_site_level_fg <- merge(diversity_stability_synchrony_site, fg_summary_site_wide_summary, by = c("site", "habitat"))
+
+# extract relevant ranges for plotting
+dss_ranges_site_fg_stab <- stability_site_level_fg %>%
+  group_by(habitat) %>%
+  summarise(min_richness_fg = min(avg_richness_fg),
+            max_richness_fg = max(avg_richness_fg),
+            min_stability= min(cover_stability),
+            max_stability = max(cover_stability))
+
+
+
+rich_stab_mod_site_fg <- glmmTMB(cover_stability~ avg_richness_fg*habitat, family = Gamma(link = "log"), data = stability_site_level_fg)
+summary(rich_stab_mod_site_fg)
+Anova(rich_stab_mod_site_fg)
+
+#                           Chisq Df Pr(>Chisq)   
+# avg_richness_fg          3.4019  1   0.065122 . 
+# habitat                 12.8194  3   0.005044 **
+# avg_richness_fg:habitat  7.9921  3   0.046176 * 
+
+hist(residuals(rich_stab_mod_site_fg)) # blocky but fine
+plot(residuals(rich_stab_mod_site_fg) ~ fitted(rich_stab_mod_site_fg)) # heteroskedastic
+r.squaredGLMM(rich_stab_mod_site_fg) # 0.563
+emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "avg_richness_fg") 
+# Fringing different from outer 10
+
+```
+
+```{r figure 4e setup}
+rich_stab_emm_site_fg <- emmip(rich_stab_mod_site_fg,
+                        habitat ~ avg_richness_fg,
+                        at = list(avg_richness_fg = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_rich_stab_effects_site <- rich_stab_emm_site_fg %>%
+  left_join(dss_ranges_site_fg_stab, by = c("habitat")) %>%
+  filter((avg_richness_fg >= min_richness_fg) & (avg_richness_fg <= max_richness_fg))
+
+```
+
+### plot figure 4e
+
+```{r figure 4e}
+(figure_4e <- 
+  ggplot() +
+  geom_point(data = stability_site_level_fg,
+             aes(x = avg_richness_fg, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_rich_stab_effects_site, aes(x = avg_richness_fg, y = exp(yvar), colour = habitat), size = 1.5) +
+  geom_ribbon(data = filtered_rich_stab_effects_site, aes(x = avg_richness_fg, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "", x = "Functional Richness", title = "4e.") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=24), 
+        axis.title.y = element_text(size=24), 
+        axis.text.x = element_text(size=22), 
+        axis.text.y = element_text(size=22),
+        legend.text = element_text(size=22),
+        plot.title = element_text(size=26), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+#ggsave(filename = "output/figure_4e_v2.png", figure_4e, height = 10, width = 14)
+```
 
 ## figure 4f
 
@@ -1393,17 +1558,17 @@ filtered_synch_stab_effects_site <- synch_stab_emm_site %>%
 
 
 ## Figure 4 Full Plot
-```{r ggpubr fig4}
-fig4_plot_list <- list(figure_4a, figure_4c, figure_4d, figure_4f)
-figure_4 <- ggarrange(plotlist = fig4_plot_list, 
-                      ncol = 2, nrow = 2, 
-                      labels = c("a.", "b."),
+```{r ggpubr fig4, fig.height = 8, fig.width=16}
+
+(figure_4 <- ggarrange(figure_4a, figure_4b, figure_4c, figure_4d, figure_4e, figure_4f, 
+                      ncol = 3, nrow = 2, 
                       common.legend = TRUE,
                       legend = "bottom", 
-                      font.label = list(size = 20, color = "black", face = "plain"))
+                      font.label = list(size = 20, color = "black", face = "plain")))
 
-#ggsave(filename = "output/figure_4.png", figure_4, height = 10, width = 20)
+# ggsave(filename = "output/figure_4.png", figure_4, height = 8, width = 16)
 ```
+
 
 
 # SUPPLEMENTAL FIGURE CODE:
