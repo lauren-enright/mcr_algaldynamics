@@ -617,18 +617,18 @@ fg_summary_site_wide <- fg_summary_site_wide_SUM
 functional_richness_quad_cover <- merge(alpha_diversity_quad_macro_with_cover, fg_summary_wide,
                                         by = c("location", "year", "site", "habitat"))
 
-cover_mod_fg <- glmmTMB(cover_trans ~ fg_richness_quad*habitat + (1|site/location) + (1|year), data = functional_richness_quad_cover)
+cover_mod_fg <- glmmTMB(cover_trans ~ fg_richness_quad*habitat + (1|site/location) + (1|year), family = beta_family(), data = functional_richness_quad_cover)
 
 
 summary(cover_mod_fg)
 car::Anova(cover_mod_fg)
 #                              Chisq Df Pr(>Chisq)    
-# fg_richness_quad         10323.133  1  < 2.2e-16 ***
-# habitat                     87.166  3  < 2.2e-16 ***
-# fg_richness_quad:habitat    77.758  3  < 2.2e-16 ***
-hist(residuals(cover_mod_fg)) # a little positive skew, not the worst
+# fg_richness_quad         31341.052  1  < 2.2e-16 ***
+# habitat                     49.887  3  8.444e-11 ***
+# fg_richness_quad:habitat   447.780  3  < 2.2e-16 ***
+hist(residuals(cover_mod_fg)) # good
 
-r.squaredGLMM(cover_mod_fg) # 0.39, 0.51
+r.squaredGLMM(cover_mod_fg) # 0.64, 0.65
 emtrends(cover_mod_fg, pairwise ~ habitat, var = "fg_richness_quad") 
 #all habitats are different from forereef 17
 
