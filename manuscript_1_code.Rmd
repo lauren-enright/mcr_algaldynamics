@@ -1665,8 +1665,8 @@ dss_spatial_2 <- merge(dss_spatial, mean_synchrony, by = c("habitat", "site"))
 
 dss_spatial_ranges <- dss_spatial_2 %>%
   group_by(habitat) %>%
-  summarise(min_spatial_synchrony = min(dss_spatial_2$spatial_synchrony, na.rm = TRUE),
-            max_spatial_synchrony = max(dss_spatial_2$spatial_synchrony, na.rm = TRUE),
+  summarise(min_spatial_synchrony = min(spatial_synchrony, na.rm = TRUE),
+            max_spatial_synchrony = max(spatial_synchrony, na.rm = TRUE),
             min_mean_synchrony= min(synchrony_mean, na.rm = TRUE),
             max_mean_synchrony = max(synchrony_mean, na.rm  = TRUE))
   
@@ -1694,6 +1694,7 @@ emtrends(spatial_synchrony_mod, pairwise ~ habitat, var = "spatial_synchrony") #
 # Backreef - Forereef 17m        2.708 1.095 Inf   2.472  0.0644
 # Forereef 10m - Forereef 17m    1.747 1.078 Inf   1.621  0.3668
 ```
+
 ```{r plot spatial synchrony}
 spat_stab_emm <- emmip(spatial_synchrony_mod,
                         habitat ~ spatial_synchrony,
@@ -1733,6 +1734,7 @@ filtered_spat_stab_effects <- spat_stab_emm %>%
          )
 
 ```
+
 ```{r mean synchrony}
 mean_synchrony_mod <- glmmTMB(cover_stability ~ synchrony_mean*habitat, family = Gamma("log"), data = dss_spatial_2)
 hist(residuals(mean_synchrony_mod)) # chunky
