@@ -27,6 +27,7 @@ library(mgcv)
 library(emmeans)
 library(dplyr)
 library(janitor)
+library(knitr)
 ```
 
 ## Functions
@@ -37,9 +38,10 @@ source("R/functions.R")
 ## Figure formatting
 ```{r figure formatting info}
 mytheme <- theme_bw() + 
-  theme(axis.title.x = element_text(size=18), 
+  theme(axis.title.x = element_text(size=24), 
         axis.text.x = element_text(angle = 45, hjust = 1),
-        axis.title.y = element_text(size=18), 
+        axis.title.y = element_text(size=24), 
+        plot.title = element_text(size = 24),
         panel.background = element_rect(fill = "white"), 
         panel.grid.major = element_blank(),  #remove major-grid labels
         panel.grid.minor = element_blank(),  #remove minor-grid labels
@@ -103,6 +105,17 @@ meta_df <- algae[,which(names(algae) %in% meta_cols)]
 algae_species_cols <- algae[,-which(names(algae) %in% meta_cols)]
 
 macro_species_cols <- macroalgae[,-which(names(macroalgae) %in% meta_cols)]
+
+# make er long
+macro_long_data <- pivot_longer(
+  data = macroalgae,
+  cols = grep("acanthophora_spicifera", colnames(macroalgae)):grep("valonia_ventricosa", colnames(macroalgae)),
+  names_to = "taxa",
+  values_to = "percent_cover") %>% 
+  mutate(prop_cover = percent_cover/100) %>% 
+  select(-percent_cover)
+
+# write_csv(macro_long_data, here("Data", "macro_long_data.csv"))
 ```
 
 
@@ -115,7 +128,7 @@ site_meta_cols <- c("year", "site", "habitat", "site_habitat")
 site_meta_df <- site_macro[,which(names(site_macro) %in% meta_cols)]
 ```
 
-# Figure 1
+# Figure 1 - benthic cover trends among habitats
 
 ## setup
 
@@ -217,7 +230,7 @@ figure_1_data <- subset(cover_long, functional_group != "Sand" & functional_grou
 ```
 
 ## plot after aes changes
-```{r Figure 1 v2}
+```{r Figure 1 v2, fig.height = 10, fig.width=14}
 plot_list <- lapply(levels(figure_1_data$habitat), function(hab) {
   ggplot(data = subset(figure_1_data, habitat == hab)) +
     geom_point(aes(x = year, y = percent_cover, colour = functional_group), size = 3) +
@@ -236,22 +249,22 @@ plot_list <- lapply(levels(figure_1_data$habitat), function(hab) {
     mytheme
 })
 
-figure_1 <- ggarrange(plotlist = plot_list, 
+(figure_1 <- ggarrange(plotlist = plot_list, 
                       ncol = 2, nrow = 2, 
                       labels = c("a.", "b.", "c.", "d."),
                       common.legend = TRUE,
                       legend = "bottom", 
-                      font.label = list(size = 20, color = "black", face = "plain"))
+                      font.label = list(size = 24, color = "black", face = "plain")))
 # 
 # figure_1_caption <- "Figure 1. Benthic coverage of four major space holders in Moorea across four habitats (Fringing, Backreef, Forereef at 10m depth, Forereef  at 17m depth). Annual fluctuations in percent cover of macroalgae, coral, turf, and crustose coralline algae (CCA) are displayed as points for the average cover for each benthic group across sites at each habitat with lines showing standard error. Dotted lines show disturbance events for Cyclone Oli (2010) in black, and the 2019 bleaching event in red, and the gray horizontal line shows crown of thorns (COTs) outbreak which occurred from 2007-2010."
 # 
 # figure_1_with_caption <- annotate_figure(figure_1,
 #                 bottom = text_grob(figure_1_caption, hjust = 0.5, vjust = 1, size = 10))
 
-#ggsave(filename = "output/figure_1v2.png", figure_1, height = 10, width = 14)
+# ggsave(filename = "output/figure_1v3.png", figure_1, height = 10, width = 14)
 ```
 
-# Figure 2
+# Figure 2 - macroalgal richness trends among habitats
 
 ## Create Data Frames
 ```{r create data for figure 2 quad}
@@ -315,10 +328,11 @@ alpha_diversity_site_macro$evenness <- ifelse(
 alpha_diversity_site_macro <- left_join(site_meta_df, alpha_diversity_site_macro,by = join_by(year, site, habitat, site_habitat))
 ```
 
-```{r}
-macroalgal_cover <- cover_df[,c("year", "habitat", "site", "location", "macroalgae")]
+```{r add cover to quad df}
+macroalgal_cover_quad <- cover_df[,c("year", "habitat", "site", "location", "macroalgae")]
 
-alpha_diversity_quad_macro_with_cover <- left_join(alpha_diversity_quad_macro, macroalgal_cover,by = join_by(location, year, site, habitat)) %>% 
+alpha_diversity_quad_macro <-
+  left_join(alpha_diversity_quad_macro, macroalgal_cover_quad,by = join_by(location, year, site, habitat)) %>% 
   mutate(macroalgal_prop_cover = macroalgae / 100) %>% 
   select(-macroalgae)
 ```
@@ -352,7 +366,7 @@ quad_richness_df <- alpha_diversity_quad_macro %>%
    scale_x_continuous(breaks = unique(quad_richness_df$year)) +
    labs(y = "Macroalgal Richness",
         x = "Year",
-        title = "a. Quadrat-level Richness") +
+        title = "Quadrat-level Richness") +
   theme_bw() + 
   mytheme +
    theme(axis.text.x = element_text(size=20),
@@ -396,7 +410,7 @@ site_richness_df <- alpha_diversity_site_macro %>%
    scale_x_continuous(breaks = unique(site_richness_df$year)) +
    labs(y = "",
         x = "Year",
-        title = "b. Site-level Richness") +
+        title = "Site-level Richness") +
   mytheme +
    theme(axis.text.x = element_text(size=20),
          axis.title.x = element_text(size=22),
@@ -414,42 +428,27 @@ site_richness_df <- alpha_diversity_site_macro %>%
 fig2_plot_list <- list(figure_2a, figure_2b)
 (figure_2 <- ggarrange(plotlist = fig2_plot_list, 
                       ncol = 2, nrow = 1, 
+                      labels = c("a.", "b."),
                       common.legend = TRUE,
                       legend = "bottom", 
-                      font.label = list(size = 20, color = "black", face = "plain")))
+                      font.label = list(size = 24, color = "black", face = "plain")))
 
-# ggsave(filename = "output/figure_2v2.png", figure_2, height = 10, width = 22)
+# ggsave(filename = "output/figure_2v3.png", figure_2, height = 10, width = 22)
 ```
 
 
-# Figure 3
+# Figure 3 - ecosystem function
 
-## set up site-level data for model
-```{r site cover by diversity data setup}
-# alpha_diversity_site_macro_with_cover <- alpha_diversity_site_macro %>% 
-#   dplyr::mutate(percent_cover = rowSums(site_macro[,-which(names(site_macro)  %in% colnames(site_meta_df))])) %>% 
-#   mutate(prop_cover = percent_cover / 100) %>% 
-#   select(-percent_cover) %>% 
-#   mutate(cover_trans = sv_trans(prop_cover))
 
-#there is no reasonable reason why the above chunk doesn't work, but it doesn't, so we did it this way
-alpha_diversity_site_macro$percent_cover <- rowSums(site_macro[,-which(names(site_macro)  %in% colnames(site_meta_df))]) 
-
-alpha_diversity_site_macro_with_cover <- alpha_diversity_site_macro %>% 
-  dplyr::mutate(prop_cover = percent_cover / 100) %>%
-  select(-percent_cover)
-  
-alpha_diversity_site_macro_with_cover$cover_trans <- sv_trans(alpha_diversity_site_macro_with_cover$prop_cover)
-```
 
 
 ## models
 
 ### quad
 ```{r figure 3a richness quad model}
-alpha_diversity_quad_macro_with_cover$cover_trans <- sv_trans(alpha_diversity_quad_macro_with_cover$macroalgal_prop_cover)
+alpha_diversity_quad_macro$cover_trans <- sv_trans(alpha_diversity_quad_macro$macroalgal_prop_cover)
 
-cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro_with_cover)
+cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro)
 summary(cover_mod)
 Anova(cover_mod)
 #                     Chisq Df Pr(>Chisq)    
@@ -460,6 +459,13 @@ hist(residuals(cover_mod)) # looks fine
 plot(residuals(cover_mod) ~ fitted(cover_mod)) # negative trend but it can't be less than 0 so not too concerned. some wave pattern
 r.squaredGLMM(cover_mod) # 0.631, 0.650
 emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not different from forereef, forereef also not different
+# contrast                    estimate     SE  df z.ratio p.value
+# Fringing - Backreef          0.34720 0.0241 Inf  14.409  <.0001
+# Fringing - Forereef 10m      0.34865 0.0240 Inf  14.514  <.0001
+# Fringing - Forereef 17m      0.38953 0.0250 Inf  15.599  <.0001
+# Backreef - Forereef 10m      0.00144 0.0205 Inf   0.071  0.9999
+# Backreef - Forereef 17m      0.04232 0.0214 Inf   1.979  0.1957
+# Forereef 10m - Forereef 17m  0.04088 0.0209 Inf   1.952  0.2063
 ```
 
 
@@ -468,7 +474,7 @@ emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not differe
 
 ## figure 3a plot setup
 ```{r figure 3a setup}
-diversity_ranges_quad <- alpha_diversity_quad_macro_with_cover %>%
+diversity_ranges_quad <- alpha_diversity_quad_macro %>%
   group_by(habitat) %>%
   summarise(min_richness = min(richness),
             max_richness = max(richness),
@@ -483,14 +489,6 @@ filtered_cover_effects <- cover_emm %>%
   left_join(diversity_ranges_quad, by = c("habitat")) %>%
   filter(richness >= min_richness & richness <= max_richness)
 
-# alpha_diversity_quad_macro_with_cover$habitat <- factor(alpha_diversity_quad_macro_with_cover$habitat, 
-#                              levels = c("fringing", "backreef", "outer_10","outer_17"),
-#                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
-# 
-# 
-# filtered_cover_effects$habitat <- factor(filtered_cover_effects$habitat, 
-#                              levels = c("fringing", "backreef", "outer_10","outer_17"),
-#                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
 ```
 
 ## figure 3a quad level richness versus cover
@@ -498,14 +496,14 @@ filtered_cover_effects <- cover_emm %>%
 ```{r figure 3a plot}
 (figure_3a <- 
   ggplot() +
-  geom_point(data = alpha_diversity_quad_macro_with_cover,
+  geom_point(data = alpha_diversity_quad_macro,
              aes(x = richness, y = cover_trans, colour = habitat), size = 1, alpha = 0.005) + 
   geom_line(data = filtered_cover_effects, aes(x = richness, y = inv_logit(yvar), colour = habitat)) +
   geom_ribbon(data = filtered_cover_effects, aes(x = richness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
               alpha = 0.5) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Cover\n", x = "", title = "3a.") +
+  labs(y = "Cover\n", x = "", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -550,7 +548,7 @@ algae_fg <- algae_fg %>%
  
 unique(algae_fg$functional_group)
 
-#merge functional groups with 
+#merge functional groups  
 macro_functional_groups <- merge(macro_long_data, algae_fg, all.x = TRUE)
 
 taxa_sum_check <- macro_functional_groups %>%
@@ -614,7 +612,7 @@ fg_summary_site_wide <- fg_summary_site_wide_SUM
 ### model
 ```{r functional richness cover mod quad}
 #merge Noam's data with functional group summary 
-functional_richness_quad_cover <- merge(alpha_diversity_quad_macro_with_cover, fg_summary_wide,
+functional_richness_quad_cover <- merge(alpha_diversity_quad_macro, fg_summary_wide,
                                         by = c("location", "year", "site", "habitat"))
 
 cover_mod_fg <- glmmTMB(cover_trans ~ fg_richness_quad*habitat + (1|site/location) + (1|year), family = beta_family(), data = functional_richness_quad_cover)
@@ -630,7 +628,15 @@ hist(residuals(cover_mod_fg)) # good
 
 r.squaredGLMM(cover_mod_fg) # 0.64, 0.65
 emtrends(cover_mod_fg, pairwise ~ habitat, var = "fg_richness_quad") 
-#all habitats are different from forereef 17
+# contrast                    estimate     SE  df z.ratio p.value
+# Fringing - Backreef            0.214 0.0266 Inf   8.051  <.0001
+# Fringing - Forereef 10m        0.346 0.0261 Inf  13.252  <.0001
+# Fringing - Forereef 17m        0.530 0.0262 Inf  20.244  <.0001
+# Backreef - Forereef 10m        0.132 0.0231 Inf   5.708  <.0001
+# Backreef - Forereef 17m        0.316 0.0232 Inf  13.617  <.0001
+# Forereef 10m - Forereef 17m    0.184 0.0223 Inf   8.241  <.0001
+
+
 
 ```
 
@@ -643,11 +649,11 @@ diversity_ranges_quad_fg <- functional_richness_quad_cover %>%
             min_cover= min(cover_trans),
             max_cover = max(cover_trans))
 
-cover_emm <- emmip(cover_mod_fg,
+cover_emm_fg <- emmip(cover_mod_fg,
                         habitat ~ fg_richness_quad,
                         at = list(fg_richness_quad = seq(0,10,1)), plotit = F, CIs = T)
 
-filtered_cover_effects <- cover_emm %>%
+filtered_cover_effects_fg <- cover_emm_fg %>%
   left_join(diversity_ranges_quad_fg, by = c("habitat")) %>%
   filter(fg_richness_quad >= min_fg_richness_quad & fg_richness_quad <= max_fg_richness_quad)
 
@@ -660,12 +666,12 @@ filtered_cover_effects <- cover_emm %>%
   ggplot() +
   geom_point(data = functional_richness_quad_cover,
              aes(x = fg_richness_quad, y = cover_trans, colour = habitat), size = 1, alpha = 0.005) + 
-  geom_line(data = filtered_cover_effects, aes(x = fg_richness_quad, y = inv_logit(yvar), colour = habitat)) +
-  geom_ribbon(data = filtered_cover_effects, aes(x = fg_richness_quad, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+  geom_line(data = filtered_cover_effects_fg, aes(x = fg_richness_quad, y = inv_logit(yvar), colour = habitat)) +
+  geom_ribbon(data = filtered_cover_effects_fg, aes(x = fg_richness_quad, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "", x = "", title = "3b.") +
+  labs(y = "", x = "", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -691,16 +697,7 @@ filtered_cover_effects <- cover_emm %>%
 
 ### synchrony set up
 ```{r calculate syncrony}
-# make er long
-macro_long_data <- pivot_longer(
-  data = macroalgae,
-  cols = grep("acanthophora_spicifera", colnames(macroalgae)):grep("valonia_ventricosa", colnames(macroalgae)),
-  names_to = "taxa",
-  values_to = "percent_cover") %>% 
-  mutate(prop_cover = percent_cover/100) %>% 
-  select(-percent_cover)
 
-# write_csv(macro_long_data, here("Data", "macro_long_data.csv"))
 
 # CALCULATE SYNCHRONY CODE
 lm_synchrony <- codyn::synchrony(df = macro_long_data,
@@ -711,7 +708,7 @@ lm_synchrony <- codyn::synchrony(df = macro_long_data,
                                    replicate.var = "location")
 
 
-diversity_stability <- alpha_diversity_quad_macro_with_cover %>%
+diversity_stability <- alpha_diversity_quad_macro %>%
   dplyr::group_by(location, habitat, site) %>%
   dplyr::summarise(
             richness_mean = mean(richness), 
@@ -723,7 +720,7 @@ diversity_stability <- alpha_diversity_quad_macro_with_cover %>%
 
 diversity_stability_synchrony <- left_join(diversity_stability, lm_synchrony, by = join_by(location))
 diversity_stability_synchrony$synchrony_trans <- sv_trans(diversity_stability_synchrony$synchrony)
-# diversity_stability_synchrony <- na.omit(diversity_stability_synchrony) # remove quads that never had algae --> NaN calcs
+
 
 
 dss_ranges<- diversity_stability_synchrony %>%
@@ -753,6 +750,15 @@ plot(residuals(synch_cov_mod) ~ fitted(synch_cov_mod)) # same issues as always
 
 r.squaredGLMM(synch_cov_mod) # error??
 emtrends(synch_cov_mod, pairwise ~ habitat, var = "synchrony") # forereef 17 distinct from all other habitats
+
+# contrast                    estimate    SE  df z.ratio p.value
+# Fringing - Backreef            0.101 0.290 Inf   0.348  0.9856
+# Fringing - Forereef 10m        0.383 0.365 Inf   1.048  0.7211
+# Fringing - Forereef 17m        3.458 0.484 Inf   7.140  <.0001
+# Backreef - Forereef 10m        0.282 0.378 Inf   0.746  0.8784
+# Backreef - Forereef 17m        3.357 0.492 Inf   6.820  <.0001
+# Forereef 10m - Forereef 17m    3.075 0.501 Inf   6.142  <.0001
+
 ```
 
 ```{r synch cov plot setup}
@@ -777,7 +783,7 @@ filtered_synch_cov_effects <- synch_cov_emm %>%
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(x = "", y = "", title = "3c.") +
+  labs(x = "", y = "", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -822,7 +828,7 @@ lm_synchrony_site <- codyn::synchrony(df = macro_long_data_site,
                                    replicate.var = "site_habitat")
 
 
-diversity_stability_site <- alpha_diversity_site_macro_with_cover %>%
+diversity_stability_site <- alpha_diversity_site_macro %>%
   dplyr::group_by(site_habitat, habitat, site) %>%
   dplyr::summarise(
             richness_mean = mean(richness), 
@@ -834,7 +840,7 @@ diversity_stability_site <- alpha_diversity_site_macro_with_cover %>%
 
 diversity_stability_synchrony_site <- left_join(diversity_stability_site, lm_synchrony_site, by = join_by(site_habitat))
 diversity_stability_synchrony_site$synchrony_trans <- sv_trans(diversity_stability_synchrony_site$synchrony)
-# diversity_stability_synchrony_site <- na.omit(diversity_stability_synchrony_site) # remove quads that never had algae --> NaN calcs
+
 # write_csv(diversity_stability_synchrony_site, here("data", "diversity_stability_synchrony_site.csv"))
 
 dss_ranges_site <- diversity_stability_synchrony_site %>%
@@ -851,9 +857,19 @@ dss_ranges_site <- diversity_stability_synchrony_site %>%
 
 ## Figure 3d site level richness versus cover
 
+## set up site-level data for model
+```{r site cover by diversity data setup}
+
+alpha_diversity_site_macro$percent_cover <- rowSums(site_macro[,-which(names(site_macro)  %in% colnames(site_meta_df))]) 
+
+alpha_diversity_site_macro$prop_cover <- alpha_diversity_site_macro$percent_cover/100
+  
+alpha_diversity_site_macro$cover_trans <- sv_trans(alpha_diversity_site_macro$prop_cover)
+```
+
 ### model at site level
 ```{r site richness mod}
-site_cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover)
+site_cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro)
 summary(site_cover_mod)
 Anova(site_cover_mod)
 #                    Chisq Df Pr(>Chisq)    
@@ -864,11 +880,18 @@ hist(residuals(site_cover_mod)) # some positive skew, not the worst thing ever
 plot(residuals(site_cover_mod) ~ fitted(site_cover_mod)) # a little heteroscedastic but can't be less than 0
 r.squaredGLMM(site_cover_mod) # 0.2212534, 0.5990825
 emtrends(site_cover_mod, pairwise ~ habitat, var = "richness") # no difference between the habitats
+# contrast                    estimate     SE  df z.ratio p.value
+# Fringing - Backreef          -0.0163 0.0394 Inf  -0.413  0.9762
+# Fringing - Forereef 10m       0.0639 0.0503 Inf   1.271  0.5818
+# Fringing - Forereef 17m       0.0334 0.0612 Inf   0.546  0.9476
+# Backreef - Forereef 10m       0.0801 0.0460 Inf   1.742  0.3020
+# Backreef - Forereef 17m       0.0497 0.0583 Inf   0.853  0.8289
+# Forereef 10m - Forereef 17m  -0.0304 0.0651 Inf  -0.467  0.9662
 ```
 
 ### setup
 ```{r site richness cover setup}
-diversity_ranges_site <- alpha_diversity_site_macro_with_cover %>%
+diversity_ranges_site <- alpha_diversity_site_macro %>%
   group_by(habitat) %>%
   summarise(min_richness = min(richness),
             max_richness = max(richness),
@@ -883,14 +906,6 @@ filtered_site_cover_effects <- site_cover_emm %>%
   left_join(diversity_ranges_site, by = c("habitat")) %>%
   filter(richness >= min_richness & richness <= max_richness)
 
-# alpha_diversity_site_macro_with_cover$habitat <- factor(alpha_diversity_site_macro_with_cover$habitat, 
-#                              levels = c("fringing", "backreef", "outer_10","outer_17"),
-#                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
-# 
-# 
-# filtered_site_cover_effects$habitat <- factor(filtered_site_cover_effects$habitat, 
-#                              levels = c("fringing", "backreef", "outer_10","outer_17"),
-#                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
 ```
 
 ### plot
@@ -898,14 +913,14 @@ filtered_site_cover_effects <- site_cover_emm %>%
 ```{r plot figure 3d}
 (figure_3d <- 
   ggplot() +
-  geom_point(data = alpha_diversity_site_macro_with_cover,
+  geom_point(data = alpha_diversity_site_macro,
              aes(x = richness, y = cover_trans, colour = habitat), size = 1, alpha = 0.3) + 
   geom_line(data = filtered_site_cover_effects, aes(x = richness, y = inv_logit(yvar), colour = habitat), size = 1.5) +
   geom_ribbon(data = filtered_site_cover_effects, aes(x = richness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Cover\n", x = "Macroalgal Richness", title = "3d.") +
+  labs(y = "Cover\n", x = "Macroalgal Richness", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -931,7 +946,7 @@ filtered_site_cover_effects <- site_cover_emm %>%
 ```{r site level fg richness model}
 #merge site level cover with site functional group richness
 
-functional_richness_site_cover<- merge(alpha_diversity_site_macro_with_cover, fg_summary_site_wide,
+functional_richness_site_cover<- merge(alpha_diversity_site_macro, fg_summary_site_wide,
                                 by = c("year", "site",  "habitat"))
 
 
@@ -950,23 +965,28 @@ hist(residuals(site_cover_mod_fg)) # positive skew
 plot(residuals(site_cover_mod_fg) ~ fitted(site_cover_mod_fg)) # a little heteroscedastic but can't be less than 0
 r.squaredGLMM(site_cover_mod_fg) # 0.180, 0.563
 emtrends(site_cover_mod_fg, pairwise ~ habitat, var = "fg_richness_site") # no difference between the habitats
-
+# Fringing - Backreef           0.0379 0.0825 Inf   0.459  0.9679
+# Fringing - Forereef 10m       0.1846 0.0930 Inf   1.985  0.1935
+# Fringing - Forereef 17m       0.0933 0.0960 Inf   0.972  0.7655
+# Backreef - Forereef 10m       0.1467 0.0986 Inf   1.488  0.4447
+# Backreef - Forereef 17m       0.0554 0.1018 Inf   0.545  0.9480
+# Forereef 10m - Forereef 17m  -0.0913 0.1093 Inf  -0.835  0.8377
 
 ```
 ```{r site fg richness cover plot setup}
-diversity_ranges_site <- functional_richness_site_cover %>%
+fg_ranges_site <- functional_richness_site_cover %>%
   group_by(habitat) %>%
   summarise(min_fg_richness_site = min(fg_richness_site),
             max_fg_richness_site = max(fg_richness_site),
             min_cover= min(cover_trans),
             max_cover = max(cover_trans))
 
-site_cover_emm <- emmip(site_cover_mod_fg,
+site_cover_fg_emm <- emmip(site_cover_mod_fg,
                         habitat ~ fg_richness_site,
                         at = list(fg_richness_site = seq(0,17,1)), plotit = F, CIs = T)
 
-filtered_site_cover_effects <- site_cover_emm %>%
-  left_join(diversity_ranges_site, by = c("habitat")) %>%
+filtered_site_fg_cover_effects <- site_cover_fg_emm %>%
+  left_join(fg_ranges_site, by = c("habitat")) %>%
   filter(fg_richness_site >= min_fg_richness_site & fg_richness_site <= max_fg_richness_site)
 ```
 
@@ -977,13 +997,13 @@ filtered_site_cover_effects <- site_cover_emm %>%
   ggplot() +
   geom_point(data = functional_richness_site_cover,
              aes(x = fg_richness_site, y = cover_trans, colour = habitat), size = 1, alpha = 0.3) + 
-  geom_line(data = filtered_site_cover_effects, aes(x = fg_richness_site, y = inv_logit(yvar), colour = habitat),
+  geom_line(data = filtered_site_fg_cover_effects, aes(x = fg_richness_site, y = inv_logit(yvar), colour = habitat),
             size = 1.5) +
-  geom_ribbon(data = filtered_site_cover_effects, aes(x = fg_richness_site, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+  geom_ribbon(data = filtered_site_fg_cover_effects, aes(x = fg_richness_site, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "", x = "Functional Richness", title = "3e.") +
+  labs(y = "", x = "Functional Richness", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -1018,6 +1038,13 @@ Anova(synch_cov_mod_site)
 hist(residuals(synch_cov_mod_site)) # slight skew
 plot(residuals(synch_cov_mod_site) ~ fitted(synch_cov_mod_site)) # looks fine
 emtrends(synch_cov_mod_site, pairwise ~ habitat, var = "synchrony") # forereef 17 different from backreef
+# contrast                    estimate   SE  df z.ratio p.value
+# Fringing - Backreef           -4.299 3.38 Inf  -1.270  0.5821
+# Fringing - Forereef 10m       -0.279 3.22 Inf  -0.087  0.9998
+# Fringing - Forereef 17m        3.675 3.78 Inf   0.973  0.7649
+# Backreef - Forereef 10m        4.019 1.98 Inf   2.031  0.1764
+# Backreef - Forereef 17m        7.973 2.80 Inf   2.848  0.0228
+# Forereef 10m - Forereef 17m    3.954 2.59 Inf   1.526  0.4217
 ```
 
 ```{r synch cov site plot setup}
@@ -1042,7 +1069,7 @@ filtered_synch_cov_effects_site <- synch_cov_emm_site %>%
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(x = "Synchrony", y = "", title = "3f.") +
+  labs(x = "Synchrony", y = "", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -1070,10 +1097,11 @@ filtered_synch_cov_effects_site <- synch_cov_emm_site %>%
 (figure_3 <- ggarrange(figure_3a, figure_3b, figure_3c, figure_3d, figure_3e, figure_3f, 
                       ncol = 3, nrow = 2, 
                       common.legend = TRUE,
+                      labels = c("a.", "b.", "c.", "d.", "e.", "f."),
                       legend = "bottom", 
-                      font.label = list(size = 20, color = "black", face = "plain")))
+                      font.label = list(size = 26, color = "black", face = "plain")))
 
-# ggsave(filename = "output/figure_3.png", figure_3, height = 8, width = 16)
+# ggsave(filename = "output/figure_3v2.png", figure_3, height = 8, width = 16)
 ```
 
 # Figure 4
@@ -1095,6 +1123,13 @@ hist(residuals(rich_stab_mod)) # looks good
 plot(residuals(rich_stab_mod) ~ fitted(rich_stab_mod)) # heteroskedastic - bring to group
 r.squaredGLMM(rich_stab_mod) # 0.803, 0.808
 emtrends(rich_stab_mod, pairwise ~ habitat, var = "richness_mean") # fringing not diff from outer17, backreef not different from outer10
+# contrast                     estimate     SE  df z.ratio p.value
+# Fringing - Backreef          0.186670 0.0414 Inf   4.512  <.0001
+# Fringing - Forereef 10m      0.187196 0.0455 Inf   4.114  0.0002
+# Fringing - Forereef 17m      0.027112 0.0463 Inf   0.586  0.9364
+# Backreef - Forereef 10m      0.000525 0.0405 Inf   0.013  1.0000
+# Backreef - Forereef 17m     -0.159559 0.0411 Inf  -3.885  0.0006
+# Forereef 10m - Forereef 17m -0.160084 0.0439 Inf  -3.647  0.0015
 ```
 
 ```{r figure 4a setup}
@@ -1120,7 +1155,7 @@ filtered_rich_stab_effects <- rich_stab_emm %>%
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Stability\n", x = "", title = "4a.") +
+  labs(y = "Stability\n", x = "", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -1203,9 +1238,7 @@ fg_summary_wide_meta_through_time <- fg_summary_wide_meta %>%
   summarise(fg_richness_mean = mean(fg_richness_quad),
             fg_richness_se = sd(fg_richness_quad)/n())
 
-#each quad only has ONE value, averaged through time 
-#1200 quads in this data set
-#this is used in figure 4 things
+
 
 #merge with fg data 
 fg_stability_quad_level <- merge(fg_summary_wide_meta_through_time, diversity_stability_synchrony, 
@@ -1239,9 +1272,16 @@ plot(residuals(rich_stab_mod_fg) ~ fitted(rich_stab_mod_fg)) # same as usual
 r.squaredGLMM(rich_stab_mod_fg) # 0.819, 0.828
 emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "fg_richness_mean") 
 #  fringing different from all others
-
-
+# contrast                    estimate     SE  df z.ratio p.value
+# Fringing - Backreef           0.1872 0.0468 Inf   3.999  0.0004
+# Fringing - Forereef 10m       0.2348 0.0519 Inf   4.524  <.0001
+# Fringing - Forereef 17m       0.2040 0.0489 Inf   4.173  0.0002
+# Backreef - Forereef 10m       0.0477 0.0472 Inf   1.011  0.7432
+# Backreef - Forereef 17m       0.0169 0.0439 Inf   0.385  0.9806
+# Forereef 10m - Forereef 17m  -0.0308 0.0475 Inf  -0.648  0.9164
+#
 ```
+
 ```{r figure 4b plot setup}
 rich_stab_emm_fg <- emmip(rich_stab_mod_fg,
                         habitat ~ fg_richness_mean,
@@ -1264,7 +1304,7 @@ filtered_rich_stab_effects_fg <- rich_stab_emm_fg %>%
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "", x = "", title = "4b.") +
+  labs(y = "", x = "", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -1300,6 +1340,13 @@ hist(residuals(synch_stab_mod)) # looks good
 plot(residuals(synch_stab_mod) ~ fitted(synch_stab_mod)) # same issue as always
 r.squaredGLMM(synch_stab_mod) # 0.63, 0.71
 emtrends(synch_stab_mod, pairwise ~ habitat, var = "synchrony") # fringing and backreef not different
+# contrast                    estimate    SE  df z.ratio p.value
+# Fringing - Backreef            0.181 0.107 Inf   1.695  0.3262
+# Fringing - Forereef 10m        1.492 0.142 Inf  10.487  <.0001
+# Fringing - Forereef 17m        2.436 0.149 Inf  16.336  <.0001
+# Backreef - Forereef 10m        1.311 0.157 Inf   8.346  <.0001
+# Backreef - Forereef 17m        2.255 0.161 Inf  14.008  <.0001
+# Forereef 10m - Forereef 17m    0.944 0.181 Inf   5.222  <.0001
 ```
 
 ```{r figure 4c setup}
@@ -1324,7 +1371,7 @@ filtered_synch_stab_effects <- synch_stab_emm %>%
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(x = "", y = "", title = "4c.") +
+  labs(x = "", y = "", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -1361,6 +1408,13 @@ hist(residuals(rich_stab_mod_site)) # blocky but fine
 plot(residuals(rich_stab_mod_site) ~ fitted(rich_stab_mod_site)) # heteroskedastic - bring to group
 r.squaredGLMM(rich_stab_mod_site) # 0.671
 emtrends(rich_stab_mod_site, pairwise ~ habitat, var = "richness_mean") # no differences across habitats
+# contrast                    estimate    SE  df z.ratio p.value
+# Fringing - Backreef           0.1854 0.120 Inf   1.539  0.4138
+# Fringing - Forereef 10m      -0.2155 0.145 Inf  -1.484  0.4471
+# Fringing - Forereef 17m      -0.2876 0.214 Inf  -1.344  0.5349
+# Backreef - Forereef 10m      -0.4009 0.165 Inf  -2.432  0.0711
+# Backreef - Forereef 17m      -0.4730 0.228 Inf  -2.077  0.1607
+# Forereef 10m - Forereef 17m  -0.0721 0.242 Inf  -0.298  0.9908
 ```
 
 ```{r figure 4d setup}
@@ -1386,7 +1440,7 @@ filtered_rich_stab_effects_site <- rich_stab_emm_site %>%
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Stability\n", x = "Taxonomic Richness", title = "4d.") +
+  labs(y = "Stability\n", x = "Taxonomic Richness", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -1449,7 +1503,13 @@ plot(residuals(rich_stab_mod_site_fg) ~ fitted(rich_stab_mod_site_fg)) # heteros
 r.squaredGLMM(rich_stab_mod_site_fg) # 0.563
 emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "avg_richness_fg") 
 # Fringing different from outer 10
-
+# contrast                    estimate    SE  df z.ratio p.value
+# Fringing - Backreef           0.2552 0.254 Inf   1.005  0.7463
+# Fringing - Forereef 10m       1.2611 0.469 Inf   2.686  0.0364
+# Fringing - Forereef 17m       0.3543 0.287 Inf   1.235  0.6045
+# Backreef - Forereef 10m       1.0059 0.492 Inf   2.044  0.1720
+# Backreef - Forereef 17m       0.0991 0.323 Inf   0.307  0.9900
+# Forereef 10m - Forereef 17m  -0.9068 0.510 Inf  -1.778  0.2838
 ```
 
 ```{r figure 4e setup}
@@ -1475,7 +1535,7 @@ filtered_rich_stab_effects_site <- rich_stab_emm_site_fg %>%
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "", x = "Functional Richness", title = "4e.") +
+  labs(y = "", x = "Functional Richness", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -1511,6 +1571,14 @@ hist(residuals(synch_stab_mod_site)) # almost uniform
 plot(residuals(synch_stab_mod_site) ~ fitted(synch_stab_mod_site)) # same issue as always
 r.squaredGLMM(synch_stab_mod_site) # 0.678
 emtrends(synch_stab_mod_site, pairwise ~ habitat, var = "synchrony") # backreef is different from forereef 17, fringing is a p = 0.05
+#
+# contrast                    estimate    SE  df z.ratio p.value
+# Fringing - Backreef           -0.256 0.971 Inf  -0.263  0.9936
+# Fringing - Forereef 10m        1.324 0.916 Inf   1.445  0.4709
+# Fringing - Forereef 17m        2.930 1.142 Inf   2.567  0.0503
+# Backreef - Forereef 10m        1.580 0.858 Inf   1.842  0.2534
+# Backreef - Forereef 17m        3.186 1.095 Inf   2.909  0.0190
+# Forereef 10m - Forereef 17m    1.606 1.047 Inf   1.534  0.4172
 ```
 
 ```{r figure 4f setup}
@@ -1535,7 +1603,7 @@ filtered_synch_stab_effects_site <- synch_stab_emm_site %>%
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(x = "Synchrony", y = "", main = "4f.") +
+  labs(x = "Synchrony", y = "", title = "") +
   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
         axis.title.y = element_text(size=24), 
@@ -1563,13 +1631,177 @@ filtered_synch_stab_effects_site <- synch_stab_emm_site %>%
 (figure_4 <- ggarrange(figure_4a, figure_4b, figure_4c, figure_4d, figure_4e, figure_4f, 
                       ncol = 3, nrow = 2, 
                       common.legend = TRUE,
+                      heights = c(1,1),
+                      widths = c(1,1,1),
                       legend = "bottom", 
-                      font.label = list(size = 20, color = "black", face = "plain")))
+                      labels = c("a.", "b.", "c.", "d.", "e.", "f."),
+                      font.label = list(size = 26, color = "black", face = "plain")))
 
-# ggsave(filename = "output/figure_4.png", figure_4, height = 8, width = 16)
+# ggsave(filename = "output/figure_4v2.png", figure_4, height = 8, width = 16)
 ```
 
 
+# Figure 5 - spatial synchrony
+
+## create new dfs
+```{r mean and spatial synchrony}
+# calculate spatial synchrony - degree to which quadrats vary together within a site
+spatial_synchrony <- codyn::synchrony(df = alpha_diversity_quad_macro,
+                                   time.var = "year",
+                                   species.var = "location",
+                                   abundance.var = "macroalgal_prop_cover",
+                                   metric = "Loreau",
+                                   replicate.var = "site_habitat")
+colnames(spatial_synchrony) <- c("site_habitat", "spatial_synchrony") # rename to avoid overwrite
+
+# calculate mean synchrony within a site (!= synchrony of species at the site level!)
+mean_synchrony <- diversity_stability_synchrony %>% 
+  group_by(habitat, site) %>% 
+  summarise(synchrony_mean = mean(synchrony))
+
+# merge with site level dss metrics
+dss_spatial <- merge(diversity_stability_site, spatial_synchrony, by = "site_habitat")
+dss_spatial_2 <- merge(dss_spatial, mean_synchrony, by = c("habitat", "site"))
+
+dss_spatial_ranges <- dss_spatial_2 %>%
+  group_by(habitat) %>%
+  summarise(min_spatial_synchrony = min(dss_spatial_2$spatial_synchrony, na.rm = TRUE),
+            max_spatial_synchrony = max(dss_spatial_2$spatial_synchrony, na.rm = TRUE),
+            min_mean_synchrony= min(synchrony_mean, na.rm = TRUE),
+            max_mean_synchrony = max(synchrony_mean, na.rm  = TRUE))
+  
+
+```
+
+
+## models
+```{r model spatial synchrony}
+spatial_synchrony_mod <- glmmTMB(cover_stability ~ spatial_synchrony*habitat, family = Gamma("log"), data = dss_spatial_2)
+hist(residuals(spatial_synchrony_mod)) # a little skew
+plot(residuals(spatial_synchrony_mod) ~ predict(spatial_synchrony_mod))
+summary(spatial_synchrony_mod)
+Anova(spatial_synchrony_mod)
+#                             Chisq Df Pr(>Chisq)    
+# spatial_synchrony         16.2914  1  5.431e-05 ***
+# habitat                   19.5303  3  0.0002124 ***
+# spatial_synchrony:habitat  6.7239  3  0.0812368 .  
+emtrends(spatial_synchrony_mod, pairwise ~ habitat, var = "spatial_synchrony") # no sig differences but close
+# contrast                    estimate    SE  df z.ratio p.value
+# Fringing - Backreef            0.404 1.765 Inf   0.229  0.9958
+# Fringing - Forereef 10m        1.365 1.754 Inf   0.778  0.8643
+# Fringing - Forereef 17m        3.112 1.882 Inf   1.654  0.3484
+# Backreef - Forereef 10m        0.961 0.857 Inf   1.121  0.6766
+# Backreef - Forereef 17m        2.708 1.095 Inf   2.472  0.0644
+# Forereef 10m - Forereef 17m    1.747 1.078 Inf   1.621  0.3668
+```
+```{r plot spatial synchrony}
+spat_stab_emm <- emmip(spatial_synchrony_mod,
+                        habitat ~ spatial_synchrony,
+                        at = list(spatial_synchrony = seq(0,1,0.01)), plotit = F, CIs = T)  
+
+filtered_spat_stab_effects <- spat_stab_emm %>%
+  left_join(dss_spatial_ranges, by = c("habitat")) %>%
+  filter(spatial_synchrony >= min_spatial_synchrony & 
+           spatial_synchrony <= max_spatial_synchrony)
+
+
+(figure_5a <- 
+  ggplot() +
+  geom_point(data = dss_spatial_2,
+             aes(x = spatial_synchrony, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_spat_stab_effects, aes(x = spatial_synchrony, y = exp(yvar), colour = habitat), size = 1.5) +
+  geom_ribbon(data = filtered_spat_stab_effects, aes(x = spatial_synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Stability\n", x = "Spatial synchrony", title = "") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=24), 
+        axis.title.y = element_text(size=24), 
+        axis.text.x = element_text(size=22), 
+        axis.text.y = element_text(size=22),
+        legend.text = element_text(size=22),
+        plot.title = element_text(size=26), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+
+```
+```{r mean synchrony}
+mean_synchrony_mod <- glmmTMB(cover_stability ~ synchrony_mean*habitat, family = Gamma("log"), data = dss_spatial_2)
+hist(residuals(mean_synchrony_mod)) # chunky
+plot(residuals(mean_synchrony_mod) ~ predict(mean_synchrony_mod)) # heteroskedastic
+summary(mean_synchrony_mod)
+Anova(mean_synchrony_mod)
+#                         Chisq Df Pr(>Chisq)    
+# synchrony_mean         30.134  1  4.031e-08 ***
+# habitat                22.008  3  6.498e-05 ***
+# synchrony_mean:habitat 17.251  3  0.0006275 ***
+emtrends(mean_synchrony_mod, pairwise ~ habitat, var = "synchrony_mean") # no sig differences but close
+# contrast                    estimate   SE  df z.ratio p.value
+# Fringing - Backreef            -2.75 1.79 Inf  -1.538  0.4147
+# Fringing - Forereef 10m         2.57 1.05 Inf   2.444  0.0691
+# Fringing - Forereef 17m         3.73 1.27 Inf   2.946  0.0170
+# Backreef - Forereef 10m         5.33 1.85 Inf   2.875  0.0211
+# Backreef - Forereef 17m         6.48 1.98 Inf   3.271  0.0059
+# Forereef 10m - Forereef 17m     1.15 1.35 Inf   0.853  0.8287
+```
+```{r plot mean synchrony}
+mean_synch_emm <- emmip(mean_synchrony_mod,
+                        habitat ~ synchrony_mean,
+                        at = list(synchrony_mean = seq(0,1,0.01)), plotit = F, CIs = T)  
+
+filtered_mean_synch_effects <- mean_synch_emm %>%
+  left_join(dss_spatial_ranges, by = c("habitat")) %>%
+  filter(synchrony_mean >= min_spatial_synchrony & 
+           synchrony_mean <= max_spatial_synchrony)
+
+
+(figure_5b <- 
+  ggplot() +
+  geom_point(data = dss_spatial_2,
+             aes(x = synchrony_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_mean_synch_effects, aes(x = synchrony_mean, y = exp(yvar), colour = habitat), size = 1.5) +
+  geom_ribbon(data = filtered_mean_synch_effects, aes(x = synchrony_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Stability\n", x = "Mean synchrony", title = "") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=24), 
+        axis.title.y = element_text(size=24), 
+        axis.text.x = element_text(size=22), 
+        axis.text.y = element_text(size=22),
+        legend.text = element_text(size=22),
+        plot.title = element_text(size=26), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+```
+
+## panel graph
+```{r figure 5 panel, fig.height = 8, fig.width=16}
+(figure_5 <- ggarrange(figure_5a, figure_5b, 
+                      ncol = 2, nrow = 1, 
+                      common.legend = TRUE,
+                      legend = "bottom", 
+                      labels = c("a.", "b."),
+                      font.label = list(size = 26, color = "black", face = "plain")))
+
+ggsave(filename = "output/figure_5.png", figure_5, height = 8, width = 16)
+```
 
 # SUPPLEMENTAL FIGURE CODE:
 
@@ -1582,7 +1814,7 @@ site_richness_df <- alpha_diversity_site_macro %>%
   summarise(richness_mean = mean(richness),
             richness_se = se(richness))
 
-quad_evenness_df <- alpha_diversity_quad_macro_with_cover %>% 
+quad_evenness_df <- alpha_diversity_quad_macro %>% 
   drop_na(evenness) %>%
   group_by(year, habitat) %>% 
   summarise(evenness_mean = mean(evenness),
@@ -1670,10 +1902,10 @@ site_evenness_df <- alpha_diversity_site_macro %>%
 ## evenness and cover relationships
 
 ```{r evenness cover quad level model}
-alpha_diversity_quad_macro_with_cover_evenness_mod <- alpha_diversity_quad_macro_with_cover %>% 
+alpha_diversity_quad_macro_evenness_mod <- alpha_diversity_quad_macro %>% 
   drop_na(evenness)
 
-evenness_cover_mod_quad <- glmmTMB(cover_trans ~ evenness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro_with_cover_evenness_mod)
+evenness_cover_mod_quad <- glmmTMB(cover_trans ~ evenness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro_evenness_mod)
 summary(evenness_cover_mod_quad)
 Anova(evenness_cover_mod_quad)
 #                     Chisq Df Pr(>Chisq)    
@@ -1689,7 +1921,7 @@ emtrends(evenness_cover_mod_quad, pairwise ~ habitat, var = "evenness") #backree
 
 
 ```{r evenness cover plot setup}
-diversity_ranges_quad_evenness <- alpha_diversity_quad_macro_with_cover_evenness_mod %>%
+diversity_ranges_quad_evenness <- alpha_diversity_quad_macro_evenness_mod %>%
   group_by(habitat) %>%
   summarise(min_evenness = min(evenness),
             max_evenness = max(evenness),
@@ -1704,7 +1936,7 @@ filtered_cover_effects_evenness <- cover_emm_evenness %>%
   left_join(diversity_ranges_quad_evenness, by = c("habitat")) %>%
   filter(evenness >= min_evenness & evenness <= max_evenness)
 
-# alpha_diversity_quad_macro_with_cover_evenness_mod$habitat <- factor(alpha_diversity_quad_macro_with_cover_evenness_mod$habitat, 
+# alpha_diversity_quad_macro_evenness_mod$habitat <- factor(alpha_diversity_quad_macro_evenness_mod$habitat, 
 #                              levels = c("fringing", "backreef", "outer_10","outer_17"),
 #                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
 # 
@@ -1717,7 +1949,7 @@ filtered_cover_effects_evenness <- cover_emm_evenness %>%
 ```{r evenness cover plot}
 (figure_3b <- 
   ggplot() +
-  geom_point(data = alpha_diversity_quad_macro_with_cover_evenness_mod,
+  geom_point(data = alpha_diversity_quad_macro_evenness_mod,
              aes(x = evenness, y = cover_trans, colour = habitat), size = 1, alpha = 0.005) + 
   geom_line(data = filtered_cover_effects_evenness, aes(x = evenness, y = inv_logit(yvar), colour = habitat)) +
   geom_ribbon(data = filtered_cover_effects_evenness, aes(x = evenness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
@@ -1749,10 +1981,10 @@ filtered_cover_effects_evenness <- cover_emm_evenness %>%
 
 ### site evenness 
 ```{r site level evenness}
-alpha_diversity_site_macro_with_cover_evenness_mod <- alpha_diversity_site_macro_with_cover %>% 
+alpha_diversity_site_macro_evenness_mod <- alpha_diversity_site_macro %>% 
   drop_na(evenness)
 
-evenness_site_cover_mod <- glmmTMB(cover_trans ~ evenness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover_evenness_mod)
+evenness_site_cover_mod <- glmmTMB(cover_trans ~ evenness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_evenness_mod)
 summary(evenness_site_cover_mod)
 Anova(evenness_site_cover_mod)
 #                    Chisq Df Pr(>Chisq)    
@@ -1766,7 +1998,7 @@ emtrends(evenness_site_cover_mod, pairwise ~ habitat, var = "evenness") # only t
 ```
 
 ```{r evenness cover model site level}
-evenness_cover_mod_site <- glmmTMB(cover_trans ~ evenness*habitat + (1|site) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_with_cover_evenness_mod)
+evenness_cover_mod_site <- glmmTMB(cover_trans ~ evenness*habitat + (1|site) + (1|year), family = beta_family(), data = alpha_diversity_site_macro_evenness_mod)
 summary(evenness_cover_mod_site)
 hist(residuals(evenness_cover_mod_site)) # little wonky but not the worst
 plot(residuals(evenness_cover_mod_site) ~ fitted(evenness_cover_mod_site))
@@ -1783,7 +2015,7 @@ emtrends(evenness_cover_mod_site, pairwise ~ habitat, var = "evenness") # fringi
 ### plot setup
 
 ```{r figure 3f evenness site plot setup}
-diversity_ranges_site_evenness <- alpha_diversity_site_macro_with_cover_evenness_mod %>%
+diversity_ranges_site_evenness <- alpha_diversity_site_macro_evenness_mod %>%
   group_by(habitat) %>%
   summarise(min_evenness = min(evenness),
             max_evenness = max(evenness),
@@ -1798,7 +2030,7 @@ filtered_cover_effects_evenness_site <- cover_emm_evenness_site %>%
   left_join(diversity_ranges_site_evenness, by = c("habitat")) %>%
   filter(evenness >= min_evenness & evenness <= max_evenness)
 
-# alpha_diversity_site_macro_with_cover_evenness_mod$habitat <- factor(alpha_diversity_site_macro_with_cover_evenness_mod$habitat, 
+# alpha_diversity_site_macro_evenness_mod$habitat <- factor(alpha_diversity_site_macro_evenness_mod$habitat, 
 #                              levels = c("fringing", "backreef", "outer_10","outer_17"),
 #                              labels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
 # 
@@ -1811,7 +2043,7 @@ filtered_cover_effects_evenness_site <- cover_emm_evenness_site %>%
 ```{r evenness cover plot site }
 (figure_3f <- 
   ggplot() +
-  geom_point(data = alpha_diversity_site_macro_with_cover_evenness_mod,
+  geom_point(data = alpha_diversity_site_macro_evenness_mod,
              aes(x = evenness, y = cover_trans, colour = habitat), size = 1, alpha = 0.5) + 
   geom_line(data = filtered_cover_effects_evenness_site, aes(x = evenness, y = inv_logit(yvar), colour = habitat)) +
   geom_ribbon(data = filtered_cover_effects_evenness_site, aes(x = evenness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
