@@ -1800,7 +1800,7 @@ filtered_mean_synch_effects <- mean_synch_emm %>%
                       labels = c("a.", "b."),
                       font.label = list(size = 26, color = "black", face = "plain")))
 
-ggsave(filename = "output/figure_5.png", figure_5, height = 8, width = 16)
+# ggsave(filename = "output/figure_5.png", figure_5, height = 8, width = 16)
 ```
 
 # SUPPLEMENTAL FIGURE CODE:
