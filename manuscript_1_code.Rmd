@@ -1657,7 +1657,7 @@ colnames(spatial_synchrony) <- c("site_habitat", "spatial_synchrony") # rename t
 # calculate mean synchrony within a site (!= synchrony of species at the site level!)
 mean_synchrony <- diversity_stability_synchrony %>% 
   group_by(habitat, site) %>% 
-  summarise(synchrony_mean = mean(synchrony))
+  summarise(synchrony_mean = mean(synchrony, na.rm = T))
 
 # merge with site level dss metrics
 dss_spatial <- merge(diversity_stability_site, spatial_synchrony, by = "site_habitat")
@@ -1738,21 +1738,21 @@ filtered_spat_stab_effects <- spat_stab_emm %>%
 ```{r mean synchrony}
 mean_synchrony_mod <- glmmTMB(cover_stability ~ synchrony_mean*habitat, family = Gamma("log"), data = dss_spatial_2)
 hist(residuals(mean_synchrony_mod)) # chunky
-plot(residuals(mean_synchrony_mod) ~ predict(mean_synchrony_mod)) # heteroskedastic
+plot(residuals(mean_synchrony_mod) ~ predict(mean_synchrony_mod)) # fine
 summary(mean_synchrony_mod)
 Anova(mean_synchrony_mod)
 #                         Chisq Df Pr(>Chisq)    
-# synchrony_mean         30.134  1  4.031e-08 ***
-# habitat                22.008  3  6.498e-05 ***
-# synchrony_mean:habitat 17.251  3  0.0006275 ***
+# synchrony_mean         32.914  1  9.634e-09 ***
+# habitat                18.523  3  0.0003430 ***
+# synchrony_mean:habitat 19.062  3  0.0002654 ***
 emtrends(mean_synchrony_mod, pairwise ~ habitat, var = "synchrony_mean") # no sig differences but close
-# contrast                    estimate   SE  df z.ratio p.value
-# Fringing - Backreef            -2.75 1.79 Inf  -1.538  0.4147
-# Fringing - Forereef 10m         2.57 1.05 Inf   2.444  0.0691
-# Fringing - Forereef 17m         3.73 1.27 Inf   2.946  0.0170
-# Backreef - Forereef 10m         5.33 1.85 Inf   2.875  0.0211
-# Backreef - Forereef 17m         6.48 1.98 Inf   3.271  0.0059
-# Forereef 10m - Forereef 17m     1.15 1.35 Inf   0.853  0.8287
+# contrast                    estimate    SE  df z.ratio p.value
+# Fringing - Backreef            -3.26 1.503 Inf  -2.166  0.1327
+# Fringing - Forereef 10m         2.22 0.995 Inf   2.231  0.1149
+# Fringing - Forereef 17m         3.37 1.220 Inf   2.764  0.0291
+# Backreef - Forereef 10m         5.48 1.622 Inf   3.377  0.0041
+# Backreef - Forereef 17m         6.63 1.769 Inf   3.748  0.0010
+# Forereef 10m - Forereef 17m     1.15 1.363 Inf   0.846  0.8322
 ```
 ```{r plot mean synchrony}
 mean_synch_emm <- emmip(mean_synchrony_mod,
@@ -1761,8 +1761,8 @@ mean_synch_emm <- emmip(mean_synchrony_mod,
 
 filtered_mean_synch_effects <- mean_synch_emm %>%
   left_join(dss_spatial_ranges, by = c("habitat")) %>%
-  filter(synchrony_mean >= min_spatial_synchrony & 
-           synchrony_mean <= max_spatial_synchrony)
+  filter(synchrony_mean >= min_mean_synchrony & 
+           synchrony_mean <= max_mean_synchrony)
 
 
 (figure_5b <- 
