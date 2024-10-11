@@ -1111,7 +1111,7 @@ filtered_synch_cov_effects_site <- synch_cov_emm_site %>%
 
 ###model - richness stability
 
-```{r richness synchrony mod}
+```{r richness stability mod}
 rich_stab_mod <- glmmTMB(cover_stability~ richness_mean*habitat + (1|site), family = Gamma(link = "log"), data = diversity_stability_synchrony)
 summary(rich_stab_mod)
 Anova(rich_stab_mod)
@@ -1643,6 +1643,65 @@ filtered_synch_stab_effects_site <- synch_stab_emm_site %>%
 
 # Figure 5 - spatial synchrony
 
+## diversity-synchrony plot level
+
+```{r ds plot}
+rich_synch_mod <- glmmTMB(synchrony_trans~ richness_mean*habitat + (1|site), family = beta_family(), data = diversity_stability_synchrony)
+summary(rich_synch_mod)
+Anova(rich_synch_mod)
+#                         Chisq Df Pr(>Chisq)    
+# richness_mean         395.416  1  < 2.2e-16 ***
+# habitat               136.859  3  < 2.2e-16 ***
+# richness_mean:habitat  90.031  3  < 2.2e-16 ***
+hist(residuals(rich_synch_mod)) # looks good
+plot(residuals(rich_synch_mod) ~ fitted(rich_synch_mod)) 
+r.squaredGLMM(rich_synch_mod) # 0.71, 0.78
+emtrends(rich_synch_mod, pairwise ~ habitat, var = "richness_mean") # forereefs not different from each other
+# contrast                    estimate    SE  df z.ratio p.value
+# Fringing - Backreef           -0.823 0.161 Inf  -5.113  <.0001
+# Fringing - Forereef 10m       -1.443 0.183 Inf  -7.879  <.0001
+# Fringing - Forereef 17m       -1.628 0.187 Inf  -8.723  <.0001
+# Backreef - Forereef 10m       -0.620 0.151 Inf  -4.103  0.0002
+# Backreef - Forereef 17m       -0.805 0.154 Inf  -5.240  <.0001
+# Forereef 10m - Forereef 17m   -0.185 0.165 Inf  -1.124  0.6745
+
+rich_synch_emm <- emmip(rich_synch_mod,
+                        habitat ~ richness_mean,
+                        at = list(richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+
+filtered_rich_synch_effects <- rich_synch_emm %>%
+  left_join(dss_ranges, by = c("habitat")) %>%
+  filter(richness_mean >= min_richness & richness_mean <= max_richness)
+
+(rich_synch_plot <- 
+  ggplot() +
+  geom_point(data = diversity_stability_synchrony,
+             aes(x = richness_mean, y = synchrony_trans, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_rich_synch_effects, aes(x = richness_mean, y = inv_logit(yvar), colour = habitat), size = 1.5) +
+  geom_ribbon(data = filtered_rich_synch_effects, aes(x = richness_mean, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Species synchrony\n", x = "Taxonomic richness", title = "") +
+  theme_bw() + 
+  theme(axis.title.x = element_text(size=24), 
+        axis.title.y = element_text(size=24), 
+        axis.text.x = element_text(size=22), 
+        axis.text.y = element_text(size=22),
+        legend.text = element_text(size=22),
+        plot.title = element_text(size=26), 
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_rect(fill = "white"),
+        legend.title = element_blank(),
+        legend.position = 'bottom', # move legend to bottom
+        legend.box = 'horizontal', # make legend horizontal
+        legend.box.background = element_rect(colour = "black"))  # add box around legend
+         )
+```
+
+
 ## create new dfs
 ```{r mean and spatial synchrony}
 # calculate spatial synchrony - degree to which quadrats vary together within a site
@@ -1754,6 +1813,7 @@ emtrends(mean_synchrony_mod, pairwise ~ habitat, var = "synchrony_mean") # no si
 # Backreef - Forereef 17m         6.63 1.769 Inf   3.748  0.0010
 # Forereef 10m - Forereef 17m     1.15 1.363 Inf   0.846  0.8322
 ```
+
 ```{r plot mean synchrony}
 mean_synch_emm <- emmip(mean_synchrony_mod,
                         habitat ~ synchrony_mean,
@@ -1794,15 +1854,15 @@ filtered_mean_synch_effects <- mean_synch_emm %>%
 ```
 
 ## panel graph
-```{r figure 5 panel, fig.height = 8, fig.width=16}
-(figure_5 <- ggarrange(figure_5a, figure_5b, 
-                      ncol = 2, nrow = 1, 
+```{r figure 5 panel, fig.height = 6, fig.width=22}
+(figure_5 <- ggarrange(rich_synch_plot, figure_5b, figure_5a, 
+                      ncol = 3, nrow = 1, 
                       common.legend = TRUE,
                       legend = "bottom", 
-                      labels = c("a.", "b."),
+                      labels = c("a.", "b.", "c."),
                       font.label = list(size = 26, color = "black", face = "plain")))
 
-# ggsave(filename = "output/figure_5.png", figure_5, height = 8, width = 16)
+# ggsave(filename = "output/figure_5_option2.png", figure_5, height = 8, width = 16)
 ```
 
 # SUPPLEMENTAL FIGURE CODE:
