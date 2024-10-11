@@ -2217,5 +2217,5 @@ filtered_even_stab_effects_site <- even_stab_emm_site %>%
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black"))  # add box around legend
          )
-ggsave(filename = "output/evenness_stability_site.png", even_stab_plot_site, height = 10, width = 14)
+# ggsave(filename = "output/evenness_stability_site.png", even_stab_plot_site, height = 10, width = 14)
 ```
