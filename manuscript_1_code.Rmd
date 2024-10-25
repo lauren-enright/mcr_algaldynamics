@@ -303,90 +303,7 @@ alpha_diversity_site_macro$cover_trans <- sv_trans(alpha_diversity_site_macro$pr
 ```
 
 
-
-
-## Figure 2a Richness @ Quad by Year
-
-### prep
-```{r richness df}
-quad_richness_df <- alpha_diversity_quad_macro %>% 
-  group_by(year, habitat) %>% 
-  summarise(richness_mean = mean(richness),
-            richness_se = se(richness))
-```
-
-
-### plot
-```{r figure 2a}
-(figure_2a <- ggplot() +
-  geom_point(data = quad_richness_df, aes(x = year, y = richness_mean, colour = habitat), size = 4,
-             position = position_dodge(0.4)) +
-  geom_line(data = quad_richness_df, aes(x = year, y = richness_mean, colour = habitat), linewidth = 1) +
-  geom_errorbar(data = quad_richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se,
-                                             colour = habitat), width = 0, size = 1.3, position = position_dodge(0.4)) +
-  scale_colour_manual(values = habitat_colours) +
-  annotate("segment", x = 2006, xend = 2010, y = 2, yend = 2, linewidth = 2, colour = "grey") +
-  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
-  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
-   scale_x_continuous(breaks = unique(quad_richness_df$year)) +
-   labs(y = "Macroalgal Richness",
-        x = "Year",
-        title = "") +
-   trends_theme)
-
-# ggsave(filename = "output/figure_2a.png", figure_2a, height = 10, width = 14)
-```
-
-## Figure 2b Richness @ Site by Year
-
-### prep
-
-```{r site level richness df}
-site_richness_df <- alpha_diversity_site_macro %>% 
-  group_by(year, habitat) %>% 
-  summarise(richness_mean = mean(richness),
-            richness_se = se(richness))
-
-```
-
-
-### plot
-```{r plot figure 2b}
-(figure_2b <- ggplot() +
-  geom_point(data = site_richness_df, aes(x = year, y = richness_mean, colour = habitat), size = 4,
-             position = position_dodge(0.4)) +
-#  geom_jitter(data = alpha_diversity_site_macro, 
-#  aes(x = year, y = richness, colour = habitat, alpha = 0.05), size = 2, width = 0.4, height = 0) +
-  geom_line(data = site_richness_df, aes(x = year, y = richness_mean, colour = habitat), linewidth = 1) +
-  geom_errorbar(data = site_richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se, colour = habitat), size = 1.3, width = 0,  position = position_dodge(0.4)) +
-  scale_colour_manual(values = habitat_colours) +
-  annotate("segment", x = 2006, xend = 2010, y = 12, yend = 12, linewidth = 2, colour = "grey") +
-  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
-  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
-   scale_x_continuous(breaks = unique(site_richness_df$year)) +
-   labs(y = "",
-        x = "Year",
-        title = "") +
-  trends_theme)
-
-# ggsave(filename = "output/figure_2b.png", figure_2b, height = 10, width = 14)
-```
-
-## Figure 2 Full Plot
-```{r ggpubr fig2, fig.height = 10, fig.width=22}
-fig2_plot_list <- list(figure_2a, figure_2b)
-(figure_2 <- ggarrange(figure_2a, figure_2b,
-                      ncol = 2, nrow = 1, 
-                      labels = c("a.", "b."),
-                      common.legend = TRUE,
-                      legend = "bottom", 
-                      font.label = list(size = 24, color = "black", face = "plain")))
-
-# ggsave(filename = "output/figure_2v4.png", figure_2, height = 10, width = 22)
-```
-
-
-# Figure 3 - ecosystem function
+# prep functional group data
 
 ```{r read and prep functional group data}
 algae_fg_raw2 <- read_csv(here("data","algae_functional_groupings_092724.csv"))
@@ -727,7 +644,7 @@ diversity_stability_site <- alpha_diversity_site_macro %>%
   dplyr::group_by(site_habitat, habitat, site) %>%
   dplyr::summarise(
             richness_mean = mean(richness), 
-            shannon_mean = mean(shannon), 
+            functional_richness_mean = mean(functional_richness), 
             cover_mean = mean(prop_cover),
             cover_cv = CV(prop_cover),
             cover_stability = 1/CV(prop_cover)) 
@@ -738,7 +655,7 @@ diversity_stability_synchrony_site$synchrony_trans <- sv_trans(diversity_stabili
 # write_csv(diversity_stability_synchrony_site, here("data", "diversity_stability_synchrony_site.csv"))
 
 dss_ranges_site <- extract_ranges(diversity_stability_synchrony_site, "habitat",
-                                  c("richness_mean", "cover_stability", "synchrony"))
+                                  c("richness_mean", "functional_richness_mean", "cover_stability", "synchrony"))
 
 
 ```
@@ -959,9 +876,7 @@ rich_stab_emm <- emmip(rich_stab_mod,
                         habitat ~ richness_mean,
                         at = list(richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
 
-filtered_rich_stab_effects <- rich_stab_emm %>%
-  left_join(dss_ranges, by = c("habitat")) %>%
-  filter(richness_mean >= min_richness & richness_mean <= max_richness)
+filtered_rich_stab_effects <- filter_ranges(rich_stab_emm, dss_ranges, "habitat", "richness_mean")
 ```
 
 
@@ -984,87 +899,12 @@ filtered_rich_stab_effects <- rich_stab_emm %>%
 # ggsave(filename = "output/figure_4a.png", figure_4a, height = 10, width = 14)
 ```
 
-#### no habitat
-
-```{r richness stability no hab}
-# rich_stab_mod_2 <- glmmTMB(cover_stability~ richness_mean + (1|site), family = Gamma(link = "log"), data = # diversity_stability_synchrony)
-# summary(rich_stab_mod_2)
-# hist(residuals(rich_stab_mod_2)) # a chunkier version
-# plot(residuals(rich_stab_mod_2) ~ fitted(rich_stab_mod_2)) # heteroskedastic - bring to group
-# r.squaredGLMM(rich_stab_mod_2) # 0.750, 0.757
-
-
-```
-
-```{r 4a no hab setup}
-# rich_stab_emm_2 <-as.data.frame(emmeans(rich_stab_mod_2, ~richness_mean,
-#                                      at = list(richness_mean = seq(min(diversity_stability_synchrony$richness_mean),
-#                                                             max(diversity_stability_synchrony$richness_mean),
-#                                                             0.01)))) 
-# 
-```
-
-#### no habitat plot
-
-```{r figure 4a no habitat}
-# (figure_4a_no_hab <- 
-#   ggplot() +
-#   geom_point(data = diversity_stability_synchrony,
-#              aes(x = richness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
-#   geom_line(data = filtered_rich_stab_effects, aes(x = richness_mean, y = exp(yvar), colour = habitat)) +
-#   geom_ribbon(data = filtered_rich_stab_effects, aes(x = richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
-#               alpha = 0.3) +
-#   geom_line(data = rich_stab_emm_2, aes(x = richness_mean, y = exp(emmean)), size = 2, colour = "black") +
-#   geom_ribbon(data = rich_stab_emm_2, aes(x = richness_mean, ymin = exp(asymp.LCL), ymax = exp(asymp.UCL)), fill = "black",
-#               alpha = 0.3) +
-#   scale_colour_manual(values = habitat_colours) +
-#   scale_fill_manual(values = habitat_colours) +
-#   labs(y = "Stability\n", x = "Macroalgal Richness") +
-#   theme_bw() + 
-#   theme(axis.title.x = element_text(size=18), 
-#         axis.title.y = element_text(size=18), 
-#         panel.background = element_blank(), 
-#         panel.grid.major = element_blank(),  #remove major-grid labels
-#         panel.grid.minor = element_blank(),  #remove minor-grid labels
-#         plot.background = element_rect(fill = "white"),
-#         legend.text = element_text(size = rel(1)), # increase legend text
-#         legend.title = element_blank(),
-#         legend.position = 'bottom', # move legend to bottom
-#         legend.box = 'horizontal', # make legend horizontal
-#         legend.box.background = element_rect(colour = "black"))  # add box around legend
-#          )
-# 
-# ggsave(filename = "output/figure_4a_with_no_hab.png", figure_4a_no_hab, height = 10, width = 14)
-```
-
 ## Figure 4b - functional group richness stability
-### Setup
-```{r functional richness through time at quad level}
-fg_summary_wide_meta <- merge(fg_summary_wide, meta_df, by = c("location", "site", "habitat", "year") )
-fg_summary_wide_meta_through_time <- fg_summary_wide_meta %>%
-  group_by(location, habitat, site) %>%
-  summarise(fg_richness_mean = mean(fg_richness_quad),
-            fg_richness_se = sd(fg_richness_quad)/n())
 
-
-
-#merge with fg data 
-fg_stability_quad_level <- merge(fg_summary_wide_meta_through_time, diversity_stability_synchrony, 
-                              by = 
-                                c("location","site", "habitat"))
-
-dss_ranges_fg <- fg_stability_quad_level %>%
-  group_by(habitat) %>%
-  summarise(min_richness_fg = min(fg_richness_mean),
-            max_richness_fg = max(fg_richness_mean),
-            min_stability= min(cover_stability, na.rm = TRUE),
-            max_stability = max(cover_stability, na.rm = TRUE))
-```
-
-### figure 4b model
+### model
 ```{r fig4b fg richness stability mod}
 
-rich_stab_mod_fg <- glmmTMB(cover_stability ~ fg_richness_mean*habitat + (1|site), family = Gamma(link = "log"), data = fg_stability_quad_level)
+rich_stab_mod_fg <- glmmTMB(cover_stability ~ functional_richness_mean*habitat + (1|site), family = Gamma(link = "log"), data = diversity_stability_synchrony)
 
 summary(rich_stab_mod_fg)
 car::Anova(rich_stab_mod_fg)
@@ -1078,7 +918,7 @@ car::Anova(rich_stab_mod_fg)
 hist(residuals(rich_stab_mod_fg)) # looks fine
 plot(residuals(rich_stab_mod_fg) ~ fitted(rich_stab_mod_fg)) # same as usual 
 r.squaredGLMM(rich_stab_mod_fg) # 0.819, 0.828
-emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "fg_richness_mean") 
+emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "functional_richness_mean") 
 #  fringing different from all others
 # contrast                    estimate     SE  df z.ratio p.value
 # Fringing - Backreef           0.1872 0.0468 Inf   3.999  0.0004
@@ -1092,12 +932,10 @@ emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "fg_richness_mean")
 
 ```{r figure 4b plot setup}
 rich_stab_emm_fg <- emmip(rich_stab_mod_fg,
-                        habitat ~ fg_richness_mean,
-                        at = list(fg_richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
+                        habitat ~ functional_richness_mean,
+                        at = list(functional_richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
 
-filtered_rich_stab_effects_fg <- rich_stab_emm_fg %>%
-  left_join(dss_ranges_fg, by = c("habitat")) %>%
-  filter(fg_richness_mean >= min_richness_fg & fg_richness_mean <= max_richness_fg)
+filtered_rich_stab_effects_fg <- filter_ranges(rich_stab_emm_fg, dss_ranges, "habitat", "functional_richness_mean")
 ```
 
 ### plot fig 4b
@@ -1105,10 +943,11 @@ filtered_rich_stab_effects_fg <- rich_stab_emm_fg %>%
 ```{r plot figure 4b}
 (figure_4b <- 
   ggplot() +
-  geom_point(data = fg_stability_quad_level,
-             aes(x = fg_richness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
-  geom_line(data = filtered_rich_stab_effects_fg, aes(x = fg_richness_mean, y = exp(yvar), colour = habitat), size = 1.5) +
-  geom_ribbon(data = filtered_rich_stab_effects_fg, aes(x = fg_richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+  geom_point(data = diversity_stability_synchrony,
+             aes(x = functional_richness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_rich_stab_effects_fg, aes(x = functional_richness_mean, y = exp(yvar), colour = habitat), size = 1.5) +
+  geom_ribbon(data = filtered_rich_stab_effects_fg,
+              aes(x = functional_richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
@@ -1148,9 +987,7 @@ synch_stab_emm <- emmip(synch_stab_mod,
                         habitat ~ synchrony,
                         at = list(synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
 
-filtered_synch_stab_effects <- synch_stab_emm %>%
-  left_join(dss_ranges, by = c("habitat")) %>%
-  filter(synchrony >= min_synchrony & synchrony <= max_synchrony)
+filtered_synch_stab_effects <- filter_ranges(synch_stab_emm, dss_ranges, "habitat", "synchrony")
 ```
 
 ### plot figure 4c
@@ -1202,9 +1039,7 @@ rich_stab_emm_site <- emmip(rich_stab_mod_site,
                         habitat ~ richness_mean,
                         at = list(richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
 
-filtered_rich_stab_effects_site <- rich_stab_emm_site %>%
-  left_join(dss_ranges_site, by = c("habitat")) %>%
-  filter(richness_mean >= min_richness & richness_mean <= max_richness)
+filtered_rich_stab_effects_site <- filter_ranges(rich_stab_emm_site, dss_ranges_site, "habitat", "richness_mean")
 ```
 
 
@@ -1234,28 +1069,8 @@ filtered_rich_stab_effects_site <- rich_stab_emm_site %>%
 ```{r functional group -- stability site}
 
 
-#need to get average functional richness through time! 
-fg_summary_site_wide_summary <- fg_summary_site_wide %>%
-  group_by(habitat, site) %>%
-  summarize(avg_richness_fg = mean(fg_richness_site),
-            se_richness_fg = sd(fg_richness_site)/sqrt(n()))
 
-#n = 24! 
-
-# merge
-stability_site_level_fg <- merge(diversity_stability_synchrony_site, fg_summary_site_wide_summary, by = c("site", "habitat"))
-
-# extract relevant ranges for plotting
-dss_ranges_site_fg_stab <- stability_site_level_fg %>%
-  group_by(habitat) %>%
-  summarise(min_richness_fg = min(avg_richness_fg),
-            max_richness_fg = max(avg_richness_fg),
-            min_stability= min(cover_stability),
-            max_stability = max(cover_stability))
-
-
-
-rich_stab_mod_site_fg <- glmmTMB(cover_stability~ avg_richness_fg*habitat, family = Gamma(link = "log"), data = stability_site_level_fg)
+rich_stab_mod_site_fg <- glmmTMB(cover_stability~ functional_richness_mean*habitat, family = Gamma(link = "log"), data = diversity_stability_site)
 summary(rich_stab_mod_site_fg)
 Anova(rich_stab_mod_site_fg)
 
@@ -1267,7 +1082,7 @@ Anova(rich_stab_mod_site_fg)
 hist(residuals(rich_stab_mod_site_fg)) # blocky but fine
 plot(residuals(rich_stab_mod_site_fg) ~ fitted(rich_stab_mod_site_fg)) # heteroskedastic
 r.squaredGLMM(rich_stab_mod_site_fg) # 0.563
-emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "avg_richness_fg") 
+emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "functional_richness_mean") 
 # Fringing different from outer 10
 # contrast                    estimate    SE  df z.ratio p.value
 # Fringing - Backreef           0.2552 0.254 Inf   1.005  0.7463
@@ -1280,12 +1095,10 @@ emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "avg_richness_fg")
 
 ```{r figure 4e setup}
 rich_stab_emm_site_fg <- emmip(rich_stab_mod_site_fg,
-                        habitat ~ avg_richness_fg,
-                        at = list(avg_richness_fg = seq(0,10,0.01)), plotit = F, CIs = T)
+                        habitat ~ functional_richness_mean,
+                        at = list(functional_richness_mean = seq(0,10,0.01)), plotit = F, CIs = T)
 
-filtered_rich_stab_effects_site <- rich_stab_emm_site_fg %>%
-  left_join(dss_ranges_site_fg_stab, by = c("habitat")) %>%
-  filter((avg_richness_fg >= min_richness_fg) & (avg_richness_fg <= max_richness_fg))
+filtered_rich_stab_effects_site <- filter_ranges(rich_stab_emm_site_fg, dss_ranges_site, "habitat", "functional_richness_mean")
 
 ```
 
@@ -1294,10 +1107,11 @@ filtered_rich_stab_effects_site <- rich_stab_emm_site_fg %>%
 ```{r figure 4e}
 (figure_4e <- 
   ggplot() +
-  geom_point(data = stability_site_level_fg,
-             aes(x = avg_richness_fg, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
-  geom_line(data = filtered_rich_stab_effects_site, aes(x = avg_richness_fg, y = exp(yvar), colour = habitat), size = 1.5) +
-  geom_ribbon(data = filtered_rich_stab_effects_site, aes(x = avg_richness_fg, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+  geom_point(data = diversity_stability_site,
+             aes(x = functional_richness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_rich_stab_effects_site, aes(x = functional_richness_mean, y = exp(yvar), colour = habitat), size = 1.5) +
+  geom_ribbon(data = filtered_rich_stab_effects_site, 
+              aes(x = functional_richness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
@@ -1338,9 +1152,7 @@ synch_stab_emm_site <- emmip(synch_stab_mod_site,
                         habitat ~ synchrony,
                         at = list(synchrony = seq(0,1,0.01)), plotit = F, CIs = T)
 
-filtered_synch_stab_effects_site <- synch_stab_emm_site %>%
-  left_join(dss_ranges_site, by = c("habitat")) %>%
-  filter(synchrony >= min_synchrony & synchrony <= max_synchrony)
+filtered_synch_stab_effects_site <- filter_ranges(synch_stab_emm_site, dss_ranges_site, "habitat", "synchrony")
 ```
 
 ### plot figure 4f
@@ -1381,7 +1193,258 @@ filtered_synch_stab_effects_site <- synch_stab_emm_site %>%
 
 # Figure 5 - spatial synchrony
 
-## diversity-synchrony plot level
+## create new dfs
+```{r mean and spatial synchrony}
+# calculate spatial synchrony - degree to which quadrats vary together within a site
+spatial_synchrony <- codyn::synchrony(df = alpha_diversity_quad_macro,
+                                   time.var = "year",
+                                   species.var = "location",
+                                   abundance.var = "macroalgal_prop_cover",
+                                   metric = "Loreau",
+                                   replicate.var = "site_habitat")
+colnames(spatial_synchrony) <- c("site_habitat", "spatial_synchrony") # rename to avoid overwrite
+
+# calculate mean synchrony within a site (!= synchrony of species at the site level!)
+mean_synchrony_stability <- diversity_stability_synchrony %>% 
+  group_by(habitat, site) %>% 
+  summarise(synchrony_mean = mean(synchrony, na.rm = T),
+            stability_mean = mean(cover_stability, na.rm = T))
+
+# merge with site level dss metrics
+dss_spatial <- merge(diversity_stability_site, spatial_synchrony, by = "site_habitat")
+dss_spatial_2 <- merge(dss_spatial, mean_synchrony_stability, by = c("habitat", "site"))
+
+dss_spatial_ranges <- extract_ranges(dss_spatial_2, "habitat", c("spatial_synchrony", "synchrony_mean", "stability_mean"))
+
+
+
+```
+
+
+## models
+
+### spatial synchrony
+```{r model spatial synchrony}
+spatial_synchrony_mod <- glmmTMB(cover_stability ~ spatial_synchrony*habitat, family = Gamma("log"), data = dss_spatial_2)
+hist(residuals(spatial_synchrony_mod)) # a little skew
+plot(residuals(spatial_synchrony_mod) ~ predict(spatial_synchrony_mod))
+summary(spatial_synchrony_mod)
+Anova(spatial_synchrony_mod)
+#                             Chisq Df Pr(>Chisq)    
+# spatial_synchrony         16.2914  1  5.431e-05 ***
+# habitat                   19.5303  3  0.0002124 ***
+# spatial_synchrony:habitat  6.7239  3  0.0812368 .  
+emtrends(spatial_synchrony_mod, pairwise ~ habitat, var = "spatial_synchrony") # no sig differences but close
+# contrast                    estimate    SE  df z.ratio p.value
+# Fringing - Backreef            0.404 1.765 Inf   0.229  0.9958
+# Fringing - Forereef 10m        1.365 1.754 Inf   0.778  0.8643
+# Fringing - Forereef 17m        3.112 1.882 Inf   1.654  0.3484
+# Backreef - Forereef 10m        0.961 0.857 Inf   1.121  0.6766
+# Backreef - Forereef 17m        2.708 1.095 Inf   2.472  0.0644
+# Forereef 10m - Forereef 17m    1.747 1.078 Inf   1.621  0.3668
+```
+
+```{r plot spatial synchrony}
+spat_stab_emm <- emmip(spatial_synchrony_mod,
+                        habitat ~ spatial_synchrony,
+                        at = list(spatial_synchrony = seq(0,1,0.01)), plotit = F, CIs = T)  
+
+filtered_spat_stab_effects <- filter_ranges(spat_stab_emm, dss_spatial_ranges, "habitat", "spatial_synchrony")
+
+
+(spatial_synchrony_plot <- 
+  ggplot() +
+  geom_point(data = dss_spatial_2,
+             aes(x = spatial_synchrony, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_spat_stab_effects, aes(x = spatial_synchrony, y = exp(yvar), colour = habitat), size = 1.5) +
+  geom_ribbon(data = filtered_spat_stab_effects, aes(x = spatial_synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Stability\n", x = "Spatial synchrony", title = "") +
+  trends_theme
+         )
+
+```
+
+### mean synchrony
+```{r mean synchrony}
+mean_synchrony_mod <- glmmTMB(cover_stability ~ synchrony_mean*habitat, family = Gamma("log"), data = dss_spatial_2)
+hist(residuals(mean_synchrony_mod)) # chunky
+plot(residuals(mean_synchrony_mod) ~ predict(mean_synchrony_mod)) # fine
+summary(mean_synchrony_mod)
+Anova(mean_synchrony_mod)
+#                         Chisq Df Pr(>Chisq)    
+# synchrony_mean         32.914  1  9.634e-09 ***
+# habitat                18.523  3  0.0003430 ***
+# synchrony_mean:habitat 19.062  3  0.0002654 ***
+emtrends(mean_synchrony_mod, pairwise ~ habitat, var = "synchrony_mean") # no sig differences but close
+# contrast                    estimate    SE  df z.ratio p.value
+# Fringing - Backreef            -3.26 1.503 Inf  -2.166  0.1327
+# Fringing - Forereef 10m         2.22 0.995 Inf   2.231  0.1149
+# Fringing - Forereef 17m         3.37 1.220 Inf   2.764  0.0291
+# Backreef - Forereef 10m         5.48 1.622 Inf   3.377  0.0041
+# Backreef - Forereef 17m         6.63 1.769 Inf   3.748  0.0010
+# Forereef 10m - Forereef 17m     1.15 1.363 Inf   0.846  0.8322
+```
+
+```{r plot mean synchrony}
+mean_synch_emm <- emmip(mean_synchrony_mod,
+                        habitat ~ synchrony_mean,
+                        at = list(synchrony_mean = seq(0,1,0.01)), plotit = F, CIs = T)  
+
+filtered_mean_synch_effects <- filter_ranges(mean_synch_emm, dss_spatial_ranges, "habitat", "synchrony_mean")
+
+
+(mean_synchrony_plot <- 
+  ggplot() +
+  geom_point(data = dss_spatial_2,
+             aes(x = synchrony_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_mean_synch_effects, aes(x = synchrony_mean, y = exp(yvar), colour = habitat), size = 1.5) +
+  geom_ribbon(data = filtered_mean_synch_effects, aes(x = synchrony_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Stability\n", x = "Mean synchrony", title = "") +
+  trends_theme
+         )
+```
+
+
+### mean stability plot
+```{r alpha gamma stability mod plot}
+alpha_gamma_stab_mod <- glmmTMB(cover_stability ~ stability_mean*habitat, family = Gamma("log"), data = dss_spatial_2)
+summary(alpha_gamma_stab_mod)
+Anova(alpha_gamma_stab_mod)
+#                          Chisq Df Pr(>Chisq)    
+# stability_mean         61.2725  1   4.97e-15 ***
+# habitat                12.9323  3   0.004785 ** 
+# stability_mean:habitat  9.4832  3   0.023511 *  
+
+emtrends(alpha_gamma_stab_mod, pairwise ~ habitat, var = "stability_mean") # backreef different from fringe and forereef 10
+# Fringing - Backreef            1.078 0.381 Inf   2.828  0.0242
+# Fringing - Forereef 10m        0.175 0.345 Inf   0.509  0.9571
+# Fringing - Forereef 17m        0.380 0.305 Inf   1.248  0.5965
+# Backreef - Forereef 10m       -0.903 0.349 Inf  -2.589  0.0475
+# Backreef - Forereef 17m       -0.698 0.309 Inf  -2.256  0.1085
+# Forereef 10m - Forereef 17m    0.205 0.263 Inf   0.779  0.8638
+
+alpha_gamma_emm <- emmip(alpha_gamma_stab_mod,
+                        habitat ~ stability_mean,
+                        at = list(stability_mean = seq(0,10,0.01)), plotit = F, CIs = T)  
+
+filtered_ag_effects <- filter_ranges(alpha_gamma_emm, dss_spatial_ranges, "habitat", "stability_mean")
+
+
+(alpha_gamma_stability_plot <- 
+  ggplot() +
+  geom_point(data = dss_spatial_2,
+             aes(x = stability_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+  geom_line(data = filtered_ag_effects, aes(x = stability_mean, y = exp(yvar), colour = habitat), size = 1.5) +
+  geom_ribbon(data = filtered_ag_effects, aes(x = stability_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
+              alpha = 0.3) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_fill_manual(values = habitat_colours) +
+  labs(y = "Site stability\n", x = "Plot stability", title = "") +
+  trends_theme
+         )
+```
+
+## panel graph
+```{r figure 5 panel, fig.height = 6, fig.width=22}
+(figure_5 <- ggarrange(mean_synchrony_plot, alpha_gamma_stability_plot, spatial_synchrony_plot,
+                      ncol = 3, nrow = 1, 
+                      common.legend = TRUE,
+                      legend = "bottom", 
+                      labels = c("a.", "b.", "c."),
+                      font.label = list(size = 26, color = "black", face = "plain")))
+
+# ggsave(filename = "output/figure_5_option3.png", figure_5, height = 6, width = 22)
+```
+
+# SUPPLEMENTAL FIGURE CODE:
+
+## Trends in richness over time
+
+### prep
+```{r richness df}
+quad_richness_df <- alpha_diversity_quad_macro %>% 
+  group_by(year, habitat) %>% 
+  summarise(richness_mean = mean(richness),
+            richness_se = se(richness))
+```
+
+
+### plot
+```{r figure 2a}
+(figure_s1a <- ggplot() +
+  geom_point(data = quad_richness_df, aes(x = year, y = richness_mean, colour = habitat), size = 4,
+             position = position_dodge(0.4)) +
+  geom_line(data = quad_richness_df, aes(x = year, y = richness_mean, colour = habitat), linewidth = 1) +
+  geom_errorbar(data = quad_richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se,
+                                             colour = habitat), width = 0, size = 1.3, position = position_dodge(0.4)) +
+  scale_colour_manual(values = habitat_colours) +
+  annotate("segment", x = 2006, xend = 2010, y = 2, yend = 2, linewidth = 2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   scale_x_continuous(breaks = unique(quad_richness_df$year)) +
+   labs(y = "Macroalgal Richness",
+        x = "Year",
+        title = "") +
+   trends_theme)
+
+# ggsave(filename = "output/figure_s1a.png", figure_s1a, height = 10, width = 14)
+```
+
+## Figure 2b Richness @ Site by Year
+
+### prep
+
+```{r site level richness df}
+site_richness_df <- alpha_diversity_site_macro %>% 
+  group_by(year, habitat) %>% 
+  summarise(richness_mean = mean(richness),
+            richness_se = se(richness))
+
+```
+
+
+### plot
+```{r plot figure 2b}
+(figure_s1b <- ggplot() +
+  geom_point(data = site_richness_df, aes(x = year, y = richness_mean, colour = habitat), size = 4,
+             position = position_dodge(0.4)) +
+#  geom_jitter(data = alpha_diversity_site_macro, 
+#  aes(x = year, y = richness, colour = habitat, alpha = 0.05), size = 2, width = 0.4, height = 0) +
+  geom_line(data = site_richness_df, aes(x = year, y = richness_mean, colour = habitat), linewidth = 1) +
+  geom_errorbar(data = site_richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se, colour = habitat), size = 1.3, width = 0,  position = position_dodge(0.4)) +
+  scale_colour_manual(values = habitat_colours) +
+  annotate("segment", x = 2006, xend = 2010, y = 12, yend = 12, linewidth = 2, colour = "grey") +
+  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
+  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
+   scale_x_continuous(breaks = unique(site_richness_df$year)) +
+   labs(y = "",
+        x = "Year",
+        title = "") +
+  trends_theme)
+
+# ggsave(filename = "output/figure_s1b.png", figure_s1b, height = 10, width = 14)
+```
+
+## Figure 2 Full Plot
+```{r ggpubr fig2, fig.height = 10, fig.width=22}
+fig2_plot_list <- list(figure_s1a, figure_s1b)
+(figure_s1 <- ggarrange(figure_s1a, figure_s1b,
+                      ncol = 2, nrow = 1, 
+                      labels = c("a.", "b."),
+                      common.legend = TRUE,
+                      legend = "bottom", 
+                      font.label = list(size = 24, color = "black", face = "plain")))
+
+# ggsave(filename = "output/figure_s1v4.png", figure_s1, height = 10, width = 22)
+```
+
+## diversity-synchrony relationships: plot level
 
 ```{r ds plot}
 rich_synch_mod <- glmmTMB(synchrony_trans~ richness_mean*habitat + (1|site), family = beta_family(), data = diversity_stability_synchrony)
@@ -1424,185 +1487,3 @@ filtered_rich_synch_effects <- rich_synch_emm %>%
   trends_theme
          )
 ```
-
-
-## create new dfs
-```{r mean and spatial synchrony}
-# calculate spatial synchrony - degree to which quadrats vary together within a site
-spatial_synchrony <- codyn::synchrony(df = alpha_diversity_quad_macro,
-                                   time.var = "year",
-                                   species.var = "location",
-                                   abundance.var = "macroalgal_prop_cover",
-                                   metric = "Loreau",
-                                   replicate.var = "site_habitat")
-colnames(spatial_synchrony) <- c("site_habitat", "spatial_synchrony") # rename to avoid overwrite
-
-# calculate mean synchrony within a site (!= synchrony of species at the site level!)
-mean_synchrony_stability <- diversity_stability_synchrony %>% 
-  group_by(habitat, site) %>% 
-  summarise(synchrony_mean = mean(synchrony, na.rm = T),
-            stability_mean = mean(cover_stability, na.rm = T))
-
-# merge with site level dss metrics
-dss_spatial <- merge(diversity_stability_site, spatial_synchrony, by = "site_habitat")
-dss_spatial_2 <- merge(dss_spatial, mean_synchrony_stability, by = c("habitat", "site"))
-
-dss_spatial_ranges <- dss_spatial_2 %>%
-  group_by(habitat) %>%
-  summarise(min_spatial_synchrony = min(spatial_synchrony, na.rm = TRUE),
-            max_spatial_synchrony = max(spatial_synchrony, na.rm = TRUE),
-            min_mean_synchrony= min(synchrony_mean, na.rm = TRUE),
-            max_mean_synchrony = max(synchrony_mean, na.rm  = TRUE),
-            min_mean_stability = min(stability_mean, na.rm = TRUE),
-            max_mean_stability = max(stability_mean, na.rm  = TRUE))
-  
-
-```
-
-
-## models
-```{r model spatial synchrony}
-spatial_synchrony_mod <- glmmTMB(cover_stability ~ spatial_synchrony*habitat, family = Gamma("log"), data = dss_spatial_2)
-hist(residuals(spatial_synchrony_mod)) # a little skew
-plot(residuals(spatial_synchrony_mod) ~ predict(spatial_synchrony_mod))
-summary(spatial_synchrony_mod)
-Anova(spatial_synchrony_mod)
-#                             Chisq Df Pr(>Chisq)    
-# spatial_synchrony         16.2914  1  5.431e-05 ***
-# habitat                   19.5303  3  0.0002124 ***
-# spatial_synchrony:habitat  6.7239  3  0.0812368 .  
-emtrends(spatial_synchrony_mod, pairwise ~ habitat, var = "spatial_synchrony") # no sig differences but close
-# contrast                    estimate    SE  df z.ratio p.value
-# Fringing - Backreef            0.404 1.765 Inf   0.229  0.9958
-# Fringing - Forereef 10m        1.365 1.754 Inf   0.778  0.8643
-# Fringing - Forereef 17m        3.112 1.882 Inf   1.654  0.3484
-# Backreef - Forereef 10m        0.961 0.857 Inf   1.121  0.6766
-# Backreef - Forereef 17m        2.708 1.095 Inf   2.472  0.0644
-# Forereef 10m - Forereef 17m    1.747 1.078 Inf   1.621  0.3668
-```
-
-```{r plot spatial synchrony}
-spat_stab_emm <- emmip(spatial_synchrony_mod,
-                        habitat ~ spatial_synchrony,
-                        at = list(spatial_synchrony = seq(0,1,0.01)), plotit = F, CIs = T)  
-
-filtered_spat_stab_effects <- spat_stab_emm %>%
-  left_join(dss_spatial_ranges, by = c("habitat")) %>%
-  filter(spatial_synchrony >= min_spatial_synchrony & 
-           spatial_synchrony <= max_spatial_synchrony)
-
-
-(figure_5a <- 
-  ggplot() +
-  geom_point(data = dss_spatial_2,
-             aes(x = spatial_synchrony, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
-  geom_line(data = filtered_spat_stab_effects, aes(x = spatial_synchrony, y = exp(yvar), colour = habitat), size = 1.5) +
-  geom_ribbon(data = filtered_spat_stab_effects, aes(x = spatial_synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
-              alpha = 0.3) +
-  scale_colour_manual(values = habitat_colours) +
-  scale_fill_manual(values = habitat_colours) +
-  labs(y = "Stability\n", x = "Spatial synchrony", title = "") +
-  trends_theme
-         )
-
-```
-
-```{r mean synchrony}
-mean_synchrony_mod <- glmmTMB(cover_stability ~ synchrony_mean*habitat, family = Gamma("log"), data = dss_spatial_2)
-hist(residuals(mean_synchrony_mod)) # chunky
-plot(residuals(mean_synchrony_mod) ~ predict(mean_synchrony_mod)) # fine
-summary(mean_synchrony_mod)
-Anova(mean_synchrony_mod)
-#                         Chisq Df Pr(>Chisq)    
-# synchrony_mean         32.914  1  9.634e-09 ***
-# habitat                18.523  3  0.0003430 ***
-# synchrony_mean:habitat 19.062  3  0.0002654 ***
-emtrends(mean_synchrony_mod, pairwise ~ habitat, var = "synchrony_mean") # no sig differences but close
-# contrast                    estimate    SE  df z.ratio p.value
-# Fringing - Backreef            -3.26 1.503 Inf  -2.166  0.1327
-# Fringing - Forereef 10m         2.22 0.995 Inf   2.231  0.1149
-# Fringing - Forereef 17m         3.37 1.220 Inf   2.764  0.0291
-# Backreef - Forereef 10m         5.48 1.622 Inf   3.377  0.0041
-# Backreef - Forereef 17m         6.63 1.769 Inf   3.748  0.0010
-# Forereef 10m - Forereef 17m     1.15 1.363 Inf   0.846  0.8322
-```
-
-```{r plot mean synchrony}
-mean_synch_emm <- emmip(mean_synchrony_mod,
-                        habitat ~ synchrony_mean,
-                        at = list(synchrony_mean = seq(0,1,0.01)), plotit = F, CIs = T)  
-
-filtered_mean_synch_effects <- mean_synch_emm %>%
-  left_join(dss_spatial_ranges, by = c("habitat")) %>%
-  filter(synchrony_mean >= min_mean_synchrony & 
-           synchrony_mean <= max_mean_synchrony)
-
-
-(figure_5b <- 
-  ggplot() +
-  geom_point(data = dss_spatial_2,
-             aes(x = synchrony_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
-  geom_line(data = filtered_mean_synch_effects, aes(x = synchrony_mean, y = exp(yvar), colour = habitat), size = 1.5) +
-  geom_ribbon(data = filtered_mean_synch_effects, aes(x = synchrony_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
-              alpha = 0.3) +
-  scale_colour_manual(values = habitat_colours) +
-  scale_fill_manual(values = habitat_colours) +
-  labs(y = "Stability\n", x = "Mean synchrony", title = "") +
-  trends_theme
-         )
-```
-
-```{r alpha gamma stability mod plot}
-alpha_gamma_stab_mod <- glmmTMB(cover_stability ~ stability_mean*habitat, family = Gamma("log"), data = dss_spatial_2)
-summary(alpha_gamma_stab_mod)
-Anova(alpha_gamma_stab_mod)
-#                          Chisq Df Pr(>Chisq)    
-# stability_mean         61.2725  1   4.97e-15 ***
-# habitat                12.9323  3   0.004785 ** 
-# stability_mean:habitat  9.4832  3   0.023511 *  
-
-emtrends(alpha_gamma_stab_mod, pairwise ~ habitat, var = "stability_mean") # backreef different from fringe and forereef 10
-# Fringing - Backreef            1.078 0.381 Inf   2.828  0.0242
-# Fringing - Forereef 10m        0.175 0.345 Inf   0.509  0.9571
-# Fringing - Forereef 17m        0.380 0.305 Inf   1.248  0.5965
-# Backreef - Forereef 10m       -0.903 0.349 Inf  -2.589  0.0475
-# Backreef - Forereef 17m       -0.698 0.309 Inf  -2.256  0.1085
-# Forereef 10m - Forereef 17m    0.205 0.263 Inf   0.779  0.8638
-
-alpha_gamma_emm <- emmip(alpha_gamma_stab_mod,
-                        habitat ~ stability_mean,
-                        at = list(stability_mean = seq(0,10,0.01)), plotit = F, CIs = T)  
-
-filtered_ag_effects <- alpha_gamma_emm %>%
-  left_join(dss_spatial_ranges, by = c("habitat")) %>%
-  filter(stability_mean >= min_mean_stability & 
-           stability_mean <= max_mean_stability)
-
-
-(alpha_gamma_stability_plot <- 
-  ggplot() +
-  geom_point(data = dss_spatial_2,
-             aes(x = stability_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
-  geom_line(data = filtered_ag_effects, aes(x = stability_mean, y = exp(yvar), colour = habitat), size = 1.5) +
-  geom_ribbon(data = filtered_ag_effects, aes(x = stability_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
-              alpha = 0.3) +
-  scale_colour_manual(values = habitat_colours) +
-  scale_fill_manual(values = habitat_colours) +
-  labs(y = "Site stability\n", x = "Plot stability", title = "") +
-  trends_theme
-         )
-```
-
-## panel graph
-```{r figure 5 panel, fig.height = 6, fig.width=22}
-(figure_5 <- ggarrange(figure_5b, figure_5a, alpha_gamma_stability_plot, 
-                      ncol = 3, nrow = 1, 
-                      common.legend = TRUE,
-                      legend = "bottom", 
-                      labels = c("a.", "b.", "c."),
-                      font.label = list(size = 26, color = "black", face = "plain")))
-
-# ggsave(filename = "output/figure_5_option3.png", figure_5, height = 6, width = 22)
-```
-
-# SUPPLEMENTAL FIGURE CODE:
