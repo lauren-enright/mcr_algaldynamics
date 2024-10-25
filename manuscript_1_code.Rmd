@@ -39,8 +39,9 @@ source("R/functions.R")
 ```{r figure formatting info}
 trends_theme <- theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
-        axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text.x = element_text(size = 22, angle = 45, hjust = 1),
         axis.title.y = element_text(size=24), 
+        axis.text.y = element_text(size = 22),
         plot.title = element_text(size = 24),
         panel.background = element_rect(fill = "white"), 
         panel.grid.major = element_blank(),  #remove major-grid labels
@@ -250,7 +251,7 @@ plot_list <- lapply(levels(figure_1_data$habitat), function(hab) {
                       font.label = list(size = 24, color = "black", face = "plain")))
 
 
-# ggsave(filename = "output/figure_1v3.png", figure_1, height = 10, width = 14)
+# ggsave(filename = "output/figure_1v4.png", figure_1, height = 10, width = 14)
 ```
 
 # Figure 2 - macroalgal richness trends among habitats
@@ -265,25 +266,8 @@ alpha_diversity_quad_macro <-
     richness = rowSums(macroalgae[, -which(names(macroalgae) %in% meta_cols)] > 0)
   )
 
-#JG Add Evenness
-alpha_diversity_quad_macro$ev <- alpha_diversity_quad_macro$shannon /
-  (log(alpha_diversity_quad_macro$richness))
-
-#makes 1 species 0 and 0 species NA for evenness metric
-alpha_diversity_quad_macro$evenness <- ifelse(
-  alpha_diversity_quad_macro$richness == 0,
-  NA,
-  # If richness == 0, ev is NA
-  ifelse(
-    alpha_diversity_quad_macro$richness == 1,
-    0,
-    # If richness == 1, ev is 0
-    alpha_diversity_quad_macro$ev
-  )
-)  
-
 alpha_diversity_quad_macro <- merge(meta_df, alpha_diversity_quad_macro, by = c("location", "year"))
-alpha_diversity_quad_macro$evenness[is.na(alpha_diversity_quad_macro$evenness)] <- 0
+
 ```
 
 ```{r site level richness df}
@@ -297,28 +281,7 @@ alpha_diversity_site_macro <-
   left_join(site_meta_df, alpha_diversity_site_macro, by = c("site_habitat", "year"))
 ```
 
-```{r site level evenness}
-#JG Add Evenness
-alpha_diversity_site_macro$ev <- alpha_diversity_site_macro$shannon /
-  (log(alpha_diversity_site_macro$richness))
 
-#makes 1 species 0 and 0 species NA for evenness metric
-alpha_diversity_site_macro$evenness <- ifelse(
-  alpha_diversity_site_macro$richness == 0,
-  NA,
-  # If richness == 0, ev is NA
-  ifelse(
-    alpha_diversity_site_macro$richness == 1,
-    0,
-    # If richness == 1, ev is 0
-    alpha_diversity_site_macro$ev
-  )
-)  
-
-alpha_diversity_site_macro <- left_join(site_meta_df, alpha_diversity_site_macro,by = join_by(year, site, habitat, site_habitat))
-# prior transformation did not properly set 0 values for evenness
-alpha_diversity_site_macro$evenness[is.na(alpha_diversity_site_macro$evenness)] <- 0
-```
 
 ```{r add cover to quad df}
 macroalgal_cover_quad <- cover_df[,c("year", "habitat", "site", "location", "macroalgae")]
@@ -359,15 +322,13 @@ quad_richness_df <- alpha_diversity_quad_macro %>%
   geom_errorbar(data = quad_richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se,
                                              colour = habitat), width = 0, size = 1.3, position = position_dodge(0.4)) +
   scale_colour_manual(values = habitat_colours) +
-  # scale_fill_manual(values = habitat_colours) +
-  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
   annotate("segment", x = 2006, xend = 2010, y = 2, yend = 2, linewidth = 2, colour = "grey") +
   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
    scale_x_continuous(breaks = unique(quad_richness_df$year)) +
    labs(y = "Macroalgal Richness",
         x = "Year",
-        title = "Quadrat-level Richness") +
+        title = "") +
    trends_theme)
 
 # ggsave(filename = "output/figure_2a.png", figure_2a, height = 10, width = 14)
@@ -396,14 +357,13 @@ site_richness_df <- alpha_diversity_site_macro %>%
   geom_line(data = site_richness_df, aes(x = year, y = richness_mean, colour = habitat), linewidth = 1) +
   geom_errorbar(data = site_richness_df, aes(x = year, ymin = richness_mean - richness_se, ymax = richness_mean + richness_se, colour = habitat), size = 1.3, width = 0,  position = position_dodge(0.4)) +
   scale_colour_manual(values = habitat_colours) +
-  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
   annotate("segment", x = 2006, xend = 2010, y = 12, yend = 12, linewidth = 2, colour = "grey") +
   geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
   geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
    scale_x_continuous(breaks = unique(site_richness_df$year)) +
    labs(y = "",
         x = "Year",
-        title = "Site-level Richness") +
+        title = "") +
   trends_theme)
 
 # ggsave(filename = "output/figure_2b.png", figure_2b, height = 10, width = 14)
@@ -412,21 +372,18 @@ site_richness_df <- alpha_diversity_site_macro %>%
 ## Figure 2 Full Plot
 ```{r ggpubr fig2, fig.height = 10, fig.width=22}
 fig2_plot_list <- list(figure_2a, figure_2b)
-(figure_2 <- ggarrange(plotlist = fig2_plot_list, 
+(figure_2 <- ggarrange(figure_2a, figure_2b,
                       ncol = 2, nrow = 1, 
                       labels = c("a.", "b."),
                       common.legend = TRUE,
                       legend = "bottom", 
                       font.label = list(size = 24, color = "black", face = "plain")))
 
-# ggsave(filename = "output/figure_2v3.png", figure_2, height = 10, width = 22)
+# ggsave(filename = "output/figure_2v4.png", figure_2, height = 10, width = 22)
 ```
 
 
 # Figure 3 - ecosystem function
-
-
-
 
 ## models
 
@@ -460,20 +417,17 @@ emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not differe
 
 ## figure 3a plot setup
 ```{r figure 3a setup}
-diversity_ranges_quad <- alpha_diversity_quad_macro %>%
-  group_by(habitat) %>%
-  summarise(min_richness = min(richness),
-            max_richness = max(richness),
-            min_cover= min(cover_trans),
-            max_cover = max(cover_trans))
+
+
+diversity_ranges_quad <- extract_ranges(alpha_diversity_quad_macro, "habitat", c("richness", "cover_trans"))
 
 cover_emm <- emmip(cover_mod,
                         habitat ~ richness,
                         at = list(richness = seq(0,10,1)), plotit = F, CIs = T)
 
-filtered_cover_effects <- cover_emm %>%
-  left_join(diversity_ranges_quad, by = c("habitat")) %>%
-  filter(richness >= min_richness & richness <= max_richness)
+
+
+filtered_cover_effects <- filter_ranges(trend = cover_emm, range_obj = diversity_ranges_quad, group = "habitat", value = "richness")
 
 ```
 
@@ -579,13 +533,19 @@ fg_summary_site_wide_SUM <- fg_summary_site_SUM %>%
 fg_summary_site_wide_SUM$fg_richness_site <- vegan::specnumber(fg_summary_site_wide_SUM[4:13])
 
 fg_summary_site_wide <- fg_summary_site_wide_SUM 
+
+#merge Noam's data with functional group summary 
+functional_richness_quad_cover <- merge(alpha_diversity_quad_macro, fg_summary_wide,
+                                        by = c("location", "year", "site", "habitat"))
+
+#merge site level cover with site functional group richness
+functional_richness_site_cover<- merge(alpha_diversity_site_macro, fg_summary_site_wide,
+                                by = c("year", "site",  "habitat"))
 ```
 
 ### model
 ```{r functional richness cover mod quad}
-#merge Noam's data with functional group summary 
-functional_richness_quad_cover <- merge(alpha_diversity_quad_macro, fg_summary_wide,
-                                        by = c("location", "year", "site", "habitat"))
+
 
 cover_mod_fg <- glmmTMB(cover_trans ~ fg_richness_quad*habitat + (1|site/location) + (1|year), family = beta_family(), data = functional_richness_quad_cover)
 
@@ -865,10 +825,7 @@ filtered_site_cover_effects <- site_cover_emm %>%
 ### model
 
 ```{r site level fg richness model}
-#merge site level cover with site functional group richness
 
-functional_richness_site_cover<- merge(alpha_diversity_site_macro, fg_summary_site_wide,
-                                by = c("year", "site",  "habitat"))
 
 
 site_cover_mod_fg <- glmmTMB(cover_trans ~ fg_richness_site*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = functional_richness_site_cover)
@@ -1677,353 +1634,3 @@ filtered_ag_effects <- alpha_gamma_emm %>%
 ```
 
 # SUPPLEMENTAL FIGURE CODE:
-
-## evenness over time
-```{r evenness over time quad,  fig.height = 10, fig.width = 14}
-
-
-quad_evenness_df <- alpha_diversity_quad_macro %>% 
-  drop_na(evenness) %>%
-  group_by(year, habitat) %>% 
-  summarise(evenness_mean = mean(evenness),
-            evenness_se = se(evenness))
-
-(evenness_time_quad <- ggplot() +
-  geom_point(data = quad_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), size = 3) +
-  geom_line(data = quad_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), linewidth = 1) +
-  geom_errorbar(data = quad_evenness_df, aes(x = year, ymin = evenness_mean - evenness_se, ymax = evenness_mean + evenness_se,
-                                             colour = habitat), width = 0, size = 1.3) +
-  scale_colour_manual(values = habitat_colours) +
-  # scale_fill_manual(values = habitat_colours) +
-  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
-  annotate("segment", x = 2006, xend = 2010, y = .7, yend = .7, linewidth = 2, colour = "grey") +
-  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
-  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
-   scale_x_continuous(breaks = unique(quad_evenness_df$year)) +
-   labs(y = "Macroalgal evenness \n",
-        x = "Year",
-        title = "c. Quadrat-level evenness") +
-  theme_bw() + 
-  theme(axis.title.x = element_text(size=24), 
-        axis.text.x = element_text(angle = 45, hjust = 1, size = 22),
-        axis.text.y = element_text( size = 22),
-        axis.title.y = element_text(size=24), 
-        plot.title = element_text(size=26),
-        panel.background = element_blank(), 
-        panel.grid.major = element_blank(),  #remove major-grid labels
-        panel.grid.minor = element_blank(),  #remove minor-grid labels
-        plot.background = element_rect(fill = "white"),
-        legend.text = element_text(size = rel(1)), # increase legend text
-        legend.title = element_blank(),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal', # make legend horizontal
-        legend.box.background = element_rect(colour = "black")) )
-
-# ggsave(filename = "output/evenness_time_quad.png", evenness_time_quad, height = 10, width = 14)
-```
-
-##  Evenness @ Site by Year
-```{r evenness over time quad,  fig.height = 10, fig.width = 14}
-site_evenness_df <- alpha_diversity_site_macro %>% 
-  drop_na(evenness) %>%
-  group_by(year, habitat) %>% 
-  summarise(evenness_mean = mean(evenness),
-            evenness_se = se(evenness))
-
-(evenness_time_site <- ggplot() +
-  geom_point(data = site_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), size = 3) +
-  geom_line(data = site_evenness_df, aes(x = year, y = evenness_mean, colour = habitat), linewidth = 1) +
-  geom_errorbar(data = site_evenness_df, aes(x = year, ymin = evenness_mean - evenness_se, ymax = evenness_mean + evenness_se, colour = habitat), size = 1.3, width = 0) +
-  scale_colour_manual(values = habitat_colours) +
-  #geom_segment(aes(y = 75, yend = 75, x = 2006, xend = 2010), linewidth = 2, colour = "grey") +
-  annotate("segment", x = 2006, xend = 2010, y = 1, yend = 1, linewidth = 2, colour = "grey") +
-  geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
-  geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
-   scale_x_continuous(breaks = unique(site_evenness_df$year)) +
-   labs(y = "Macroalgal evenness \n",
-        x = "Year",
-        title = "Site-level evenness") +
-  theme_bw() + 
-  theme_bw() + 
-  theme(axis.title.x = element_text(size=24), 
-        axis.text.x = element_text(angle = 45, hjust = 1, size = 22),
-        axis.text.y = element_text( size = 22),
-        axis.title.y = element_text(size=24), 
-        plot.title = element_text(size=26),
-        panel.background = element_blank(), 
-        panel.grid.major = element_blank(),  #remove major-grid labels
-        panel.grid.minor = element_blank(),  #remove minor-grid labels
-        plot.background = element_rect(fill = "white"),
-        legend.text = element_text(size = rel(1)), # increase legend text
-        legend.title = element_blank(),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal', # make legend horizontal
-        legend.box.background = element_rect(colour = "black")) )
-
-# ggsave(filename = "output/evenness_time_site.png", evenness_time_site, height = 10, width = 14)
-```
-
-## evenness and cover relationships
-
-```{r evenness cover quad level model}
-
-# NOTE: I tried transforming evenness and the trends/plot were basically identical, just on a different scale. There's no fixing a shit sandwich - Noam
-evenness_cover_mod_quad <- glmmTMB(cover_trans ~ evenness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro)
-summary(evenness_cover_mod_quad)
-Anova(evenness_cover_mod_quad)
-#                    Chisq Df Pr(>Chisq)    
-# evenness         9226.79  1  < 2.2e-16 ***
-# habitat           270.78  3  < 2.2e-16 ***
-# evenness:habitat  411.03  3  < 2.2e-16 ***
-hist(residuals(evenness_cover_mod_quad)) # slight pos skeq
-plot(residuals(evenness_cover_mod_quad) ~ fitted(evenness_cover_mod_quad))
-r.squaredGLMM(evenness_cover_mod_quad) # 0.38, 0.46
-emtrends(evenness_cover_mod_quad, pairwise ~ habitat, var = "evenness") # everything different
-#  contrast                    estimate     SE  df z.ratio p.value
-#  Fringing - Backreef           -0.206 0.0708 Inf  -2.904  0.0193
-#  Fringing - Forereef 10m        0.491 0.0679 Inf   7.228  <.0001
-#  Fringing - Forereef 17m        0.920 0.0689 Inf  13.361  <.0001
-#  Backreef - Forereef 10m        0.696 0.0581 Inf  11.994  <.0001
-#  Backreef - Forereef 17m        1.126 0.0595 Inf  18.925  <.0001
-#  Forereef 10m - Forereef 17m    0.429 0.0551 Inf   7.794  <.0001
-
-```
-
-
-```{r evenness cover plot setup}
-diversity_ranges_quad_evenness <- alpha_diversity_quad_macro %>%
-  group_by(habitat) %>%
-  summarise(min_evenness = min(evenness),
-            max_evenness = max(evenness),
-            min_cover= min(cover_trans),
-            max_cover = max(cover_trans))
-
-cover_emm_evenness <- emmip(evenness_cover_mod_quad,
-                        habitat ~ evenness,
-                        at = list(evenness = seq(0,10,1)), plotit = F, CIs = T)
-
-filtered_cover_effects_evenness <- cover_emm_evenness %>%
-  left_join(diversity_ranges_quad_evenness, by = c("habitat")) %>%
-  filter(evenness >= min_evenness & evenness <= max_evenness)
-
-```
-
-```{r evenness cover plot}
-(evenness_cover_quad_plot <- 
-  ggplot() +
-  geom_point(data = alpha_diversity_quad_macro,
-             aes(x = evenness, y = cover_trans, colour = habitat), size = 1, alpha = 1) + 
-  geom_line(data = filtered_cover_effects_evenness, aes(x = evenness, y = inv_logit(yvar), colour = habitat)) +
-  geom_ribbon(data = filtered_cover_effects_evenness, aes(x = evenness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
-              alpha = 0.3) +
-  scale_colour_manual(values = habitat_colours) +
-  scale_fill_manual(values = habitat_colours) +
-  labs(y = "Cover\n", x = "Macroalgal evenness", title = "") +
-  theme_bw() + 
-  theme(axis.title.x = element_text(size=18), 
-        axis.title.y = element_text(size=18), 
-        panel.background = element_blank(), 
-        panel.grid.major = element_blank(),  #remove major-grid labels
-        panel.grid.minor = element_blank(),  #remove minor-grid labels
-        plot.background = element_rect(fill = "white"),
-        legend.text = element_text(size = rel(1)), # increase legend text
-        legend.title = element_blank(),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal', # make legend horizontal
-        legend.box.background = element_rect(colour = "black"))  # add box around legend
-         )
-
-# ggsave(filename = "output/evenness_cover_quad.png", evenness_cover_quad_plot, height = 10, width = 14)
-```
-
-## site level evenness versus cover
-
-
-```{r site level evenness}
-
-evenness_site_cover_mod <- glmmTMB(cover_trans ~ evenness*habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro)
-summary(evenness_site_cover_mod)
-Anova(evenness_site_cover_mod)
-#                    Chisq Df Pr(>Chisq)   
-# evenness          8.1578  1   0.004288 **
-# habitat           6.6305  3   0.084654 . 
-# evenness:habitat 14.6557  3   0.002136 ** 
-hist(residuals(evenness_site_cover_mod)) # some positive skew, not the worst thing ever
-plot(residuals(evenness_site_cover_mod) ~ fitted(evenness_site_cover_mod)) # a little heteroscedastic but can't be less than 0
-r.squaredGLMM(evenness_site_cover_mod) # 0.1300791 0.5988565
-emtrends(evenness_site_cover_mod, pairwise ~ habitat, var = "evenness") # only the outers are different from each other
-# contrast                    estimate    SE  df z.ratio p.value
-# Fringing - Backreef            0.967 0.545 Inf   1.774  0.2860
-# Fringing - Forereef 10m        1.258 0.409 Inf   3.073  0.0114
-# Fringing - Forereef 17m       -0.228 0.459 Inf  -0.497  0.9597
-# Backreef - Forereef 10m        0.292 0.563 Inf   0.517  0.9549
-# Backreef - Forereef 17m       -1.195 0.595 Inf  -2.007  0.1854
-# Forereef 10m - Forereef 17m   -1.486 0.472 Inf  -3.146  0.0090
-```
-### plot 
-
-```{r  evenness site plot }
-diversity_ranges_site_evenness <- alpha_diversity_site_macro %>%
-  group_by(habitat) %>%
-  summarise(min_evenness = min(evenness),
-            max_evenness = max(evenness),
-            min_cover= min(cover_trans),
-            max_cover = max(cover_trans))
-
-cover_emm_evenness_site <- emmip(evenness_site_cover_mod,
-                        habitat ~ evenness,
-                        at = list(evenness = seq(0,1,0.01)), plotit = F, CIs = T)
-
-filtered_cover_effects_evenness_site <- cover_emm_evenness_site %>%
-  left_join(diversity_ranges_site_evenness, by = c("habitat")) %>%
-  filter(evenness >= min_evenness & evenness <= max_evenness)
-
-(evenness_cover_site_plot <- 
-  ggplot() +
-  geom_point(data = alpha_diversity_site_macro,
-             aes(x = evenness, y = cover_trans, colour = habitat), size = 1, alpha = 0.5) + 
-  geom_line(data = filtered_cover_effects_evenness_site, aes(x = evenness, y = inv_logit(yvar), colour = habitat)) +
-  geom_ribbon(data = filtered_cover_effects_evenness_site, aes(x = evenness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
-              alpha = 0.3) +
-  scale_colour_manual(values = habitat_colours) +
-  scale_fill_manual(values = habitat_colours) +
-  labs(y = "Cover\n", x = "Macroalgal evenness", title = "3f. Site Level Evenness") +
-  theme_bw() + 
-  theme(axis.title.x = element_text(size=18), 
-        axis.title.y = element_text(size=18), 
-        panel.background = element_blank(), 
-        panel.grid.major = element_blank(),  #remove major-grid labels
-        panel.grid.minor = element_blank(),  #remove minor-grid labels
-        plot.background = element_rect(fill = "white"),
-        legend.text = element_text(size = rel(1)), # increase legend text
-        legend.title = element_blank(),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal', # make legend horizontal
-        legend.box.background = element_rect(colour = "black"))  # add box around legend
-         )
-
-# ggsave(filename = "output/evenness_cover_site.png", evenness_cover_site_plot, height = 10, width = 14)
-```
-
-## evenness stability
-
-### quad level mod
-
-```{r evenness stability quad mod}
-even_stab_mod_quad <- glmmTMB(cover_stability~ evenness_mean*habitat + (1|site), family = Gamma("log"), data = diversity_stability_synchrony)
-summary(even_stab_mod_quad)
-Anova(even_stab_mod_quad)
-
-#                          Chisq Df Pr(>Chisq)    
-# evenness_mean         1235.417  1    < 2e-16 ***
-# habitat                292.670  3    < 2e-16 ***
-# evenness_mean:habitat   13.518  3    0.00364 ** 
-hist(residuals(even_stab_mod_quad)) # slight positive skew
-plot(residuals(even_stab_mod_quad) ~ fitted(even_stab_mod_quad)) 
-r.squaredGLMM(even_stab_mod_quad) # 0.6582154 0.6582154
-emtrends(even_stab_mod_quad, pairwise ~ habitat, var = "evenness_mean") # forereef 10 diff from fringe and backreef
-# contrast                    estimate    SE  df z.ratio p.value
-# Fringing - Backreef          -0.0123 0.151 Inf  -0.082  0.9998
-# Fringing - Forereef 10m       0.4039 0.148 Inf   2.725  0.0326
-# Fringing - Forereef 17m       0.3023 0.140 Inf   2.152  0.1368
-# Backreef - Forereef 10m       0.4162 0.140 Inf   2.979  0.0153
-# Backreef - Forereef 17m       0.3146 0.131 Inf   2.394  0.0782
-# Forereef 10m - Forereef 17m  -0.1016 0.129 Inf  -0.790  0.8589
-
-even_stab_emm <- emmip(even_stab_mod_quad,
-                        habitat ~ evenness_mean,
-                        at = list(evenness_mean = seq(0,1,0.01)), plotit = F, CIs = T)
-
-filtered_even_stab_effects <- even_stab_emm %>%
-  left_join(dss_ranges, by = c("habitat")) %>%
-  filter(evenness_mean >= min_evenness & evenness_mean <= max_evenness)
-
-(even_stab_plot <- 
-  ggplot() +
-  geom_point(data = diversity_stability_synchrony,
-             aes(x = evenness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
-  geom_line(data = filtered_even_stab_effects, aes(x = evenness_mean, y = exp(yvar), colour = habitat), size = 1.5) +
-  geom_ribbon(data = filtered_even_stab_effects, aes(x = evenness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
-              alpha = 0.3) +
-  scale_colour_manual(values = habitat_colours) +
-  scale_fill_manual(values = habitat_colours) +
-  labs(y = "Stability\n", x = "Evenness", title = "") +
-  theme_bw() + 
-  theme(axis.title.x = element_text(size=24), 
-        axis.title.y = element_text(size=24), 
-        axis.text.x = element_text(size=22), 
-        axis.text.y = element_text(size=22),
-        legend.text = element_text(size=22),
-        plot.title = element_text(size=26), 
-        panel.background = element_blank(), 
-        panel.grid.major = element_blank(),  #remove major-grid labels
-        panel.grid.minor = element_blank(),  #remove minor-grid labels
-        plot.background = element_rect(fill = "white"),
-        legend.title = element_blank(),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal', # make legend horizontal
-        legend.box.background = element_rect(colour = "black"))  # add box around legend
-         )
-
-# ggsave(filename = "output/evenness_stability_quad.png", even_stab_plot, height = 10, width = 14)
-```
-
-## site level evenness stability
-
-```{r site level evenness}
-even_stab_mod_site <- glmmTMB(cover_stability~ evenness_mean*habitat, family = Gamma("log"), data = diversity_stability_synchrony_site)
-summary(even_stab_mod_site)
-Anova(even_stab_mod_site)
-
-#                         Chisq Df Pr(>Chisq)   
-# evenness_mean          0.1035  1   0.747623   
-# habitat               11.8743  3   0.007827 **
-# evenness_mean:habitat  9.6254  3   0.022034 * 
-hist(residuals(even_stab_mod_site)) # a little chunky
-plot(residuals(even_stab_mod_site) ~ fitted(even_stab_mod_site)) 
-r.squaredGLMM(even_stab_mod_site) # 0.51
-emtrends(even_stab_mod_site, pairwise ~ habitat, var = "evenness_mean") # no diff
-# contrast                    estimate   SE  df z.ratio p.value
-# Fringing - Backreef             2.82 1.66 Inf   1.705  0.3210
-# Fringing - Forereef 10m         8.30 3.70 Inf   2.244  0.1115
-# Fringing - Forereef 17m         4.27 1.94 Inf   2.205  0.1219
-# Backreef - Forereef 10m         5.48 3.82 Inf   1.432  0.4793
-# Backreef - Forereef 17m         1.45 2.17 Inf   0.668  0.9093
-# Forereef 10m - Forereef 17m    -4.03 3.95 Inf  -1.019  0.7385
-
-even_stab_emm_site <- emmip(even_stab_mod_site,
-                        habitat ~ evenness_mean,
-                        at = list(evenness_mean = seq(0,1,0.01)), plotit = F, CIs = T)
-
-filtered_even_stab_effects_site <- even_stab_emm_site %>%
-  left_join(dss_ranges, by = c("habitat")) %>%
-  filter(evenness_mean >= min_evenness & evenness_mean <= max_evenness)
-# This is useless
-(even_stab_plot_site <- 
-  ggplot() +
-  geom_point(data = diversity_stability_synchrony_site,
-             aes(x = evenness_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
-  geom_line(data = filtered_even_stab_effects_site, aes(x = evenness_mean, y = exp(yvar), colour = habitat), size = 1.5) +
-  geom_ribbon(data = filtered_even_stab_effects_site, aes(x = evenness_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
-              alpha = 0.3) +
-  scale_colour_manual(values = habitat_colours) +
-  scale_fill_manual(values = habitat_colours) +
-  labs(y = "Stability\n", x = "Evenness", title = "") +
-  theme_bw() + 
-  theme(axis.title.x = element_text(size=24), 
-        axis.title.y = element_text(size=24), 
-        axis.text.x = element_text(size=22), 
-        axis.text.y = element_text(size=22),
-        legend.text = element_text(size=22),
-        plot.title = element_text(size=26), 
-        panel.background = element_blank(), 
-        panel.grid.major = element_blank(),  #remove major-grid labels
-        panel.grid.minor = element_blank(),  #remove minor-grid labels
-        plot.background = element_rect(fill = "white"),
-        legend.title = element_blank(),
-        legend.position = 'bottom', # move legend to bottom
-        legend.box = 'horizontal', # make legend horizontal
-        legend.box.background = element_rect(colour = "black"))  # add box around legend
-         )
-# ggsave(filename = "output/evenness_stability_site.png", even_stab_plot_site, height = 10, width = 14)
-```
