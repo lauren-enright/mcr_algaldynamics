@@ -28,6 +28,7 @@ library(emmeans)
 library(dplyr)
 library(janitor)
 library(knitr)
+library(performance)
 ```
 
 ## Functions
@@ -413,6 +414,7 @@ Anova(cover_mod)
 hist(residuals(cover_mod)) # looks fine
 plot(residuals(cover_mod) ~ fitted(cover_mod)) # negative trend but it can't be less than 0 so not too concerned. some wave pattern
 r.squaredGLMM(cover_mod) # 0.631, 0.650
+performance::r2(cover_mod) # 0.634, 0.654
 emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not different from forereef, forereef also not different
 # contrast                    estimate     SE  df z.ratio p.value
 # Fringing - Backreef          0.34720 0.0241 Inf  14.409  <.0001
@@ -482,6 +484,7 @@ car::Anova(cover_mod_fg)
 hist(residuals(cover_mod_fg)) # good
 
 r.squaredGLMM(cover_mod_fg) # 0.64, 0.65
+performance::r2(cover_mod_fg) # 0.63, 0.65
 emtrends(cover_mod_fg, pairwise ~ habitat, var = "functional_richness") 
 # contrast                    estimate     SE  df z.ratio p.value
 # Fringing - Backreef            0.214 0.0266 Inf   8.051  <.0001
@@ -574,7 +577,9 @@ Anova(synch_cov_mod)
 hist(residuals(synch_cov_mod)) # slight skew
 plot(residuals(synch_cov_mod) ~ fitted(synch_cov_mod)) # same issues as always
 
-r.squaredGLMM(synch_cov_mod) # error??
+# can't compute r2 - manually fit null model. Null model won't fit without sv_trans() for some reason
+null_synch_mod <- glmmTMB(sv_trans(cover_mean) ~ 1, family = beta_family(), data = diversity_stability_synchrony)
+performance::r2(model = synch_cov_mod, null_model = null_synch_mod)
 emtrends(synch_cov_mod, pairwise ~ habitat, var = "synchrony") # forereef 17 distinct from all other habitats
 
 # contrast                    estimate    SE  df z.ratio p.value
@@ -675,6 +680,7 @@ Anova(site_cover_mod)
 hist(residuals(site_cover_mod)) # some positive skew, not the worst thing ever
 plot(residuals(site_cover_mod) ~ fitted(site_cover_mod)) # a little heteroscedastic but can't be less than 0
 r.squaredGLMM(site_cover_mod) # 0.2212534, 0.5990825
+performance::r2(site_cover_mod) # 0.22, 0.59
 emtrends(site_cover_mod, pairwise ~ habitat, var = "richness") # no difference between the habitats
 # contrast                    estimate     SE  df z.ratio p.value
 # Fringing - Backreef          -0.0163 0.0394 Inf  -0.413  0.9762
@@ -738,6 +744,7 @@ Anova(site_cover_mod_fg)
 hist(residuals(site_cover_mod_fg)) # positive skew
 plot(residuals(site_cover_mod_fg) ~ fitted(site_cover_mod_fg)) # a little heteroscedastic but can't be less than 0
 r.squaredGLMM(site_cover_mod_fg) # 0.180, 0.563
+performance::r2(site_cover_mod_fg) # 0.180, 0.563
 emtrends(site_cover_mod_fg, pairwise ~ habitat, var = "functional_richness") # no difference between the habitats
 # Fringing - Backreef           0.0379 0.0825 Inf   0.459  0.9679
 # Fringing - Forereef 10m       0.1846 0.0930 Inf   1.985  0.1935
@@ -790,6 +797,7 @@ Anova(synch_cov_mod_site)
 # synchrony         2.4184  1    0.11992  
 # habitat           7.8002  3    0.05033 .
 # synchrony:habitat 8.8866  3    0.03084 *
+performance::r2(synch_cov_mod_site)
 hist(residuals(synch_cov_mod_site)) # slight skew
 plot(residuals(synch_cov_mod_site) ~ fitted(synch_cov_mod_site)) # looks fine
 emtrends(synch_cov_mod_site, pairwise ~ habitat, var = "synchrony") # forereef 17 different from backreef
@@ -861,6 +869,7 @@ Anova(rich_stab_mod)
 hist(residuals(rich_stab_mod)) # looks good
 plot(residuals(rich_stab_mod) ~ fitted(rich_stab_mod)) # heteroskedastic - bring to group
 r.squaredGLMM(rich_stab_mod) # 0.803, 0.808
+performance::r2(rich_stab_mod) # 0.812, 0.816
 emtrends(rich_stab_mod, pairwise ~ habitat, var = "richness_mean") # fringing not diff from outer17, backreef not different from outer10
 # contrast                     estimate     SE  df z.ratio p.value
 # Fringing - Backreef          0.186670 0.0414 Inf   4.512  <.0001
@@ -918,6 +927,7 @@ car::Anova(rich_stab_mod_fg)
 hist(residuals(rich_stab_mod_fg)) # looks fine
 plot(residuals(rich_stab_mod_fg) ~ fitted(rich_stab_mod_fg)) # same as usual 
 r.squaredGLMM(rich_stab_mod_fg) # 0.819, 0.828
+performance::r2(rich_stab_mod_fg)
 emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "functional_richness_mean") 
 #  fringing different from all others
 # contrast                    estimate     SE  df z.ratio p.value
@@ -972,6 +982,7 @@ Anova(synch_stab_mod)
 hist(residuals(synch_stab_mod)) # looks good
 plot(residuals(synch_stab_mod) ~ fitted(synch_stab_mod)) # same issue as always
 r.squaredGLMM(synch_stab_mod) # 0.63, 0.71
+performance::r2(synch_stab_mod)
 emtrends(synch_stab_mod, pairwise ~ habitat, var = "synchrony") # fringing and backreef not different
 # contrast                    estimate    SE  df z.ratio p.value
 # Fringing - Backreef            0.181 0.107 Inf   1.695  0.3262
@@ -1024,6 +1035,7 @@ Anova(rich_stab_mod_site)
 hist(residuals(rich_stab_mod_site)) # blocky but fine
 plot(residuals(rich_stab_mod_site) ~ fitted(rich_stab_mod_site)) # heteroskedastic - bring to group
 r.squaredGLMM(rich_stab_mod_site) # 0.671
+performance::r2(rich_stab_mod_site)
 emtrends(rich_stab_mod_site, pairwise ~ habitat, var = "richness_mean") # no differences across habitats
 # contrast                    estimate    SE  df z.ratio p.value
 # Fringing - Backreef           0.1854 0.120 Inf   1.539  0.4138
@@ -1082,6 +1094,7 @@ Anova(rich_stab_mod_site_fg)
 hist(residuals(rich_stab_mod_site_fg)) # blocky but fine
 plot(residuals(rich_stab_mod_site_fg) ~ fitted(rich_stab_mod_site_fg)) # heteroskedastic
 r.squaredGLMM(rich_stab_mod_site_fg) # 0.563
+performance::r2(rich_stab_mod_site_fg) # 0.551
 emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "functional_richness_mean") 
 # Fringing different from outer 10
 # contrast                    estimate    SE  df z.ratio p.value
@@ -1136,6 +1149,7 @@ Anova(synch_stab_mod_site)
 hist(residuals(synch_stab_mod_site)) # almost uniform
 plot(residuals(synch_stab_mod_site) ~ fitted(synch_stab_mod_site)) # same issue as always
 r.squaredGLMM(synch_stab_mod_site) # 0.678
+performance::r2(synch_stab_mod_site) # 0.702
 emtrends(synch_stab_mod_site, pairwise ~ habitat, var = "synchrony") # backreef is different from forereef 17, fringing is a p = 0.05
 #
 # contrast                    estimate    SE  df z.ratio p.value
@@ -1234,6 +1248,7 @@ Anova(spatial_synchrony_mod)
 # spatial_synchrony         16.2914  1  5.431e-05 ***
 # habitat                   19.5303  3  0.0002124 ***
 # spatial_synchrony:habitat  6.7239  3  0.0812368 .  
+performance::r2(spatial_synchrony_mod) # 0.64
 emtrends(spatial_synchrony_mod, pairwise ~ habitat, var = "spatial_synchrony") # no sig differences but close
 # contrast                    estimate    SE  df z.ratio p.value
 # Fringing - Backreef            0.404 1.765 Inf   0.229  0.9958
@@ -1278,6 +1293,7 @@ Anova(mean_synchrony_mod)
 # synchrony_mean         32.914  1  9.634e-09 ***
 # habitat                18.523  3  0.0003430 ***
 # synchrony_mean:habitat 19.062  3  0.0002654 ***
+performance::r2(mean_synchrony_mod)
 emtrends(mean_synchrony_mod, pairwise ~ habitat, var = "synchrony_mean") # no sig differences but close
 # contrast                    estimate    SE  df z.ratio p.value
 # Fringing - Backreef            -3.26 1.503 Inf  -2.166  0.1327
@@ -1320,6 +1336,7 @@ Anova(alpha_gamma_stab_mod)
 # stability_mean         61.2725  1   4.97e-15 ***
 # habitat                12.9323  3   0.004785 ** 
 # stability_mean:habitat  9.4832  3   0.023511 *  
+performance::r2(alpha_gamma_stab_mod)
 
 emtrends(alpha_gamma_stab_mod, pairwise ~ habitat, var = "stability_mean") # backreef different from fringe and forereef 10
 # Fringing - Backreef            1.078 0.381 Inf   2.828  0.0242
