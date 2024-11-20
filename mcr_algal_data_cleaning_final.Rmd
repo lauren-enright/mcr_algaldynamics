@@ -47,7 +47,7 @@ data$Site_habitat <- as.factor( paste(data$Site, data$Habitat))
 #### REPLACE OUTDATED TAXA
 
 # Caulerpa peltata is outdated --> Caulerpa racemosa
-data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Caulerpa peltata"] <- "Caulerpa racemosa"
+data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Caulerpa peltata"] <- "Caulerpa chemnitzia"
 
 # Boodlea kaeneana --> Cladophoropsis membranacea
 data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Boodlea kaeneana"] <- 
