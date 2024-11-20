@@ -46,8 +46,16 @@ data$Site_habitat <- as.factor( paste(data$Site, data$Habitat))
 
 #### REPLACE OUTDATED TAXA
 
+# Julianna notes on taxa:
+# Changed Caulerpa peltata to Caulerpa chemnitzia 
+# Changed Chnoospora implexa to Pseudochnoospora implexa
+# Changed Neogoniolithon frutescens to Neogoniolithon brassica-florida
+# Changed Caulerpa pickeringii to Caulerpa webbiana
+# Changed Boodlea kaeneana to Cladophoropsis membranacea
+# Changed Dictyota divaricata to Dictyota cervicornis
+
 # Caulerpa peltata is outdated --> Caulerpa racemosa
-data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Caulerpa peltata"] <- "Caulerpa chemnitzia"
+data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Caulerpa peltata"] <- "Caulerpa racemosa"
 
 # Boodlea kaeneana --> Cladophoropsis membranacea
 data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Boodlea kaeneana"] <- 
