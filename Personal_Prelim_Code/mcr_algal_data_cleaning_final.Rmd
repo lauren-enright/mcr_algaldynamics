@@ -54,8 +54,21 @@ data$Site_habitat <- as.factor( paste(data$Site, data$Habitat))
 # Changed Boodlea kaeneana to Cladophoropsis membranacea
 # Changed Dictyota divaricata to Dictyota cervicornis
 
-# Caulerpa peltata is outdated --> Caulerpa racemosa
-data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Caulerpa peltata"] <- "Caulerpa racemosa"
+### ADDING JULIANNA UPDATES HERE ###
+data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Chnoospora implexa"] <- "Pseudochnoospora implexa"
+
+data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Caulerpa pickeringii"] <- "Caulerpa webbiana"
+
+data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Boodlea kaeneana"] <- "Cladophoropsis membranacea"
+
+data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Dictyota divaricata"] <- "Dictyota cervicornis"
+
+# Caulerpa peltata is outdated --> Caulerpa racemosa JULIANNA UPDATE = Caulerpa chemnitzia
+data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Caulerpa peltata"] <- "Caulerpa chemnitzia"
+
+
+### EVERYTHING ELSE BELOW AS BEFORE ###
+
 
 # Boodlea kaeneana --> Cladophoropsis membranacea
 data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Group == "Boodlea kaeneana"] <- 
@@ -71,7 +84,7 @@ data$Taxonomy_Substrate_Functional_Group[data$Taxonomy_Substrate_Functional_Grou
 
 # remove old levels
 data <- droplevels(data)
-levels(as.factor(data$Taxonomy_Substrate_Functional_Group)) # 84 levels
+levels(as.factor(data$Taxonomy_Substrate_Functional_Group)) # 84 levels --> 85 AFTER JULIANNA UPDATES
 
 ```
 
@@ -116,7 +129,7 @@ unique(quad_level_summary$sum)
 
 ### CREATE DATAFRAME THAT IS JUST ALGAE
 
-not_algae <- c("Ascidian", "Bare Space", "Coral", "Coral Rubble", "Corallimorpharia", "Heteractis sp.", "Millepora platyphylla", "No data", "Sand", "Sacrophyton sp.", "Shell Debris", "Soft Coral", "Sponge", "Tridacna sp.", "Zooxanthellae")
+not_algae <- c("Ascidian", "Bare Space", "Coral", "Coral Rubble", "Corallimorpharia", "Heteractis sp.", "Millepora platyphylla", "No data", "Sand", "Sarcophyton sp.", "Shell Debris", "Soft Coral", "Sponge", "Tridacna sp.", "Zooxanthellae")
 
 ### CREATE DATAFRAME THAT IS JUST MACROALGAE
 # Maintaining mat-forming cyanos even though they're not macroalgae in the traditional sense
@@ -270,7 +283,7 @@ wide_alldata_filtered <- comb_wide_quad_sum_final %>%
 dim(wide_alldata_filtered)
 
 #writing one file so column names will work with Noam's code
-write.csv(wide_alldata_filtered, "allbenthicdata_cleaned.csv", row.names = FALSE)
+write.csv(wide_alldata_filtered, "data/allbenthicdata_cleaned.csv", row.names = FALSE)
 
 #clean names so column names are not so hard to work with
 
