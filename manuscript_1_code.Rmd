@@ -178,8 +178,8 @@ cover_df <- data.frame(
 cover_df$total <- rowSums(cover_df[,-which(names(cover_df) %in% meta_cols)])
 
 cover_means <- cover_df %>%
-  group_by(year, habitat) %>%
-  summarise(macroalgae = mean(macroalgae),
+  dplyr::group_by(year, habitat) %>%
+  dplyr::summarise(macroalgae = mean(macroalgae),
             coral = mean(coral),
             turf = mean(turf),
             cca = mean(cca),
@@ -188,8 +188,8 @@ cover_means <- cover_df %>%
             )
 
 cover_se <- cover_df %>%
-  group_by(year, habitat) %>%
-  summarise(macroalgae = se(macroalgae),
+  dplyr::group_by(year, habitat) %>%
+  dplyr::summarise(macroalgae = se(macroalgae),
             coral = se(coral),
             turf = se(turf),
             cca = se(cca),
@@ -332,8 +332,8 @@ unique(algae_fg$functional_group)
 macro_functional_groups <- merge(macro_long_data, algae_fg, all.x = TRUE)
 
 taxa_sum_check <- macro_functional_groups %>%
-  group_by(location, year) %>%
-  summarise(sum_macrocover = sum(prop_cover))
+  dplyr::group_by(location, year) %>%
+  dplyr::summarise(sum_macrocover = sum(prop_cover))
 
 macro_functional_groups %>%
   filter(location == "lter_2_backreef_algae_transect_1_quad_1") %>%
@@ -341,27 +341,27 @@ macro_functional_groups %>%
 
 #summarizing functional groups at the quad level
 fg_summary <- macro_functional_groups %>%
-  group_by(location, year, functional_group, habitat, site) %>%
-  summarise(sum_fg_cover = sum(prop_cover))
+  dplyr::group_by(location, year, functional_group, habitat, site) %>%
+  dplyr::summarise(sum_fg_cover = sum(prop_cover))
 
 max(fg_summary$sum_fg_cover)
 
 #summarizing functional groups at the site level
 #NOTE that this is ADDED and not averaged. This data is only used to find richness at the site level. LE did this as adding and as a sum, both end up the same from a richness perspective. 
 fg_summary_site_SUM <- macro_functional_groups %>%
-  group_by(site, year, habitat, functional_group) %>%
-  summarise(sum_fg_cover = sum(prop_cover))
+  dplyr::group_by(site, year, habitat, functional_group) %>%
+  dplyr::summarise(sum_fg_cover = sum(prop_cover))
 
 
 
 #QAQC
 fg_summary_qaqc <- macro_functional_groups %>%
-  group_by(location, year, functional_group) %>%
-  summarise(sum_fg_cover = sum(prop_cover))
+  dplyr::group_by(location, year, functional_group) %>%
+  dplyr::summarise(sum_fg_cover = sum(prop_cover))
 
 fg_qaqc <- fg_summary_qaqc %>%
-  group_by(location, year) %>%
-  summarise(sum_fg_check = sum(sum_fg_cover))
+  dplyr::group_by(location, year) %>%
+  dplyr::summarise(sum_fg_check = sum(sum_fg_cover))
   
 check_them <- merge(taxa_sum_check, fg_qaqc)
 
@@ -370,7 +370,7 @@ check_them %>%
 
 #pivot wide at quad level
 fg_summary_wide <- fg_summary %>%
-  pivot_wider(names_from = "functional_group", values_from = "sum_fg_cover")
+  tidyr::pivot_wider(names_from = "functional_group", values_from = "sum_fg_cover")
 
 #richness at every quad/year combination 
 fg_summary_wide$functional_richness <- vegan::specnumber(fg_summary_wide[5:14])
@@ -408,21 +408,22 @@ cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site/location) + (1|yea
 summary(cover_mod)
 Anova(cover_mod)
 #                     Chisq Df Pr(>Chisq)    
-# richness         30916.73  1  < 2.2e-16 ***
-# habitat            141.78  3  < 2.2e-16 ***
-# richness:habitat   294.54  3  < 2.2e-16 ***
+# richness         30918.96  1  < 2.2e-16 ***
+# habitat            141.68  3  < 2.2e-16 ***
+# richness:habitat   294.44  3  < 2.2e-16 ***
 hist(residuals(cover_mod)) # looks fine
 plot(residuals(cover_mod) ~ fitted(cover_mod)) # negative trend but it can't be less than 0 so not too concerned. some wave pattern
 r.squaredGLMM(cover_mod) # 0.631, 0.650
-performance::r2(cover_mod) # 0.634, 0.654
+performance::r2(cover_mod) # 0.635, 0.654
 emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not different from forereef, forereef also not different
 # contrast                    estimate     SE  df z.ratio p.value
-# Fringing - Backreef          0.34720 0.0241 Inf  14.409  <.0001
-# Fringing - Forereef 10m      0.34865 0.0240 Inf  14.514  <.0001
-# Fringing - Forereef 17m      0.38953 0.0250 Inf  15.599  <.0001
-# Backreef - Forereef 10m      0.00144 0.0205 Inf   0.071  0.9999
-# Backreef - Forereef 17m      0.04232 0.0214 Inf   1.979  0.1957
-# Forereef 10m - Forereef 17m  0.04088 0.0209 Inf   1.952  0.2063
+# Fringing - Backreef          0.34715 0.0241 Inf  14.407  <.0001
+# Fringing - Forereef 10m      0.34862 0.0240 Inf  14.513  <.0001
+# Fringing - Forereef 17m      0.38937 0.0250 Inf  15.593  <.0001
+# Backreef - Forereef 10m      0.00147 0.0205 Inf   0.072  0.9999
+# Backreef - Forereef 17m      0.04223 0.0214 Inf   1.975  0.1974
+# Forereef 10m - Forereef 17m  0.04076 0.0209 Inf   1.947  0.2087
+
 ```
 
 
@@ -477,22 +478,22 @@ cover_mod_fg <- glmmTMB(cover_trans ~ functional_richness*habitat + (1|site/loca
 
 summary(cover_mod_fg)
 car::Anova(cover_mod_fg)
-#                              Chisq Df Pr(>Chisq)    
-# fg_richness_quad         31341.052  1  < 2.2e-16 ***
-# habitat                     49.887  3  8.444e-11 ***
-# fg_richness_quad:habitat   447.780  3  < 2.2e-16 ***
+#                                 Chisq Df Pr(>Chisq)    
+# functional_richness         31362.191  1  < 2.2e-16 ***
+# habitat                        49.343  3  1.103e-10 ***
+# functional_richness:habitat   451.974  3  < 2.2e-16 ***
 hist(residuals(cover_mod_fg)) # good
 
 r.squaredGLMM(cover_mod_fg) # 0.64, 0.65
 performance::r2(cover_mod_fg) # 0.63, 0.65
 emtrends(cover_mod_fg, pairwise ~ habitat, var = "functional_richness") 
 # contrast                    estimate     SE  df z.ratio p.value
-# Fringing - Backreef            0.214 0.0266 Inf   8.051  <.0001
-# Fringing - Forereef 10m        0.346 0.0261 Inf  13.252  <.0001
-# Fringing - Forereef 17m        0.530 0.0262 Inf  20.244  <.0001
-# Backreef - Forereef 10m        0.132 0.0231 Inf   5.708  <.0001
-# Backreef - Forereef 17m        0.316 0.0232 Inf  13.617  <.0001
-# Forereef 10m - Forereef 17m    0.184 0.0223 Inf   8.241  <.0001
+# Fringing - Backreef            0.211 0.0266 Inf   7.937  <.0001
+# Fringing - Forereef 10m        0.348 0.0262 Inf  13.285  <.0001
+# Fringing - Forereef 17m        0.531 0.0262 Inf  20.280  <.0001
+# Backreef - Forereef 10m        0.136 0.0231 Inf   5.888  <.0001
+# Backreef - Forereef 17m        0.320 0.0232 Inf  13.812  <.0001
+# Forereef 10m - Forereef 17m    0.184 0.0223 Inf   8.253  <.0001
 
 
 
@@ -571,15 +572,15 @@ synch_cov_mod <- glmmTMB(cover_mean ~ synchrony*habitat + (1|site), family = bet
 summary(synch_cov_mod)
 Anova(synch_cov_mod)
 #                     Chisq Df Pr(>Chisq)    
-# synchrony         209.545  1  < 2.2e-16 ***
-# habitat            52.512  3  2.330e-11 ***
-# synchrony:habitat  54.632  3  8.227e-12 ***
+# synchrony         209.521  1  < 2.2e-16 ***
+# habitat            52.498  3  2.345e-11 ***
+# synchrony:habitat  54.627  3  8.246e-12 ***
 hist(residuals(synch_cov_mod)) # slight skew
 plot(residuals(synch_cov_mod) ~ fitted(synch_cov_mod)) # same issues as always
 
 # can't compute r2 - manually fit null model. Null model won't fit without sv_trans() for some reason
 null_synch_mod <- glmmTMB(sv_trans(cover_mean) ~ 1, family = beta_family(), data = diversity_stability_synchrony)
-performance::r2(model = synch_cov_mod, null_model = null_synch_mod)
+performance::r2(model = synch_cov_mod, null_model = null_synch_mod) # 0.352, 0.534
 emtrends(synch_cov_mod, pairwise ~ habitat, var = "synchrony") # forereef 17 distinct from all other habitats
 
 # contrast                    estimate    SE  df z.ratio p.value
@@ -674,9 +675,9 @@ site_cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site_habitat) + (1
 summary(site_cover_mod)
 Anova(site_cover_mod)
 #                    Chisq Df Pr(>Chisq)    
-# richness         58.9195  1  1.643e-14 ***
-# habitat           6.6247  3    0.08487 .  
-# richness:habitat  3.2967  3    0.34811    
+# richness         58.9196  1  1.642e-14 ***
+# habitat           6.6248  3    0.08487 .  
+# richness:habitat  3.2966  3    0.34811    
 hist(residuals(site_cover_mod)) # some positive skew, not the worst thing ever
 plot(residuals(site_cover_mod) ~ fitted(site_cover_mod)) # a little heteroscedastic but can't be less than 0
 r.squaredGLMM(site_cover_mod) # 0.2212534, 0.5990825
@@ -735,10 +736,10 @@ site_cover_mod_fg <- glmmTMB(cover_trans ~ functional_richness*habitat + (1|site
 summary(site_cover_mod_fg)
 Anova(site_cover_mod_fg)
 
-#                            Chisq Df Pr(>Chisq)    
-# fg_richness_site         30.9412  1   2.66e-08 ***
-# habitat                   4.8929  3     0.1798    
-# fg_richness_site:habitat  4.2193  3     0.2387  
+#                               Chisq Df Pr(>Chisq)    
+# functional_richness         30.3776  1  3.556e-08 ***
+# habitat                      4.9314  3     0.1769    
+# functional_richness:habitat  4.1429  3     0.2464    
 
 
 hist(residuals(site_cover_mod_fg)) # positive skew
@@ -746,12 +747,13 @@ plot(residuals(site_cover_mod_fg) ~ fitted(site_cover_mod_fg)) # a little hetero
 r.squaredGLMM(site_cover_mod_fg) # 0.180, 0.563
 performance::r2(site_cover_mod_fg) # 0.180, 0.563
 emtrends(site_cover_mod_fg, pairwise ~ habitat, var = "functional_richness") # no difference between the habitats
-# Fringing - Backreef           0.0379 0.0825 Inf   0.459  0.9679
-# Fringing - Forereef 10m       0.1846 0.0930 Inf   1.985  0.1935
-# Fringing - Forereef 17m       0.0933 0.0960 Inf   0.972  0.7655
-# Backreef - Forereef 10m       0.1467 0.0986 Inf   1.488  0.4447
-# Backreef - Forereef 17m       0.0554 0.1018 Inf   0.545  0.9480
-# Forereef 10m - Forereef 17m  -0.0913 0.1093 Inf  -0.835  0.8377
+# contrast                    estimate     SE  df z.ratio p.value
+# Fringing - Backreef          -0.0163 0.0394 Inf  -0.413  0.9762
+# Fringing - Forereef 10m       0.0639 0.0503 Inf   1.271  0.5818
+# Fringing - Forereef 17m       0.0334 0.0612 Inf   0.546  0.9476
+# Backreef - Forereef 10m       0.0801 0.0460 Inf   1.742  0.3020
+# Backreef - Forereef 17m       0.0497 0.0583 Inf   0.853  0.8289
+# Forereef 10m - Forereef 17m  -0.0304 0.0651 Inf  -0.467  0.9662
 
 ```
 ```{r site fg richness cover plot setup}
@@ -794,20 +796,20 @@ synch_cov_mod_site <- glmmTMB(cover_mean ~ synchrony*habitat, family = beta_fami
 summary(synch_cov_mod_site)
 Anova(synch_cov_mod_site)
 #                    Chisq Df Pr(>Chisq)  
-# synchrony         2.4184  1    0.11992  
-# habitat           7.8002  3    0.05033 .
-# synchrony:habitat 8.8866  3    0.03084 *
-performance::r2(synch_cov_mod_site)
+# synchrony         2.4156  1    0.12013  
+# habitat           7.7966  3    0.05041 .
+# synchrony:habitat 8.8876  3    0.03082 *
+performance::r2(synch_cov_mod_site) # 0.48
 hist(residuals(synch_cov_mod_site)) # slight skew
 plot(residuals(synch_cov_mod_site) ~ fitted(synch_cov_mod_site)) # looks fine
 emtrends(synch_cov_mod_site, pairwise ~ habitat, var = "synchrony") # forereef 17 different from backreef
 # contrast                    estimate   SE  df z.ratio p.value
-# Fringing - Backreef           -4.299 3.38 Inf  -1.270  0.5821
-# Fringing - Forereef 10m       -0.279 3.22 Inf  -0.087  0.9998
-# Fringing - Forereef 17m        3.675 3.78 Inf   0.973  0.7649
-# Backreef - Forereef 10m        4.019 1.98 Inf   2.031  0.1764
-# Backreef - Forereef 17m        7.973 2.80 Inf   2.848  0.0228
-# Forereef 10m - Forereef 17m    3.954 2.59 Inf   1.526  0.4217
+# Fringing - Backreef            -4.31 3.39 Inf  -1.269  0.5824
+# Fringing - Forereef 10m        -0.29 3.23 Inf  -0.090  0.9997
+# Fringing - Forereef 17m         3.66 3.79 Inf   0.968  0.7679
+# Backreef - Forereef 10m         4.02 1.98 Inf   2.031  0.1764
+# Backreef - Forereef 17m         7.97 2.80 Inf   2.848  0.0228
+# Forereef 10m - Forereef 17m     3.95 2.59 Inf   1.526  0.4218
 ```
 
 ```{r synch cov site plot setup}
@@ -863,21 +865,23 @@ rich_stab_mod <- glmmTMB(cover_stability~ richness_mean*habitat + (1|site), fami
 summary(rich_stab_mod)
 Anova(rich_stab_mod)
 #                          Chisq Df Pr(>Chisq)    
-# richness_mean         2721.438  1  < 2.2e-16 ***
-# habitat                325.876  3  < 2.2e-16 ***
-# richness_mean:habitat   33.926  3  2.054e-07 ***
+# richness_mean         2720.311  1  < 2.2e-16 ***
+# habitat                325.657  3  < 2.2e-16 ***
+# richness_mean:habitat   33.857  3  2.124e-07 ***
 hist(residuals(rich_stab_mod)) # looks good
 plot(residuals(rich_stab_mod) ~ fitted(rich_stab_mod)) # heteroskedastic - bring to group
 r.squaredGLMM(rich_stab_mod) # 0.803, 0.808
 performance::r2(rich_stab_mod) # 0.812, 0.816
 emtrends(rich_stab_mod, pairwise ~ habitat, var = "richness_mean") # fringing not diff from outer17, backreef not different from outer10
-# contrast                     estimate     SE  df z.ratio p.value
-# Fringing - Backreef          0.186670 0.0414 Inf   4.512  <.0001
-# Fringing - Forereef 10m      0.187196 0.0455 Inf   4.114  0.0002
-# Fringing - Forereef 17m      0.027112 0.0463 Inf   0.586  0.9364
-# Backreef - Forereef 10m      0.000525 0.0405 Inf   0.013  1.0000
-# Backreef - Forereef 17m     -0.159559 0.0411 Inf  -3.885  0.0006
-# Forereef 10m - Forereef 17m -0.160084 0.0439 Inf  -3.647  0.0015
+# $contrasts
+#  contrast                     estimate     SE  df z.ratio p.value
+#  Fringing - Backreef          0.186640 0.0414 Inf   4.511  <.0001
+#  Fringing - Forereef 10m      0.187248 0.0455 Inf   4.114  0.0002
+#  Fringing - Forereef 17m      0.027482 0.0463 Inf   0.594  0.9340
+#  Backreef - Forereef 10m      0.000608 0.0405 Inf   0.015  1.0000
+#  Backreef - Forereef 17m     -0.159158 0.0411 Inf  -3.875  0.0006
+#  Forereef 10m - Forereef 17m -0.159766 0.0439 Inf  -3.640  0.0016
+
 ```
 
 ```{r figure 4a setup}
@@ -918,10 +922,10 @@ rich_stab_mod_fg <- glmmTMB(cover_stability ~ functional_richness_mean*habitat +
 summary(rich_stab_mod_fg)
 car::Anova(rich_stab_mod_fg)
 
-#                             Chisq Df Pr(>Chisq)    
-# fg_richness_mean         3079.229  1  < 2.2e-16 ***
-# habitat                   118.605  3  < 2.2e-16 ***
-# fg_richness_mean:habitat   25.692  3  1.107e-05 ***
+#                                    Chisq Df Pr(>Chisq)    
+# functional_richness_mean         3082.22  1  < 2.2e-16 ***
+# habitat                           116.63  3  < 2.2e-16 ***
+# functional_richness_mean:habitat   25.79  3  1.055e-05 ***
 
 
 hist(residuals(rich_stab_mod_fg)) # looks fine
@@ -931,12 +935,12 @@ performance::r2(rich_stab_mod_fg)
 emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "functional_richness_mean") 
 #  fringing different from all others
 # contrast                    estimate     SE  df z.ratio p.value
-# Fringing - Backreef           0.1872 0.0468 Inf   3.999  0.0004
-# Fringing - Forereef 10m       0.2348 0.0519 Inf   4.524  <.0001
-# Fringing - Forereef 17m       0.2040 0.0489 Inf   4.173  0.0002
-# Backreef - Forereef 10m       0.0477 0.0472 Inf   1.011  0.7432
-# Backreef - Forereef 17m       0.0169 0.0439 Inf   0.385  0.9806
-# Forereef 10m - Forereef 17m  -0.0308 0.0475 Inf  -0.648  0.9164
+# Fringing - Backreef           0.1825 0.0468 Inf   3.903  0.0006
+# Fringing - Forereef 10m       0.2372 0.0518 Inf   4.575  <.0001
+# Fringing - Forereef 17m       0.2045 0.0488 Inf   4.187  0.0002
+# Backreef - Forereef 10m       0.0547 0.0472 Inf   1.158  0.6534
+# Backreef - Forereef 17m       0.0219 0.0439 Inf   0.500  0.9592
+# Forereef 10m - Forereef 17m  -0.0327 0.0475 Inf  -0.689  0.9015
 #
 ```
 
@@ -976,13 +980,13 @@ synch_stab_mod <- glmmTMB(cover_stability ~ synchrony*habitat + (1|site), family
 summary(synch_stab_mod)
 Anova(synch_stab_mod)
 #                     Chisq Df Pr(>Chisq)    
-# synchrony         1308.33  1  < 2.2e-16 ***
+# synchrony         1308.34  1  < 2.2e-16 ***
 # habitat            103.13  3  < 2.2e-16 ***
-# synchrony:habitat  327.97  3  < 2.2e-16 ***
+# synchrony:habitat  327.96  3  < 2.2e-16 ***
 hist(residuals(synch_stab_mod)) # looks good
 plot(residuals(synch_stab_mod) ~ fitted(synch_stab_mod)) # same issue as always
 r.squaredGLMM(synch_stab_mod) # 0.63, 0.71
-performance::r2(synch_stab_mod)
+performance::r2(synch_stab_mod) # 0.66, 0.74
 emtrends(synch_stab_mod, pairwise ~ habitat, var = "synchrony") # fringing and backreef not different
 # contrast                    estimate    SE  df z.ratio p.value
 # Fringing - Backreef            0.181 0.107 Inf   1.695  0.3262
@@ -1086,10 +1090,11 @@ rich_stab_mod_site_fg <- glmmTMB(cover_stability~ functional_richness_mean*habit
 summary(rich_stab_mod_site_fg)
 Anova(rich_stab_mod_site_fg)
 
-#                           Chisq Df Pr(>Chisq)   
-# avg_richness_fg          3.4019  1   0.065122 . 
-# habitat                 12.8194  3   0.005044 **
-# avg_richness_fg:habitat  7.9921  3   0.046176 * 
+# 
+#                                    Chisq Df Pr(>Chisq)   
+# functional_richness_mean          3.3605  1    0.06678 . 
+# habitat                          12.9894  3    0.00466 **
+# functional_richness_mean:habitat  7.9219  3    0.04765 * 
 
 hist(residuals(rich_stab_mod_site_fg)) # blocky but fine
 plot(residuals(rich_stab_mod_site_fg) ~ fitted(rich_stab_mod_site_fg)) # heteroskedastic
@@ -1097,13 +1102,14 @@ r.squaredGLMM(rich_stab_mod_site_fg) # 0.563
 performance::r2(rich_stab_mod_site_fg) # 0.551
 emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "functional_richness_mean") 
 # Fringing different from outer 10
+#$contrasts
 # contrast                    estimate    SE  df z.ratio p.value
-# Fringing - Backreef           0.2552 0.254 Inf   1.005  0.7463
-# Fringing - Forereef 10m       1.2611 0.469 Inf   2.686  0.0364
-# Fringing - Forereef 17m       0.3543 0.287 Inf   1.235  0.6045
-# Backreef - Forereef 10m       1.0059 0.492 Inf   2.044  0.1720
-# Backreef - Forereef 17m       0.0991 0.323 Inf   0.307  0.9900
-# Forereef 10m - Forereef 17m  -0.9068 0.510 Inf  -1.778  0.2838
+# Fringing - Backreef            0.244 0.252 Inf   0.966  0.7686
+# Fringing - Forereef 10m        1.250 0.469 Inf   2.663  0.0388
+# Fringing - Forereef 17m        0.354 0.280 Inf   1.264  0.5860
+# Backreef - Forereef 10m        1.006 0.493 Inf   2.040  0.1735
+# Backreef - Forereef 17m        0.110 0.318 Inf   0.346  0.9858
+# Forereef 10m - Forereef 17m   -0.896 0.508 Inf  -1.763  0.2911
 ```
 
 ```{r figure 4e setup}
@@ -1142,10 +1148,10 @@ filtered_rich_stab_effects_site <- filter_ranges(rich_stab_emm_site_fg, dss_rang
 synch_stab_mod_site <- glmmTMB(cover_stability ~ synchrony*habitat, family = Gamma("log"), data = diversity_stability_synchrony_site)
 summary(synch_stab_mod_site)
 Anova(synch_stab_mod_site)
-#                     Chisq Df Pr(>Chisq)    
-# synchrony         22.0686  1  2.631e-06 ***
-# habitat            9.3333  3    0.02517 *  
-# synchrony:habitat 10.5561  3    0.01439 *  
+#                    Chisq Df Pr(>Chisq)    
+# synchrony         22.117  1  2.565e-06 ***
+# habitat            9.345  3    0.02504 *  
+# synchrony:habitat 10.534  3    0.01453 *   
 hist(residuals(synch_stab_mod_site)) # almost uniform
 plot(residuals(synch_stab_mod_site) ~ fitted(synch_stab_mod_site)) # same issue as always
 r.squaredGLMM(synch_stab_mod_site) # 0.678
@@ -1153,12 +1159,12 @@ performance::r2(synch_stab_mod_site) # 0.702
 emtrends(synch_stab_mod_site, pairwise ~ habitat, var = "synchrony") # backreef is different from forereef 17, fringing is a p = 0.05
 #
 # contrast                    estimate    SE  df z.ratio p.value
-# Fringing - Backreef           -0.256 0.971 Inf  -0.263  0.9936
-# Fringing - Forereef 10m        1.324 0.916 Inf   1.445  0.4709
-# Fringing - Forereef 17m        2.930 1.142 Inf   2.567  0.0503
-# Backreef - Forereef 10m        1.580 0.858 Inf   1.842  0.2534
-# Backreef - Forereef 17m        3.186 1.095 Inf   2.909  0.0190
-# Forereef 10m - Forereef 17m    1.606 1.047 Inf   1.534  0.4172
+# Fringing - Backreef           -0.262 0.972 Inf  -0.269  0.9932
+# Fringing - Forereef 10m        1.318 0.918 Inf   1.437  0.4764
+# Fringing - Forereef 17m        2.924 1.143 Inf   2.559  0.0513
+# Backreef - Forereef 10m        1.580 0.857 Inf   1.843  0.2533
+# Backreef - Forereef 17m        3.186 1.095 Inf   2.910  0.0189
+# Forereef 10m - Forereef 17m    1.606 1.047 Inf   1.534  0.4170
 ```
 
 ```{r figure 4f setup}
@@ -1220,8 +1226,8 @@ colnames(spatial_synchrony) <- c("site_habitat", "spatial_synchrony") # rename t
 
 # calculate mean synchrony within a site (!= synchrony of species at the site level!)
 mean_synchrony_stability <- diversity_stability_synchrony %>% 
-  group_by(habitat, site) %>% 
-  summarise(synchrony_mean = mean(synchrony, na.rm = T),
+  dplyr::group_by(habitat, site) %>% 
+  dplyr::summarise(synchrony_mean = mean(synchrony, na.rm = T),
             stability_mean = mean(cover_stability, na.rm = T))
 
 # merge with site level dss metrics
@@ -1245,18 +1251,18 @@ plot(residuals(spatial_synchrony_mod) ~ predict(spatial_synchrony_mod))
 summary(spatial_synchrony_mod)
 Anova(spatial_synchrony_mod)
 #                             Chisq Df Pr(>Chisq)    
-# spatial_synchrony         16.2914  1  5.431e-05 ***
-# habitat                   19.5303  3  0.0002124 ***
-# spatial_synchrony:habitat  6.7239  3  0.0812368 .  
+# spatial_synchrony         16.2942  1  5.423e-05 ***
+# habitat                   19.5302  3  0.0002124 ***
+# spatial_synchrony:habitat  6.7253  3  0.0811882 .  
 performance::r2(spatial_synchrony_mod) # 0.64
 emtrends(spatial_synchrony_mod, pairwise ~ habitat, var = "spatial_synchrony") # no sig differences but close
 # contrast                    estimate    SE  df z.ratio p.value
-# Fringing - Backreef            0.404 1.765 Inf   0.229  0.9958
+# Fringing - Backreef            0.404 1.764 Inf   0.229  0.9958
 # Fringing - Forereef 10m        1.365 1.754 Inf   0.778  0.8643
 # Fringing - Forereef 17m        3.112 1.882 Inf   1.654  0.3484
 # Backreef - Forereef 10m        0.961 0.857 Inf   1.121  0.6766
-# Backreef - Forereef 17m        2.708 1.095 Inf   2.472  0.0644
-# Forereef 10m - Forereef 17m    1.747 1.078 Inf   1.621  0.3668
+# Backreef - Forereef 17m        2.708 1.095 Inf   2.472  0.0643
+# Forereef 10m - Forereef 17m    1.747 1.078 Inf   1.621  0.3667
 ```
 
 ```{r plot spatial synchrony}
@@ -1276,7 +1282,7 @@ filtered_spat_stab_effects <- filter_ranges(spat_stab_emm, dss_spatial_ranges, "
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Stability\n", x = "Spatial synchrony", title = "") +
+  labs(y = "", x = "Spatial synchrony", title = "") +
   trends_theme
          )
 
@@ -1321,7 +1327,7 @@ filtered_mean_synch_effects <- filter_ranges(mean_synch_emm, dss_spatial_ranges,
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Stability\n", x = "Mean synchrony", title = "") +
+  labs(y = "Site-level Stability\n", x = "Mean plot-level species synchrony", title = "") +
   trends_theme
          )
 ```
@@ -1333,18 +1339,20 @@ alpha_gamma_stab_mod <- glmmTMB(cover_stability ~ stability_mean*habitat, family
 summary(alpha_gamma_stab_mod)
 Anova(alpha_gamma_stab_mod)
 #                          Chisq Df Pr(>Chisq)    
-# stability_mean         61.2725  1   4.97e-15 ***
-# habitat                12.9323  3   0.004785 ** 
-# stability_mean:habitat  9.4832  3   0.023511 *  
-performance::r2(alpha_gamma_stab_mod)
+# stability_mean         61.2742  1  4.965e-15 ***
+# habitat                12.9328  3   0.004784 ** 
+# stability_mean:habitat  9.4834  3   0.023508 * 
+performance::r2(alpha_gamma_stab_mod) # 0.838
 
 emtrends(alpha_gamma_stab_mod, pairwise ~ habitat, var = "stability_mean") # backreef different from fringe and forereef 10
-# Fringing - Backreef            1.078 0.381 Inf   2.828  0.0242
-# Fringing - Forereef 10m        0.175 0.345 Inf   0.509  0.9571
-# Fringing - Forereef 17m        0.380 0.305 Inf   1.248  0.5965
-# Backreef - Forereef 10m       -0.903 0.349 Inf  -2.589  0.0475
-# Backreef - Forereef 17m       -0.698 0.309 Inf  -2.256  0.1085
-# Forereef 10m - Forereef 17m    0.205 0.263 Inf   0.779  0.8638
+# $contrasts
+#  contrast                    estimate    SE  df z.ratio p.value
+#  Fringing - Backreef            1.078 0.381 Inf   2.828  0.0242
+#  Fringing - Forereef 10m        0.175 0.345 Inf   0.509  0.9571
+#  Fringing - Forereef 17m        0.380 0.305 Inf   1.248  0.5965
+#  Backreef - Forereef 10m       -0.903 0.349 Inf  -2.589  0.0474
+#  Backreef - Forereef 17m       -0.698 0.309 Inf  -2.256  0.1085
+#  Forereef 10m - Forereef 17m    0.205 0.263 Inf   0.779  0.8639
 
 alpha_gamma_emm <- emmip(alpha_gamma_stab_mod,
                         habitat ~ stability_mean,
@@ -1362,7 +1370,7 @@ filtered_ag_effects <- filter_ranges(alpha_gamma_emm, dss_spatial_ranges, "habit
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Site stability\n", x = "Plot stability", title = "") +
+  labs(y = "", x = "Plot stability", title = "") +
   trends_theme
          )
 ```
@@ -1376,18 +1384,17 @@ filtered_ag_effects <- filter_ranges(alpha_gamma_emm, dss_spatial_ranges, "habit
                       labels = c("a.", "b.", "c."),
                       font.label = list(size = 26, color = "black", face = "plain")))
 
-# ggsave(filename = "output/figure_5_option3.png", figure_5, height = 6, width = 22)
+# ggsave(filename = "output/figure_5_option3_v2.png", figure_5, height = 6, width = 22)
 ```
 
-# SUPPLEMENTAL FIGURE CODE:
 
 ## Trends in richness over time
 
 ### prep
 ```{r richness df}
 quad_richness_df <- alpha_diversity_quad_macro %>% 
-  group_by(year, habitat) %>% 
-  summarise(richness_mean = mean(richness),
+  dplyr::group_by(year, habitat) %>% 
+  dplyr::summarise(richness_mean = mean(richness),
             richness_se = se(richness))
 ```
 
@@ -1419,8 +1426,8 @@ quad_richness_df <- alpha_diversity_quad_macro %>%
 
 ```{r site level richness df}
 site_richness_df <- alpha_diversity_site_macro %>% 
-  group_by(year, habitat) %>% 
-  summarise(richness_mean = mean(richness),
+  dplyr::group_by(year, habitat) %>% 
+  dplyr::summarise(richness_mean = mean(richness),
             richness_se = se(richness))
 
 ```
