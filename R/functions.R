@@ -30,8 +30,8 @@ extract_ranges <- function(df, # a dataframe
                            columns # columns you want to summarize (e.g. richness, cover, synchrony)
 ){
   df %>% # in your dataframe
-    group_by(across(all_of(group))) %>% 
-    summarise(across(all_of(columns), # summarize the columns in your group
+    dplyr::group_by(across(all_of(group))) %>% 
+    dplyr::summarise(across(all_of(columns), # summarize the columns in your group
                      list(min = ~min(.x, na.rm = TRUE), max = ~max(.x, na.rm = TRUE)), # by taking the min/max of them
                      .names = "{.fn}_{.col}")) # and assigning them to the columns name "min/max_value"
 }
