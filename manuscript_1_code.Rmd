@@ -677,18 +677,8 @@ diversity_stability <- alpha_diversity_quad_macro %>%
 
 diversity_stability_synchrony <- left_join(diversity_stability, lm_synchrony, by = join_by(location))
 diversity_stability_synchrony$synchrony_trans <- sv_trans(diversity_stability_synchrony$synchrony)
+# write.csv(file = here::here("data", "full_plot_level_dss.csv"), diversity_stability_synchrony)
 
-
-dss_ranges <- extract_ranges(diversity_stability_synchrony, "habitat",
-                             c("richness_mean", "functional_richness_mean", "cover_stability", "synchrony"))
-
-# repeat for the mean of each plot
-dss_ranges_2 <- extract_ranges(mean_synchrony_stability, "habitat",
-                             c("richness_mean", "functional_richness_mean", "synchrony_mean", "stability_mean", "cover_mean"))
-```
-
-### mean plot-level dss setup
-```{r mean plot dss}
 # calculate mean synchrony within a site (!= synchrony of species at the site level!)
 mean_synchrony_stability <- diversity_stability_synchrony %>% 
   dplyr::group_by(habitat, site) %>% 
@@ -698,7 +688,16 @@ mean_synchrony_stability <- diversity_stability_synchrony %>%
     synchrony_mean = mean(synchrony, na.rm = T),
     stability_mean = mean(cover_stability, na.rm = T),
     cover_mean = mean(cover_mean, na.rm = T))
+
+# write.csv(file = here::here("data", "mean_plot_level_dss.csv"), mean_synchrony_stability)
+dss_ranges <- extract_ranges(diversity_stability_synchrony, "habitat",
+                             c("richness_mean", "functional_richness_mean", "cover_stability", "synchrony"))
+
+# repeat for the mean of each plot
+dss_ranges_2 <- extract_ranges(mean_synchrony_stability, "habitat",
+                             c("richness_mean", "functional_richness_mean", "synchrony_mean", "stability_mean", "cover_mean"))
 ```
+
 ### synchrony and cover model
 
 ```{r synchrony cover mod}
@@ -1575,8 +1574,10 @@ colnames(spatial_synchrony) <- c("site_habitat", "spatial_synchrony") # rename t
 
 # merge with site level dss metrics
 dss_spatial <- merge(diversity_stability_site, spatial_synchrony, by = "site_habitat")
-dss_spatial_2 <- merge(dss_spatial, mean_synchrony_stability, by = c("habitat", "site"))
-
+dss_spatial_2 <- merge(dss_spatial, mean_synchrony_stability[, which(names(mean_synchrony_stability) %in%
+                                                               c("habitat", "site", "synchrony_mean", "stability_mean"))],
+                       by = c("habitat", "site"))
+# write.csv(file = here::here("data", "spatial_synchrony.csv"), dss_spatial_2)
 dss_spatial_ranges <- extract_ranges(dss_spatial_2, "habitat", c("spatial_synchrony", "synchrony_mean", "stability_mean"))
 
 
