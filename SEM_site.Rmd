@@ -1,0 +1,95 @@
+---
+title: "SEM with site-level algae data"
+output: html_document
+date: "2025-01-21"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# clear workspace
+rm(list = ls())
+
+# load needed packages
+require(tidyverse)
+require(here)
+require(piecewiseSEM)
+require(lme4) # glmer() function
+require(performance)
+```
+
+# Read in data
+
+# Read in data
+
+```{r}
+# spatial synchrony data from Noam & functional richness--need to double check that FR is site-level
+spatial_synch <- read_csv(here("data/spatial_synchrony.csv")) %>% 
+  select(habitat, site, functional_richness_mean, spatial_synchrony)
+
+# site-level data summarized with one point for all time per site
+algae_site <- read_csv(here("data/diversity_stability_synchrony_site.csv")) %>% 
+  full_join(spatial_synch)
+```
+
+# Scale data
+
+Gamma families are currently not supported and we're not able to get glmmTMB to work for the time being.
+
+
+```{r}
+algae_site %>% 
+  mutate(
+    richness_mean_scale = scale(algae_site$richness_mean)[,1],
+    functional_richness_mean_scale = scale(algae_site$functional_richness_mean)[,1],
+    cover_mean_scale = scale(algae_site$cover_mean)[,1],
+    cover_stability_scale = scale(algae_site$cover_stability)[,1],
+    synchrony_scale = scale(algae_site$synchrony)[,1],
+    spatial_synchrony_scale = scale(algae_site$spatial_synchrony)[,1]
+  ) -> algae_site_scaled
+```
+
+
+# Make a simple SEM
+
+First, fit individual models
+
+```{r}
+# effect of richness on synchrony
+m.sprich.synch <- glmer(synchrony_mean_scale ~ richness_mean_scale + functional_richness_mean_scale + (1|site) + (1|habitat),
+                        data = algae_site_scaled)
+  performance::check_model(m.sprich.synch)
+
+# effect of synchrony on stability
+m.synch.stab.cov <- glmer(cover_stability_scale ~ synchrony_scale + functional_richness_mean_scale + cover_mean_scale + richness_mean_scale + spatial_synchrony_scale + (1|site) + (1|habitat),
+                      data = algae_site_scaled)  
+  performance::check_model(m.synch.stab.cov)
+  
+# effect of richness on cover
+m.sprich.cov <- glmer(cover_mean_scale ~ richness_mean_scale + (1|site) + (1|habitat),
+                      data = algae_site_scaled)
+  performance::check_model(m.sprich.cov)
+```
+
+Make it with piecewiseSEM
+
+```{r}
+# Build SEM
+sem <- psem(
+  m.sprich.synch,
+  m.synch.stab.cov,
+  m.sprich.cov,
+  data = as.data.frame(algae_site_scaled)
+)
+
+summary(sem)
+```
+
+Plot
+
+```{r}
+plot(sem)
+```
+
