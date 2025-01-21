@@ -1,0 +1,305 @@
+---
+title: "SEM with quad-level algae data"
+output: html_document
+date: "2025-01-17"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+require(tidyverse)
+require(here)
+require(piecewiseSEM)
+require(lme4) # glmer() function
+require(performance)
+```
+
+# Read in data
+
+```{r}
+# quad-level data summarized with one point for all time
+algae <- read_csv(here("data/diversity_stability_synchrony.csv"))
+```
+
+# Scale data
+
+Gamma families are currently not supported and we're not able to get glmmTMB to work for the time being.
+
+
+```{r}
+algae %>% 
+  mutate(
+    richness_mean_scale = scale(algae$richness_mean)[,1],
+    cover_mean_scale = scale(algae$cover_mean)[,1],
+    cover_stability_scale = scale(algae$cover_stability)[,1],
+    synchrony_scale = scale(algae$synchrony)[,1]
+  ) -> algae_scaled
+```
+
+
+# Make a simple SEM
+
+First, fit individual models
+
+```{r}
+# effect of richness on synchrony
+m.sprich.synch <- glmer(synchrony_scale ~ richness_mean_scale + (1|site) + (1|habitat),
+                        data = algae_scaled)
+  performance::check_model(m.sprich.synch)
+
+# effect of synchrony on stability
+m.synch.stab.cov <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site) + (1|habitat),
+                      data = algae_scaled)  
+  performance::check_model(m.synch.stab)
+  
+# effect of richness on cover
+m.sprich.cov <- glmer(cover_mean_scale ~ richness_mean_scale + (1|site) + (1|habitat),
+                      data = algae_scaled)
+  performance::check_model(m.sprich.cov)
+```
+
+Try it with piecewiseSEM
+
+```{r}
+# Build SEM
+sem <- psem(
+  m.sprich.synch,
+  m.synch.stab.cov,
+  m.sprich.cov,
+  data = as.data.frame(algae)
+)
+
+summary(sem)
+```
+
+Plot
+
+```{r}
+# Extract coefficients
+#coefficients <- summary(sem)$coefficients
+
+# Add a column for color based on the sign of the path coefficient
+#coefficients$color <- ifelse(coefficients$Estimate > 0, "blue", #"red")
+
+plot(sem)
+```
+
+
+# Frining reef: bracketed 
+
+This is trying to make these models without rescaling within the fringing reef to see if it matters (i.e., we'll just subset from the original scaled dataframe)
+
+```{r}
+# effect of richness on synchrony
+m.sprich.synch.FR <- glmer(synchrony_scale ~ richness_mean_scale + (1|site),
+                        data = algae_scaled[algae_scaled$habitat == "Fringing", ])
+  performance::check_model(m.sprich.synch.FR)
+
+# effect of synchrony on stability
+m.synch.stab.cov.FR <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site),
+                      data = algae_scaled[algae_scaled$habitat == "Fringing", ])  
+  performance::check_model(m.synch.stab.cov.FR)
+  
+# effect of richness on cover
+m.sprich.cov.FR <- glmer(cover_mean_scale ~ richness_mean_scale + (1|site),
+                      data = algae_scaled[algae_scaled$habitat == "Fringing", ])
+  performance::check_model(m.sprich.cov.FR)
+```
+
+Try it with piecewiseSEM
+
+```{r}
+# Build SEM
+sem_fringe_brac <- psem(
+  m.sprich.synch.FR,
+  m.synch.stab.cov.FR,
+  m.sprich.cov.FR,
+  data = as.data.frame(algae_scaled[algae_scaled$habitat == "Fringing", ])
+)
+
+summary(sem_fringe_brac)
+```
+
+Plot
+
+```{r}
+plot(sem_fringe_brac)
+```
+
+# Backreef: bracketed 
+
+This is trying to make these models without rescaling within the fringing reef to see if it matters (i.e., we'll just subset from the original scaled dataframe)
+
+```{r}
+# effect of richness on synchrony
+m.sprich.synch.BA <- glmer(synchrony_scale ~ richness_mean_scale + (1|site),
+                        data = algae_scaled[algae_scaled$habitat == "Backreef", ])
+  performance::check_model(m.sprich.synch.BA)
+
+# effect of synchrony on stability
+m.synch.stab.cov.BA <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site),
+                      data = algae_scaled[algae_scaled$habitat == "Backreef", ])  
+  performance::check_model(m.synch.stab.cov.BA)
+  
+# effect of richness on cover
+m.sprich.cov.BA <- glmer(cover_mean_scale ~ richness_mean_scale + (1|site),
+                      data = algae_scaled[algae_scaled$habitat == "Backreef", ])
+  performance::check_model(m.sprich.cov.BA)
+```
+
+Try it with piecewiseSEM
+
+```{r}
+# Build SEM
+sem_back_brac <- psem(
+  m.sprich.synch.BA,
+  m.synch.stab.cov.BA,
+  m.sprich.cov.BA,
+  data = as.data.frame(algae_scaled[algae_scaled$habitat == "Backreef", ])
+)
+
+summary(sem_back_brac)
+```
+
+Plot
+
+```{r}
+plot(sem_back_brac)
+```
+
+# Forereef 10: bracketed 
+
+This is trying to make these models without rescaling within the fringing reef to see if it matters (i.e., we'll just subset from the original scaled dataframe)
+
+```{r}
+# effect of richness on synchrony
+m.sprich.synch.FO10 <- glmer(synchrony_scale ~ richness_mean_scale + (1|site),
+                        data = algae_scaled[algae_scaled$habitat == "Forereef 10m", ])
+  performance::check_model(m.sprich.synch.FO10)
+
+# effect of synchrony on stability
+m.synch.stab.cov.FO10 <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site),
+                      data = algae_scaled[algae_scaled$habitat == "Forereef 10m", ])  
+  performance::check_model(m.synch.stab.cov.FO10)
+  
+# effect of richness on cover
+m.sprich.cov.FO10 <- glmer(cover_mean_scale ~ richness_mean_scale + (1|site),
+                      data = algae_scaled[algae_scaled$habitat == "Forereef 10m", ])
+  performance::check_model(m.sprich.cov.FO10)
+```
+
+Try it with piecewiseSEM
+
+```{r}
+# Build SEM
+sem_for10_brac <- psem(
+  m.sprich.synch.FO10,
+  m.synch.stab.cov.FO10,
+  m.sprich.cov.FO10,
+  data = as.data.frame(algae_scaled[algae_scaled$habitat == "Forereef 10m", ])
+)
+
+summary(sem_for10_brac)
+```
+
+Plot
+
+```{r}
+plot(sem_for10_brac)
+```
+
+# Forereef 17: bracketed 
+
+This is trying to make these models without rescaling within the fringing reef to see if it matters (i.e., we'll just subset from the original scaled dataframe)
+
+```{r}
+# effect of richness on synchrony
+m.sprich.synch.FO17 <- glmer(synchrony_scale ~ richness_mean_scale + (1|site),
+                        data = algae_scaled[algae_scaled$habitat == "Forereef 17m", ])
+  performance::check_model(m.sprich.synch.FO17)
+
+# effect of synchrony on stability
+m.synch.stab.cov.FO17 <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site),
+                      data = algae_scaled[algae_scaled$habitat == "Forereef 17m", ])  
+  performance::check_model(m.synch.stab.cov.FO17)
+  
+# effect of richness on cover
+m.sprich.cov.FO17 <- glmer(cover_mean_scale ~ richness_mean_scale + (1|site),
+                      data = algae_scaled[algae_scaled$habitat == "Forereef 17m", ])
+  performance::check_model(m.sprich.cov.FO17)
+```
+
+Try it with piecewiseSEM
+
+```{r}
+# Build SEM
+sem_for17_brac <- psem(
+  m.sprich.synch.FO17,
+  m.synch.stab.cov.FO17,
+  m.sprich.cov.FO17,
+  data = as.data.frame(algae_scaled[algae_scaled$habitat == "Forereef 17m", ])
+)
+
+summary(sem_for17_brac)
+```
+
+Plot
+
+```{r}
+plot(sem_for17_brac)
+```
+
+# Try re-scaling within a habitat: Frining
+
+```{r}
+algae %>% 
+  filter(habitat == "Fringing") -> fringe
+  
+fringe %>% 
+  mutate(
+    richness_mean_scale = scale(fringe$richness_mean)[,1],
+    cover_mean_scale = scale(fringe$cover_mean)[,1],
+    cover_stability_scale = scale(fringe$cover_stability)[,1],
+    synchrony_scale = scale(fringe$synchrony)[,1]
+  ) -> algae_scaled_fringe
+
+```
+
+```{r}
+# effect of richness on synchrony
+m.sprich.synch.FRsc <- glmer(synchrony_scale ~ richness_mean_scale + (1|site),
+                        data = algae_scaled_fringe)
+  performance::check_model(m.sprich.synch.FRsc)
+
+# effect of synchrony on stability
+m.synch.stab.cov.FRsc <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site),
+                      data = algae_scaled_fringe)  
+  performance::check_model(m.synch.stab.cov.FRsc)
+  
+# effect of richness on cover
+m.sprich.cov.FRsc <- glmer(cover_mean_scale ~ richness_mean_scale + (1|site),
+                      data = algae_scaled_fringe)
+  performance::check_model(m.sprich.cov.FRsc)
+```
+
+Try it with piecewiseSEM
+
+```{r}
+# Build SEM
+sem.FRsc <- psem(
+  m.sprich.synch.FRsc,
+  m.synch.stab.cov.FRsc,
+  m.sprich.cov.FRsc,
+  data = as.data.frame(algae_scaled_fringe)
+)
+
+summary(sem.FRsc)
+```
+
+Plot
+
+```{r}
+plot(sem.FRsc)
+```
