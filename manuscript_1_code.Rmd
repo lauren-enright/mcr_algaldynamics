@@ -133,14 +133,17 @@ macro_long_data <- pivot_longer(
   mutate(prop_cover = percent_cover/100) %>% 
   select(-percent_cover)
 
+# convert cover to area
+macro_long_data$area <- macro_long_data$prop_cover*0.25
 # write_csv(macro_long_data, here("Data", "macro_long_data.csv"))
 ```
 
 
 ```{r site macroalgal data}
+# NOTE - FRI JAN 24 - updated mean() in summarize across to sum() to reflect new method of calculating cover as area
 site_macro <- macroalgae %>%
   dplyr::group_by(year, site, habitat,site_habitat) %>%
-  dplyr::summarize(across(acanthophora_spicifera:valonia_ventricosa, \(x) mean(x, na.rm = TRUE)))
+  dplyr::summarize(across(acanthophora_spicifera:valonia_ventricosa, \(x) sum(x, na.rm = TRUE))) 
 
 site_meta_cols <- c("year", "site", "habitat", "site_habitat")
 site_meta_df <- site_macro[,which(names(site_macro) %in% meta_cols)]
@@ -291,6 +294,8 @@ alpha_diversity_quad_macro <-
   left_join(alpha_diversity_quad_macro, macroalgal_cover_quad,by = join_by(location, year, site, habitat)) %>% 
   mutate(macroalgal_prop_cover = macroalgae / 100) %>% 
   select(-macroalgae)
+
+alpha_diversity_quad_macro$area <- alpha_diversity_quad_macro$macroalgal_prop_cover*0.25
 ```
 
 
@@ -301,6 +306,8 @@ alpha_diversity_site_macro$percent_cover <- rowSums(site_macro[,-which(names(sit
 alpha_diversity_site_macro$prop_cover <- alpha_diversity_site_macro$percent_cover/100
   
 alpha_diversity_site_macro$cover_trans <- sv_trans(alpha_diversity_site_macro$prop_cover)
+
+alpha_diversity_site_macro$area <- alpha_diversity_site_macro$prop_cover*0.25
 ```
 
 
