@@ -1,0 +1,197 @@
+---
+title: "SEM for quad-level data using lavaan"
+output: html_document
+date: "2025-01-22"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# clear workspace
+rm(list = ls())
+
+require(tidyverse)
+require(here)
+require(lavaan)
+require(lavaanPlot)
+```
+
+# Read in data
+
+```{r}
+# functional richness from Noam
+functrich <- read_csv(here("data/full_plot_level_dss.csv")) %>% 
+  select(location, habitat, site, functional_richness_mean)
+
+# quad-level data summarized with one point for all time
+algae <- read_csv(here("data/diversity_stability_synchrony.csv")) %>% 
+  inner_join(functrich)
+```
+
+# Scale data
+
+```{r}
+algae %>% 
+  mutate(
+    richness_mean_scale = scale(algae$richness_mean)[,1],
+    functional_richness_mean_scale = scale(algae$functional_richness_mean)[,1],
+    cover_mean_scale = scale(algae$cover_mean)[,1],
+    cover_stability_scale = scale(algae$cover_stability)[,1],
+    synchrony_scale = scale(algae$synchrony)[,1]
+  ) %>% 
+  select(site, habitat, richness_mean_scale, functional_richness_mean_scale,
+         cover_mean_scale, cover_stability_scale, synchrony_scale
+         ) -> algae_scaled
+```
+
+# Overall model
+
+```{r define model}
+# define the model
+m.all <- '
+  # Structural model/regressions
+  synchrony_scale ~ richness_mean_scale + functional_richness_mean_scale
+  functional_richness_mean_scale ~ richness_mean_scale
+  cover_stability_scale ~ synchrony_scale + functional_richness_mean_scale + cover_mean_scale + richness_mean_scale
+  cover_mean_scale ~ richness_mean_scale
+'   
+```
+
+```{r examine fit}
+fit.all <- lavaan::sem(m.all, cluster = "site", data = algae_scaled) 
+  lavaan::summary(fit.all, standardized = TRUE, fit.measures = TRUE)
+```
+
+```{r}
+# make labels
+labels1 <- list(synchrony_scale = "Synchrony", richness_mean_scale = "Spp richness", functional_richness_mean_scale = "Func. Richness", cover_stability_scale = "Stability", cover_mean_scale = "Cover")
+
+# plot
+lavaanPlot(model = fit.all,
+           labels = labels1,
+           coefs = TRUE,
+           stand = TRUE,
+           sig = 0.05 # standardized regression paths, showing only paths with p<= .05
+           )
+```
+
+
+# Overall modell: no functional richness
+
+```{r define model}
+# define the model
+m.all.noFR <- '
+  # Structural model/regressions
+  synchrony_scale ~ richness_mean_scale 
+  cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale
+  cover_mean_scale ~ richness_mean_scale
+'   
+```
+
+```{r examine fit}
+fit.noFR <- lavaan::sem(m.all.noFR, cluster = "site", data = algae_scaled) 
+  lavaan::summary(fit.noFR, standardized = TRUE, fit.measures = TRUE)
+```
+
+```{r}
+# make labels
+labels2 <- list(synchrony_scale = "Synchrony", richness_mean_scale = "Spp richness", cover_stability_scale = "Stability", cover_mean_scale = "Cover")
+
+# plot
+lavaanPlot(model = fit.noFR,
+           labels = labels2,
+           coefs = TRUE,
+           stand = TRUE,
+           sig = 0.05 # standardized regression paths, showing only paths with p<= .05
+           )
+```
+
+# Overall model: no cover
+
+```{r define model}
+# define the model
+m.noC <- '
+  # Structural model/regressions
+  synchrony_scale ~ richness_mean_scale + functional_richness_mean_scale
+  functional_richness_mean_scale ~ richness_mean_scale
+  cover_stability_scale ~ synchrony_scale + functional_richness_mean_scale + richness_mean_scale
+'   
+```
+
+```{r examine fit}
+fit.noC <- lavaan::sem(m.noC, cluster = "site", data = algae_scaled) 
+  lavaan::summary(fit.noC, standardized = TRUE, fit.measures = TRUE)
+```
+
+```{r}
+# make labels
+labels3 <- list(synchrony_scale = "Synchrony", richness_mean_scale = "Spp richness", functional_richness_mean_scale = "Func. Richness", cover_stability_scale = "Stability")
+
+# plot
+lavaanPlot(model = fit.noC,
+           labels = labels3,
+           coefs = TRUE,
+           stand = TRUE,
+           sig = 0.05 # standardized regression paths, showing only paths with p<= .05
+           )
+```
+
+# Overall model: no cover or functional richness
+
+```{r define model}
+# define the model
+m.noCorFR <- '
+  # Structural model/regressions
+  synchrony_scale ~ richness_mean_scale 
+  cover_stability_scale ~ synchrony_scale + richness_mean_scale
+'   
+```
+
+```{r examine fit}
+fit.noCorF <- lavaan::sem(m.noCorFR, cluster = "site", data = algae_scaled) 
+  lavaan::summary(fit.noCorF, standardized = TRUE, fit.measures = TRUE)
+```
+
+```{r}
+# make labels
+labels4 <- list(synchrony_scale = "Synchrony", richness_mean_scale = "Spp richness",  cover_stability_scale = "Stability")
+
+# plot
+lavaanPlot(model = fit.noCorF,
+           labels = labels4,
+           coefs = TRUE,
+           stand = TRUE,
+           sig = 0.05 # standardized regression paths, showing only paths with p<= .05
+           )
+```
+
+# Fringing model: no cover or functional richness
+
+```{r define model}
+# define the model
+m.noCorFR.FR <- '
+  # Structural model/regressions
+  synchrony_scale ~ richness_mean_scale 
+  cover_stability_scale ~  richness_mean_scale + synchrony_scale
+'   
+```
+
+```{r examine fit}
+fit.noCorF.FR <- lavaan::sem(m.noCorFR.FR, cluster = "site", data = algae_scaled) # [algae_scaled$habitat == "Fringing", ] 
+  lavaan::summary(fit.noCorF.FR, standardized = TRUE, fit.measures = TRUE)
+```
+
+```{r}
+# make labels
+labels4 <- list(synchrony_scale = "Synchrony", richness_mean_scale = "Spp richness", cover_stability_scale = "Stability")
+
+# plot
+lavaanPlot(model = fit.noCorF.FR,
+           labels = labels4,
+           coefs = TRUE,
+           stand = TRUE,
+           sig = 0.05 # standardized regression paths, showing only paths with p<= .05
+           )
+```

@@ -9,6 +9,10 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+# clear workspace
+rm(list = ls())
+
+
 require(tidyverse)
 require(here)
 require(piecewiseSEM)
@@ -19,19 +23,37 @@ require(performance)
 # Read in data
 
 ```{r}
+# functional richness from Noam
+functrich <- read_csv(here("data/full_plot_level_dss.csv"))
+
 # quad-level data summarized with one point for all time
-algae <- read_csv(here("data/diversity_stability_synchrony.csv"))
+algae_1 <- read_csv(here("data/diversity_stability_synchrony.csv"))
 ```
+
+These two guys have different dimensions. See where they differ:
+
+```{r}
+functrich[!(functrich$location %in% algae_1$location),] 
+```
+
+Noam says we can just inner join/exclude these--just used to calculate averages
+
+```{r}
+functrich %>% 
+  select(location, habitat, site, functional_richness_mean) %>% 
+  inner_join(algae_1) -> algae
+```
+
 
 # Scale data
 
 Gamma families are currently not supported and we're not able to get glmmTMB to work for the time being.
 
-
 ```{r}
 algae %>% 
   mutate(
     richness_mean_scale = scale(algae$richness_mean)[,1],
+    functional_richness_mean_scale = scale(algae$functional_richness_mean)[,1],
     cover_mean_scale = scale(algae$cover_mean)[,1],
     cover_stability_scale = scale(algae$cover_stability)[,1],
     synchrony_scale = scale(algae$synchrony)[,1]
@@ -39,20 +61,25 @@ algae %>%
 ```
 
 
-# Make a simple SEM
+# Make an overall SEM with functional richness
 
 First, fit individual models
 
 ```{r}
 # effect of richness on synchrony
-m.sprich.synch <- glmer(synchrony_scale ~ richness_mean_scale + (1|site) + (1|habitat),
+m.sprich.synch <- glmer(synchrony_scale ~ richness_mean_scale + functional_richness_mean_scale + (1|site) + (1|habitat),
                         data = algae_scaled)
   performance::check_model(m.sprich.synch)
+  
+# effect of taxonomic richness on functional richness
+m.sprich.funrich <- glmer(functional_richness_mean_scale ~ richness_mean_scale + (1|site) + (1|habitat),
+                        data = algae_scaled)
+  performance::check_model(m.sprich.funrich)
 
 # effect of synchrony on stability
-m.synch.stab.cov <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site) + (1|habitat),
+m.synch.stab.cov <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + functional_richness_mean_scale + (1|site) + (1|habitat),
                       data = algae_scaled)  
-  performance::check_model(m.synch.stab)
+  performance::check_model(m.synch.stab.cov)
   
 # effect of richness on cover
 m.sprich.cov <- glmer(cover_mean_scale ~ richness_mean_scale + (1|site) + (1|habitat),
@@ -66,9 +93,10 @@ Try it with piecewiseSEM
 # Build SEM
 sem <- psem(
   m.sprich.synch,
+  m.sprich.funrich,
   m.synch.stab.cov,
   m.sprich.cov,
-  data = as.data.frame(algae)
+  data = as.data.frame(algae_scaled)
 )
 
 summary(sem)
@@ -77,15 +105,50 @@ summary(sem)
 Plot
 
 ```{r}
-# Extract coefficients
-#coefficients <- summary(sem)$coefficients
-
-# Add a column for color based on the sign of the path coefficient
-#coefficients$color <- ifelse(coefficients$Estimate > 0, "blue", #"red")
-
 plot(sem)
 ```
 
+
+# Make an overall SEM withOUT functional richness
+
+First, fit individual models
+
+```{r}
+# effect of richness on synchrony
+m.sprich.synch.noFR <- glmer(synchrony_scale ~ richness_mean_scale  + (1|site) + (1|habitat),
+                        data = algae_scaled)
+  performance::check_model(m.sprich.synch.noFR)
+
+# effect of synchrony on stability
+m.synch.stab.cov.noFR <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site) + (1|habitat),
+                      data = algae_scaled)  
+  performance::check_model(m.synch.stab.cov.noFR)
+  
+# effect of richness on cover
+m.sprich.cov.noFR <- glmer(cover_mean_scale ~ richness_mean_scale + (1|site) + (1|habitat),
+                      data = algae_scaled)
+  performance::check_model(m.sprich.cov.noFR)
+```
+
+Try it with piecewiseSEM
+
+```{r}
+# Build SEM
+sem.noFR <- psem(
+  m.sprich.synch,
+  m.synch.stab.cov,
+  m.sprich.cov,
+  data = as.data.frame(algae_scaled)
+)
+
+summary(sem.noFR)
+```
+
+Plot
+
+```{r}
+plot(sem.noFR)
+```
 
 # Frining reef: bracketed 
 
@@ -93,12 +156,17 @@ This is trying to make these models without rescaling within the fringing reef t
 
 ```{r}
 # effect of richness on synchrony
-m.sprich.synch.FR <- glmer(synchrony_scale ~ richness_mean_scale + (1|site),
+m.sprich.synch.FR <- glmer(synchrony_scale ~ richness_mean_scale + functional_richness_mean_scale + (1|site),
                         data = algae_scaled[algae_scaled$habitat == "Fringing", ])
   performance::check_model(m.sprich.synch.FR)
+  
+# effect of taxonomic richness on functional richness
+m.sprich.funrich.FR <- glmer(functional_richness_mean_scale ~ richness_mean_scale + (1|site),
+                        data = algae_scaled[algae_scaled$habitat == "Fringing", ])
+  performance::check_model(m.sprich.funrich.FR)
 
 # effect of synchrony on stability
-m.synch.stab.cov.FR <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site),
+m.synch.stab.cov.FR <- glmer(cover_stability_scale ~ synchrony_scale + functional_richness_mean_scale +  cover_mean_scale + richness_mean_scale + (1|site),
                       data = algae_scaled[algae_scaled$habitat == "Fringing", ])  
   performance::check_model(m.synch.stab.cov.FR)
   
@@ -114,6 +182,7 @@ Try it with piecewiseSEM
 # Build SEM
 sem_fringe_brac <- psem(
   m.sprich.synch.FR,
+  m.sprich.funrich.FR,
   m.synch.stab.cov.FR,
   m.sprich.cov.FR,
   data = as.data.frame(algae_scaled[algae_scaled$habitat == "Fringing", ])
@@ -134,12 +203,18 @@ This is trying to make these models without rescaling within the fringing reef t
 
 ```{r}
 # effect of richness on synchrony
-m.sprich.synch.BA <- glmer(synchrony_scale ~ richness_mean_scale + (1|site),
+m.sprich.synch.BA <- glmer(synchrony_scale ~ richness_mean_scale + functional_richness_mean_scale + (1|site),
                         data = algae_scaled[algae_scaled$habitat == "Backreef", ])
   performance::check_model(m.sprich.synch.BA)
+  
+# effect of taxonomic richness on functional richness
+m.sprich.funrich.BA <- glmer(functional_richness_mean_scale ~ richness_mean_scale + (1|site),
+                        data = algae_scaled[algae_scaled$habitat == "Backreef", ])
+  performance::check_model(m.sprich.funrich.BA)
+
 
 # effect of synchrony on stability
-m.synch.stab.cov.BA <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site),
+m.synch.stab.cov.BA <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + functional_richness_mean_scale + richness_mean_scale + (1|site),
                       data = algae_scaled[algae_scaled$habitat == "Backreef", ])  
   performance::check_model(m.synch.stab.cov.BA)
   
@@ -155,6 +230,7 @@ Try it with piecewiseSEM
 # Build SEM
 sem_back_brac <- psem(
   m.sprich.synch.BA,
+  m.sprich.funrich.BA,
   m.synch.stab.cov.BA,
   m.sprich.cov.BA,
   data = as.data.frame(algae_scaled[algae_scaled$habitat == "Backreef", ])
@@ -175,12 +251,17 @@ This is trying to make these models without rescaling within the fringing reef t
 
 ```{r}
 # effect of richness on synchrony
-m.sprich.synch.FO10 <- glmer(synchrony_scale ~ richness_mean_scale + (1|site),
+m.sprich.synch.FO10 <- glmer(synchrony_scale ~ richness_mean_scale + functional_richness_mean_scale + (1|site),
                         data = algae_scaled[algae_scaled$habitat == "Forereef 10m", ])
   performance::check_model(m.sprich.synch.FO10)
+  
+# effect of taxonomic richness on functional richness
+m.sprich.funrich.FO10 <- glmer(functional_richness_mean_scale ~ richness_mean_scale + (1|site),
+                        data = algae_scaled[algae_scaled$habitat == "Forereef 10m", ])
+  performance::check_model(m.sprich.funrich.FO10)
 
 # effect of synchrony on stability
-m.synch.stab.cov.FO10 <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site),
+m.synch.stab.cov.FO10 <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + functional_richness_mean_scale + (1|site),
                       data = algae_scaled[algae_scaled$habitat == "Forereef 10m", ])  
   performance::check_model(m.synch.stab.cov.FO10)
   
@@ -196,6 +277,7 @@ Try it with piecewiseSEM
 # Build SEM
 sem_for10_brac <- psem(
   m.sprich.synch.FO10,
+  m.sprich.funrich.FO10,
   m.synch.stab.cov.FO10,
   m.sprich.cov.FO10,
   data = as.data.frame(algae_scaled[algae_scaled$habitat == "Forereef 10m", ])
@@ -216,12 +298,17 @@ This is trying to make these models without rescaling within the fringing reef t
 
 ```{r}
 # effect of richness on synchrony
-m.sprich.synch.FO17 <- glmer(synchrony_scale ~ richness_mean_scale + (1|site),
+m.sprich.synch.FO17 <- glmer(synchrony_scale ~ richness_mean_scale + functional_richness_mean_scale + (1|site),
                         data = algae_scaled[algae_scaled$habitat == "Forereef 17m", ])
   performance::check_model(m.sprich.synch.FO17)
+  
+# effect of taxonomic richness on functional richness
+m.sprich.funrich.FO17 <- glmer(functional_richness_mean_scale ~ richness_mean_scale + (1|site),
+                        data = algae_scaled[algae_scaled$habitat == "Forereef 17m", ])
+  performance::check_model(m.sprich.funrich.FO17)
 
 # effect of synchrony on stability
-m.synch.stab.cov.FO17 <- glmer(cover_stability_scale ~ synchrony_scale + cover_mean_scale + richness_mean_scale + (1|site),
+m.synch.stab.cov.FO17 <- glmer(cover_stability_scale ~ synchrony_scale + functional_richness_mean_scale + cover_mean_scale + richness_mean_scale + (1|site),
                       data = algae_scaled[algae_scaled$habitat == "Forereef 17m", ])  
   performance::check_model(m.synch.stab.cov.FO17)
   
@@ -237,6 +324,7 @@ Try it with piecewiseSEM
 # Build SEM
 sem_for17_brac <- psem(
   m.sprich.synch.FO17,
+  m.sprich.funrich.FO17,
   m.synch.stab.cov.FO17,
   m.sprich.cov.FO17,
   data = as.data.frame(algae_scaled[algae_scaled$habitat == "Forereef 17m", ])
@@ -303,3 +391,6 @@ Plot
 ```{r}
 plot(sem.FRsc)
 ```
+
+
+

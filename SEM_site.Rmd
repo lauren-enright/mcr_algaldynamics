@@ -22,8 +22,6 @@ require(performance)
 
 # Read in data
 
-# Read in data
-
 ```{r}
 # spatial synchrony data from Noam & functional richness--need to double check that FR is site-level
 spatial_synch <- read_csv(here("data/spatial_synchrony.csv")) %>% 
@@ -38,7 +36,6 @@ algae_site <- read_csv(here("data/diversity_stability_synchrony_site.csv")) %>%
 
 Gamma families are currently not supported and we're not able to get glmmTMB to work for the time being.
 
-
 ```{r}
 algae_site %>% 
   mutate(
@@ -52,15 +49,20 @@ algae_site %>%
 ```
 
 
-# Make a simple SEM
+# Make an overall SEM
 
 First, fit individual models
 
 ```{r}
 # effect of richness on synchrony
-m.sprich.synch <- glmer(synchrony_mean_scale ~ richness_mean_scale + functional_richness_mean_scale + (1|site) + (1|habitat),
+m.sprich.synch <- glmer(synchrony_scale ~ richness_mean_scale + functional_richness_mean_scale + (1|site) + (1|habitat),
                         data = algae_site_scaled)
   performance::check_model(m.sprich.synch)
+  
+# effect of taxonomic richness on functional richness
+m.sprich.funrich <- glmer(functional_richness_mean_scale ~ richness_mean_scale + (1|site) + (1|habitat),
+                        data = algae_site_scaled)
+  performance::check_model(m.sprich.funrich)
 
 # effect of synchrony on stability
 m.synch.stab.cov <- glmer(cover_stability_scale ~ synchrony_scale + functional_richness_mean_scale + cover_mean_scale + richness_mean_scale + spatial_synchrony_scale + (1|site) + (1|habitat),
@@ -81,6 +83,7 @@ sem <- psem(
   m.sprich.synch,
   m.synch.stab.cov,
   m.sprich.cov,
+  m.sprich.funrich,
   data = as.data.frame(algae_site_scaled)
 )
 
@@ -93,3 +96,49 @@ Plot
 plot(sem)
 ```
 
+Poor convergence issues/singularity
+
+# What about no random effect for habitat?
+
+```{r}
+# effect of richness on synchrony
+m.sprich.synch.nR <- glmer(synchrony_scale ~ richness_mean_scale + functional_richness_mean_scale + (1|site),
+                        data = algae_site_scaled)
+  performance::check_model(m.sprich.synch.nR)
+  
+# effect of taxonomic richness on functional richness
+m.sprich.funrich.nR <- glmer(functional_richness_mean_scale ~ richness_mean_scale + (1|site),
+                        data = algae_site_scaled)
+  performance::check_model(m.sprich.funrich.nR)
+
+# effect of synchrony on stability
+m.synch.stab.cov.nR <- glmer(cover_stability_scale ~ synchrony_scale + functional_richness_mean_scale + cover_mean_scale + richness_mean_scale + spatial_synchrony_scale + (1|site),
+                      data = algae_site_scaled)  
+  performance::check_model(m.synch.stab.cov.nR)
+  
+# effect of richness on cover
+m.sprich.cov.nR <- glmer(cover_mean_scale ~ richness_mean_scale + (1|site),
+                      data = algae_site_scaled)
+  performance::check_model(m.sprich.cov.nR)
+```
+
+Make it with piecewiseSEM
+
+```{r}
+# Build SEM
+sem.nR <- psem(
+  m.sprich.synch.nR,
+  m.synch.stab.cov.nR,
+  m.sprich.cov.nR,
+  m.sprich.funrich.nR,
+  data = as.data.frame(algae_site_scaled)
+)
+
+summary(sem.nR)
+```
+
+Plot
+
+```{r}
+plot(sem.nR)
+```
