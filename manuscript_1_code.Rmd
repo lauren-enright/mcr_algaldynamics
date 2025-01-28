@@ -450,7 +450,7 @@ emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not differe
 # Forereef 10m - Forereef 17m  0.04076 0.0209 Inf   1.947  0.2087
 
 
-# area model - play around with area vs. area_trans
+# area model - play around with area vs. area_trans. If you use area_trans, family = Gamma("log") and remove ziformula argument
 area_mod <- glmmTMB(area ~ richness*habitat + (1|site/location) + (1|year), family = ziGamma("log"), ziformula = ~1, data = alpha_diversity_quad_macro)
 summary(area_mod)
 Anova(area_mod)
