@@ -353,6 +353,7 @@ fg_summary <- macro_functional_groups %>%
 
 max(fg_summary$sum_fg_cover)
 
+
 #summarizing functional groups at the site level
 #NOTE that this is ADDED and not averaged. This data is only used to find richness at the site level. LE did this as adding and as a sum, both end up the same from a richness perspective. 
 fg_summary_site_SUM <- macro_functional_groups %>%
@@ -398,6 +399,8 @@ fg_summary_site_wide_SUM$functional_richness <- vegan::specnumber(fg_summary_sit
 alpha_diversity_quad_macro <- merge(alpha_diversity_quad_macro,
                                     fg_summary_wide[,c("location", "year", "site",  "habitat", "functional_richness")],
                                     by = c("location", "year", "site", "habitat"))
+# add small amount to avoid 0s in data for gamma modeling
+alpha_diversity_quad_macro$area_trans <- alpha_diversity_quad_macro$area + 10E-10
 
 #merge site level cover with site functional group richness
 alpha_diversity_site_macro<-merge(alpha_diversity_site_macro,
@@ -413,7 +416,8 @@ mean_adiv_quad <- alpha_diversity_quad_macro %>%
   dplyr::summarise(
     richness_mean = mean(richness, na.rm = T),
     functional_richness_mean = mean(functional_richness, na.rm = T),
-    cover_mean = mean(macroalgal_prop_cover, na.rm = T))
+    cover_mean = mean(macroalgal_prop_cover, na.rm = T),
+    area_mean = mean(area_trans, na.rm = T))
 
 # sv transform cover due to 0s in data
 mean_adiv_quad$cover_trans <- sv_trans(mean_adiv_quad$cover_mean)
@@ -444,6 +448,18 @@ emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not differe
 # Backreef - Forereef 10m      0.00147 0.0205 Inf   0.072  0.9999
 # Backreef - Forereef 17m      0.04223 0.0214 Inf   1.975  0.1974
 # Forereef 10m - Forereef 17m  0.04076 0.0209 Inf   1.947  0.2087
+
+
+# area model - play around with area vs. area_trans
+area_mod <- glmmTMB(area ~ richness*habitat + (1|site/location) + (1|year), family = ziGamma("log"), ziformula = ~1, data = alpha_diversity_quad_macro)
+summary(area_mod)
+Anova(area_mod)
+hist(residuals(area_mod))
+plot(simulateResiduals(area_mod))
+plot(residuals(area_mod) ~ fitted(area_mod)) # heteroskedastic - because of the few 100% cover plots?
+r.squaredGLMM(area_mod) # 0.631, 0.650
+performance::r2(area_mod) # 0.635, 0.654
+emtrends(area_mod, pairwise ~ habitat, var = "richness")
 
 ```
 
