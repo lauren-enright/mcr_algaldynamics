@@ -59,7 +59,7 @@ model_themes <-   theme_bw() +
         axis.title.y = element_text(size=24), 
         axis.text.x = element_text(size=22), 
         axis.text.y = element_text(size=22),
-        legend.text = element_text(size=22),
+        legend.text = element_text(size=24),
         plot.title = element_text(size=26), 
         panel.background = element_blank(), 
         panel.grid.major = element_blank(),  #remove major-grid labels
@@ -512,13 +512,13 @@ filtered_cover_effects_2 <- filter_ranges(trend = cover_emm_2, range_obj = diver
 (figure_3a <- 
   ggplot() +
   geom_point(data = alpha_diversity_quad_macro,
-             aes(x = richness, y = cover_trans, colour = habitat), size = 1, alpha = 0.5) + 
+             aes(x = richness, y = cover_trans, colour = habitat), size = 1, alpha = 0.75) + 
   geom_line(data = filtered_cover_effects, aes(x = richness, y = inv_logit(yvar), colour = habitat)) +
   geom_ribbon(data = filtered_cover_effects, aes(x = richness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
               alpha = 0.5) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Cover\n", x = "", title = "") +
+  labs(y = "Cover\n", x = "Taxonomic richness", title = "") +
   model_themes 
          )
 # ggsave(filename = "output/figure_3a.png", figure_3a, height = 10, width = 14)
@@ -629,14 +629,14 @@ filtered_cover_effects_fg_2 <- filter_ranges(cover_emm_fg_2, diversity_ranges_qu
 (figure_3b <- 
   ggplot() +
   geom_point(data = alpha_diversity_quad_macro,
-             aes(x = functional_richness, y = cover_trans, colour = habitat), size = 1, alpha = 0.5) + 
+             aes(x = functional_richness, y = cover_trans, colour = habitat), size = 1, alpha = 0.75) + 
   geom_line(data = filtered_cover_effects_fg, aes(x = functional_richness, y = inv_logit(yvar), colour = habitat)) +
   geom_ribbon(data = filtered_cover_effects_fg, aes(x = functional_richness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
-              alpha = 0.3) +
+              alpha = 0.5) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "", x = "", title = "") +
-  trends_theme
+  labs(y = "", x = "Functional richness", title = "") +
+  model_themes
          )
 #ggsave(filename = "output/figure_3b_quad_v2.png", figure_3b, height = 10, width = 14)
 
@@ -981,40 +981,29 @@ filtered_synch_cov_effects_site <- filter_ranges(synch_cov_emm_site, dss_ranges_
 ```
 
 ## Figure 3 Full Plot
-```{r ggpubr fig3, fig.height = 8, fig.width=16}
+```{r ggpubr fig3 main, fig.height = 8, fig.width=16}
 
-(figure_3 <- ggarrange(figure_3a, figure_3b, figure_3c, figure_3d, figure_3e, figure_3f, 
-                      ncol = 3, nrow = 2, 
+(figure_3 <- ggarrange(figure_3a, figure_3b,  
+                      ncol = 2, nrow = 1, 
                       common.legend = TRUE,
-                      labels = c("a.", "b.", "c.", "d.", "e.", "f."),
+                      labels = c("a.", "b."),
                       legend = "bottom", 
-                      font.label = list(size = 26, color = "black", face = "plain")))
+                      font.label = list(size = 26, color = "black", face = "plain")) )
 
 # ggsave(filename = "output/figure_3v2.png", figure_3, height = 8, width = 16)
 ```
 
-### full vs mean plot comparison plot
-```{r ggpubr meanfull, fig.height = 8, fig.width=9}
-
-(mean_full_fxn_plot <- ggarrange(figure_3a, figure_3a_2, figure_3b, figure_3b_2, 
-                      ncol = 2, nrow = 2, 
+```{r figure 3 site supplement, fig.height = 8, fig.width = 16}
+(figure_3_supplement <- ggarrange(figure_3d, figure_3e,  
+                      ncol = 2, nrow = 1, 
                       common.legend = TRUE,
+                      labels = c("a.", "b."),
                       legend = "bottom", 
                       font.label = list(size = 26, color = "black", face = "plain")))
 
-# ggsave(filename = "output/figure_3v2.png", figure_3, height = 8, width = 16)
+# ggsave(filename = "output/figure_3_site.png", figure_3_supplement, height = 8, width = 16)
 ```
-```{r figure 3 with mean, fig.height = 8, fig.width=9}
-(figure_3_2 <- ggarrange(figure_3a_2, figure_3b_2, figure_3d, figure_3e, 
-                      ncol = 2, nrow = 2, 
-                      common.legend = TRUE,
-                      labels = c("a.", "b.", "c.", "d."),
-                      legend = "bottom", 
-                      font.label = list(size = 26, color = "black", face = "plain")))
 
-# ggsave(filename = "output/figure_3v3.png", figure_3_2, height = 8, width = 16)
-
-```
 # Figure 4
 
 
@@ -1105,8 +1094,8 @@ filtered_rich_stab_effects_2 <- filter_ranges(rich_stab_emm_2, dss_ranges_2, "ha
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Stability\n", x = "", title = "") +
-  trends_theme
+  labs(y = "Stability\n", x = "Taxonomic richness", title = "") +
+  model_themes
          )
 
 # ggsave(filename = "output/figure_4a.png", figure_4a, height = 10, width = 14)
@@ -1221,8 +1210,9 @@ filtered_rich_stab_effects_fg_2 <- filter_ranges(rich_stab_emm_fg_2, dss_ranges_
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "", x = "", title = "") +
-  trends_theme
+  scale_x_continuous(breaks = c(0,1,2)) +
+  labs(y = "", x = "Functional richness", title = "") +
+  model_themes
          )
 
 #ggsave(filename = "output/figure_4b_v2.png", figure_4b, height = 10, width = 14)
@@ -1328,8 +1318,8 @@ filtered_synch_stab_effects_2 <- filter_ranges(synch_stab_emm_2, dss_ranges_2, "
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(x = "", y = "", title = "") +
-  trends_theme
+  labs(x = "Synchrony", y = "", title = "") +
+  model_themes
          )
 # ggsave(filename = "output/figure_4c.png", figure_4c, height = 10, width = 14)
 
@@ -1396,8 +1386,9 @@ filtered_rich_stab_effects_site <- filter_ranges(rich_stab_emm_site, dss_ranges_
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "Stability\n", x = "Taxonomic Richness", title = "") +
-  trends_theme
+  scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
+  labs(y = "Site-level Stability\n", x = "Taxonomic richness", title = "") +
+  model_themes
          )
 
 # ggsave(filename = "output/figure_4d.png", figure_4d, height = 10, width = 14)
@@ -1459,8 +1450,10 @@ filtered_rich_stab_effects_site <- filter_ranges(rich_stab_emm_site_fg, dss_rang
               alpha = 0.3) +
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
-  labs(y = "", x = "Functional Richness", title = "") +
-  trends_theme
+  scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
+  scale_x_continuous(limits = c(2, 4.2), breaks = c(1,2,3,4)) +
+  labs(y = "", x = "Functional richness", title = "") +
+  model_themes
          )
 
 #ggsave(filename = "output/figure_4e_v2.png", figure_4e, height = 10, width = 14)
@@ -1513,7 +1506,8 @@ filtered_synch_stab_effects_site <- filter_ranges(synch_stab_emm_site, dss_range
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
   labs(x = "Synchrony", y = "", title = "") +
-  trends_theme
+  scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
+  model_themes
          )
 # ggsave(filename = "output/figure_4f.png", figure_4f, height = 10, width = 14)
 ```
@@ -1521,10 +1515,10 @@ filtered_synch_stab_effects_site <- filter_ranges(synch_stab_emm_site, dss_range
 
 
 ## Figure 4 Full Plot
-```{r ggpubr fig4, fig.height = 8, fig.width=16}
+```{r ggpubr fig4, fig.height = 6, fig.width=18}
 
-(figure_4 <- ggarrange(figure_4a, figure_4b, figure_4c, figure_4d, figure_4e, figure_4f, 
-                      ncol = 3, nrow = 2, 
+(figure_4 <- ggarrange(figure_4a, figure_4b, figure_4c, 
+                      ncol = 3, nrow = 1, 
                       common.legend = TRUE,
                       heights = c(1,1),
                       widths = c(1,1,1),
@@ -1532,7 +1526,7 @@ filtered_synch_stab_effects_site <- filter_ranges(synch_stab_emm_site, dss_range
                       labels = c("a.", "b.", "c.", "d.", "e.", "f."),
                       font.label = list(size = 26, color = "black", face = "plain")))
 
-# ggsave(filename = "output/figure_4v2.png", figure_4, height = 8, width = 16)
+# ggsave(filename = "output/figure_4v3.png", figure_4, height = 6, width = 18)
 ```
 
 ### compare plot level graphs
@@ -1634,7 +1628,8 @@ filtered_spat_stab_effects <- filter_ranges(spat_stab_emm, dss_spatial_ranges, "
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
   labs(y = "", x = "Spatial synchrony", title = "") +
-  trends_theme
+  scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
+  model_themes
          )
 
 ```
@@ -1679,7 +1674,8 @@ filtered_mean_synch_effects <- filter_ranges(mean_synch_emm, dss_spatial_ranges,
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
   labs(y = "Site-level Stability\n", x = "Mean plot-level species synchrony", title = "") +
-  trends_theme
+  scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
+  model_themes
          )
 ```
 
@@ -1722,20 +1718,22 @@ filtered_ag_effects <- filter_ranges(alpha_gamma_emm, dss_spatial_ranges, "habit
   scale_colour_manual(values = habitat_colours) +
   scale_fill_manual(values = habitat_colours) +
   labs(y = "", x = "Plot-level stability", title = "") +
-  trends_theme
+  scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
+  model_themes
          )
 ```
 
 ## panel graph
-```{r figure 5 panel, fig.height = 6, fig.width=22}
-(figure_5 <- ggarrange(mean_synchrony_plot, alpha_gamma_stability_plot, spatial_synchrony_plot,
-                      ncol = 3, nrow = 1, 
+```{r figure 5 panel, fig.height = 10, fig.width=18}
+(figure_5 <- ggarrange(figure_4d, figure_4e, figure_4f, 
+                       mean_synchrony_plot, alpha_gamma_stability_plot, spatial_synchrony_plot,
+                      ncol = 3, nrow = 2, 
                       common.legend = TRUE,
                       legend = "bottom", 
-                      labels = c("a.", "b.", "c."),
+                      labels = c("a.", "b.", "c.", "d.", "e.", "f."),
                       font.label = list(size = 26, color = "black", face = "plain")))
 
-# ggsave(filename = "output/figure_5_option3_v2.png", figure_5, height = 6, width = 22)
+# ggsave(filename = "output/figure_5_v2.png", figure_5, height = 10, width = 18)
 ```
 
 
