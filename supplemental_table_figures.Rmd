@@ -346,7 +346,7 @@ Plot together using `patchwork`
 pdf(here("output/tableS4toFig.pdf"), height = 15, width = 32)
 
 (s4.taxon + s4.functional + s4.synch) /
-  (s4.plt.stab + s4.plt.synch + s4.spat.synch)
+  (s4.plt.synch + s4.plt.stab + s4.spat.synch)
 
 dev.off()
 ```
