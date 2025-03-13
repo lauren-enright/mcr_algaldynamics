@@ -1860,3 +1860,149 @@ filtered_rich_synch_effects <- rich_synch_emm %>%
   trends_theme
          )
 ```
+
+# Supplemental tables
+
+Save `emtrends()` output as a table for supplemental figures
+
+## Table S2
+
+For supplemental table S2: cover vs. diversity
+
+```{r}
+# get estimates: taxonomic richness
+t.s2.a <- as_tibble(emtrends(cover_mod, pairwise ~ habitat, var = "richness")$emtrends) %>% 
+  mutate(Predictor = "Taxonomic richness",
+         `Spatial scale` = "Plot-level") %>% 
+  # rename this so it matches for joining purposes
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+
+# just want to make sure this^ isn't this (below)?
+# emtrends(cover_mod_2, pairwise ~ habitat, var = "richness_mean")
+
+t.s2.b <- as_tibble(emtrends(site_cover_mod, pairwise ~ habitat, var = "richness")$emtrends) %>% 
+  mutate(Predictor = "Taxonomic richness",
+         `Spatial scale` = "Site-level") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+# functional richness
+t.s2.c <- as.tibble(emtrends(cover_mod_fg, pairwise ~ habitat, var = "functional_richness")$emtrends) %>% 
+  mutate(Predictor = "Functional richness",
+         `Spatial scale` = "Plot-level") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+# not this right?
+# emtrends(cover_mod_fg_2, pairwise ~ habitat, var = "functional_richness_mean")
+
+t.s2.d <- as.tibble(emtrends(site_cover_mod_fg, pairwise ~ habitat, var = "functional_richness")$emtrends) %>% 
+  mutate(Predictor = "Functional richness",
+         `Spatial scale` = "Site-level") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+# not this right?
+# emtrends(cover_mod_fg, pairwise ~ habitat, var = "functional_richness")
+```
+
+Join:
+
+```{r}
+rbind(t.s2.a, t.s2.b, t.s2.c, t.s2.d) %>% 
+  mutate(Table = "S2") %>% 
+  select(-SE, -df) -> table_s2
+```
+
+## Table S3
+
+Stability
+
+```{r}
+# get estimates for taxonomic richness
+t.s3.a <- as.tibble(emtrends(rich_stab_mod, pairwise ~ habitat, var = "richness_mean")$emtrends) %>% 
+  mutate(Predictor = "Taxonomic richness") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+# get estimates for fucntional richness
+t.s3.b <- as.tibble(emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "functional_richness_mean")$emtrends) %>% 
+  mutate(Predictor = "Functional richness") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+# get estimates for synchrony
+t.s3.c <- as.tibble(emtrends(synch_stab_mod, pairwise ~ habitat, var = "synchrony")$emtrends) %>% 
+  mutate(Predictor = "Synchrony") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+```
+
+Join:
+
+```{r}
+rbind(t.s3.a, t.s3.b, t.s3.c) %>% 
+  mutate(`Spatial scale` = "Plot-level", 
+         Table = "S3") %>% 
+  select(-SE, -df) -> table_s3
+```
+
+## Table S4
+
+For supplemental table S4: scale figure
+
+```{r}
+# get estimates: site-level richness
+t.s4.a <- as.tibble(emtrends(rich_stab_mod_site, pairwise ~ habitat, var = "richness_mean")$emtrends) %>% 
+  mutate(Predictor = "Site-level taxonomic-richness") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+# not this right?
+# emtrends(rich_stab_mod, pairwise ~ habitat, var = "richness_mean"
+
+t.s4.b <- as.tibble(emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "functional_richness_mean")$emtrends) %>% 
+  mutate(Predictor = "Site-level functional richness") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+## CHECK ^^^^^^ -- doesn't match??
+
+t.s4.c <- as.tibble(emtrends(synch_stab_mod_site, pairwise ~ habitat, var = "synchrony")$emtrends) %>% 
+  mutate(Predictor = "Site-level species synchrony") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+t.s4.d <- as.tibble(emtrends(mean_synchrony_mod, pairwise ~ habitat, var = "synchrony_mean")$emtrends) %>% 
+  mutate(Predictor = "Mean plot-level species synchrony") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+t.s4.e <- as.tibble(emtrends(alpha_gamma_stab_mod, pairwise ~ habitat, var = "stability_mean")$emtrends) %>% 
+  mutate(Predictor = "Plot-level stability") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+t.s4.f <- as.tibble(emtrends(spatial_synchrony_mod, pairwise ~ habitat, var = "spatial_synchrony")$emtrends) %>% 
+  mutate(Predictor = "Spatial synchrony") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+```
+
+Join:
+
+```{r}
+rbind(t.s4.a, t.s4.b, t.s4.c,
+      t.s4.d, t.s4.e, t.s4.f) %>% 
+  mutate(Table = "S4") %>% 
+  select(-SE, -df) -> table_s4
+```
+
+### Save as a CSV
+
+Join them all together
+
+```{r}
+table_s2 %>% 
+  full_join(table_s3) %>% 
+  full_join(table_s4) %>% 
+  # rename to match previous version/code
+  rename(Habitat = habitat,
+         Lower_CI = asymp.LCL,
+         Upper_CI = asymp.UCL) %>%
+  # make a blank column to fill in the letter designations manually
+  mutate(Letter = NA) %>%
+  # save as CSV
+  write_csv(here("data/supplemental_tables.csv"))
+```
+

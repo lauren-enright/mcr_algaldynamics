@@ -17,7 +17,7 @@ require(patchwork) # putting plots together
 # Load data
 
 ```{r}
-supp_tables <- read_csv(here("data/supplemental_tables.csv"))
+supp_tables <- read_csv(here("data/supplemental_tables_manual_letters.csv"))
 ```
 
 # Set plotting colors and plotting theme
@@ -91,6 +91,8 @@ supp_tables %>%
   xlab("Coefficient") +
   ylab("") +
   ggtitle("(b) Site-level") +
+  # if you want the 0 reference:
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.03 , y = Habitat, 
@@ -207,7 +209,7 @@ supp_tables %>%
   geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
   xlab("Coefficient") +
   ylab("") +
-  ggtitle("(a) Site-level taxonomic-richness") +
+  ggtitle("(a) Site-level taxonomic richness") +
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.05 , y = Habitat, 
@@ -219,7 +221,7 @@ supp_tables %>%
 ```{r}
 supp_tables %>% 
   filter(Table == "S4") %>% 
-  filter(Predictor == "Site-level functional-richness") %>% 
+  filter(Predictor == "Site-level functional richness") %>% 
   # order the habitats by distance from shore
   mutate(Habitat = factor(Habitat, levels = c("Forereef 17m", "Forereef 10m",  "Backreef", "Fringing"))) %>% 
   ggplot(aes(x = Mean, y = Habitat, color = Habitat)) +
@@ -231,7 +233,7 @@ supp_tables %>%
   geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
   xlab("Coefficient") +
   ylab("") +
-  ggtitle("(b) Site-level functional-richness") +
+  ggtitle("(b) Site-level functional richness") +
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.1 , y = Habitat, 
@@ -277,7 +279,7 @@ supp_tables %>%
   # add confidence intervals:
   geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
   scale_colour_manual(values = habitat_colours) +
-    # if you want the 0 reference:
+  # if you want the 0 reference:
   geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
   xlab("Coefficient") +
   ylab("") +
@@ -287,6 +289,31 @@ supp_tables %>%
   geom_text(aes(x = Upper_CI + 0.6 , y = Habitat, 
                 label = Letter), colour = "black", size = 10) -> s4.plt.synch
 ```
+
+Plot-level stability
+
+```{r}
+supp_tables %>% 
+  filter(Table == "S4") %>% 
+  filter(Predictor == "Plot-level stability") %>% 
+  # order the habitats by distance from shore
+  mutate(Habitat = factor(Habitat, levels = c("Forereef 17m", "Forereef 10m",  "Backreef", "Fringing"))) %>% 
+  ggplot(aes(x = Mean, y = Habitat, color = Habitat)) +
+  geom_point(size = 6) +
+  # add confidence intervals:
+  geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
+  scale_colour_manual(values = habitat_colours) +
+  # if you want the 0 reference:
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
+  xlab("Coefficient") +
+  ylab("") +
+  ggtitle("(e) Plot-level stability") +
+  model_themes + 
+  # add letters denoting significance
+  geom_text(aes(x = Upper_CI + 0.1 , y = Habitat, 
+                label = Letter), colour = "black", size = 10) -> s4.plt.stab
+```
+
 
 Spatial synchrony
 
@@ -310,7 +337,7 @@ supp_tables %>%
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.4 , y = Habitat, 
                 label = Letter), colour = "black", size = 10) +
-  theme(legend.position = "none") -> s4.plt.synch
+  theme(legend.position = "none") -> s4.spat.synch
 ```
 
 Plot together using `patchwork`
