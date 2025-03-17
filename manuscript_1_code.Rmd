@@ -48,9 +48,10 @@ trends_theme <- theme_bw() +
         panel.grid.major = element_blank(),  #remove major-grid labels
         panel.grid.minor = element_blank(),  #remove minor-grid labels
         plot.background = element_rect(fill = "white"),
-        legend.text = element_text(size = rel(1)), # increase legend text
+        legend.text = element_text(size=24),
         legend.title = element_blank(),
-        legend.position = 'bottom', # move legend to bottom
+        legend.position = 'bottom', # move legend to bottom,
+        legend.key.size = unit(2, 'cm'), # increase legend size
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black")) 
 
@@ -66,6 +67,7 @@ model_themes <-   theme_bw() +
         panel.grid.minor = element_blank(),  #remove minor-grid labels
         plot.background = element_rect(fill = "white"),
         legend.title = element_blank(),
+        legend.key.size = unit(2, 'cm'), # increase legend size
         legend.position = 'bottom', # move legend to bottom
         legend.box = 'horizontal', # make legend horizontal
         legend.box.background = element_rect(colour = "black"))  # add box around legend
@@ -238,7 +240,7 @@ plot_list <- lapply(levels(figure_1_data$habitat), function(hab) {
     geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
     geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
     scale_colour_manual(values = functional_group_colours) +
-    scale_x_continuous(breaks = unique(figure_1_data$year)) +
+    scale_x_continuous(breaks = seq(2007, 2023, 2)) +
     labs(y = "Percent Cover",
          x = "Year", title = "") +  
     trends_theme
@@ -999,6 +1001,7 @@ filtered_synch_cov_effects_site <- filter_ranges(synch_cov_emm_site, dss_ranges_
                       common.legend = TRUE,
                       labels = c("a.", "b."),
                       legend = "bottom", 
+                      legend.grob = get_legend(figure_3a),
                       font.label = list(size = 26, color = "black", face = "plain")))
 
 # ggsave(filename = "output/figure_3_site.png", figure_3_supplement, height = 8, width = 16)
