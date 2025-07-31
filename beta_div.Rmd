@@ -1,0 +1,995 @@
+---
+title: "beta diversity"
+author: "L. Enright"
+date: "2025-06-10"
+output: html_document
+---
+
+# read in the data. these are written out from previous scripts, need to rerun all of these scripts and then read back in the data, to make sure they are up to date. 
+
+if someone else other than lauren is running these, need to update data folder name
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(vegan)
+
+macro_long_data <- read.csv(here::here("data_le", "macro_long_data.csv"), stringsAsFactors = F) 
+diversity_stability_synchrony <- read.csv(here::here("data_le", "full_plot_level_dss.csv"), stringsAsFactors = F) 
+diversity_stability_synchrony_site <- read.csv(here::here("data_le", "diversity_stability_synchrony_site.csv"), stringsAsFactors = F) 
+spatial_synchrony <- read.csv(here::here("data_le", "spatial_synchrony.csv"), stringsAsFactors = F) 
+mean_plot_level_dss <- read.csv(here::here("data_le", "mean_plot_level_dss.csv"), stringsAsFactors = F) 
+
+
+taxo <- read.csv(here::here("data_le", "MCR_Algal_Functional_Groups_02042025_updatedtax.csv"), stringsAsFactors = F)
+```
+
+# Data Prep
+*** is it okay to leave the data in prop cover? instead of percent cover? leaving in prop cover for now. --> Noam says yes!
+
+```{r}
+# first, need to SUM the data across years for each quad 
+macro_long_data_summed <- macro_long_data %>%
+  group_by(location, site, habitat, site_habitat, transect, quadrat, taxa) %>%
+  summarise(sum_taxa = sum(prop_cover)) %>%
+  ungroup()
+#should have 1 row for each site/habitat/transect/quad/taxa, summarized across years. 
+```
+
+# beta diversity - intital attempt
+```{r}
+
+#from long to wide
+macro_wide_data_summed <- macro_long_data_summed %>%
+   pivot_wider(names_from = taxa, values_from = sum_taxa, values_fill = 0)
+
+#calculating beta diversity for individual sites/habitats so that I can check the foreloop is working.
+#LTER 1 BR
+
+macro_wide_data_summed_LTER1BR <- macro_wide_data_summed %>%
+  filter(site_habitat == "lter_1_backreef") %>%
+   filter(rowSums(.[, 7:68]) != 0)
+# lost 1 :) --> this would be a quad that has no macroalgae in it 
+#(lter_1_backreef_algae_transect_5_quad_7)
+
+#for checking row sums
+#macro_wide_data_summed_LTER1BR$row_sum <- rowSums(macro_wide_data_summed_LTER1BR[, 7:68])
+
+sp_community_LTER1BR <- as.matrix(macro_wide_data_summed_LTER1BR[,c(7:68)])
+meta_LTER1BR <-macro_wide_data_summed_LTER1BR[,c(1:6)]
+sp_community_LTER1BR_transformed <- wisconsin(sp_community_LTER1BR)
+
+rowSums(sp_community_LTER1BR)
+
+#pairwise comparisons 
+bray_LTER1BR <- vegdist(sp_community_LTER1BR, method = "bray")
+bray_LTER1BR_transformed <- vegdist(sp_community_LTER1BR_transformed, method = "bray")
+
+median_vegdist <- median(bray_LTER1BR)
+#0.4913037
+median_vegdist_tranformed <- median(bray_LTER1BR_transformed)
+# 0.6590098
+mean_vegdist <- mean(bray_LTER1BR)
+#0.5195
+mean_vegdist_tranformed <- mean(bray_LTER1BR_transformed)
+# 0.6451
+betadisp_LTER1BR <- betadisper(bray_LTER1BR, meta_LTER1BR$site_habitat)
+#0.3596  
+betadisp_LTER1BR_transformed <- betadisper(bray_LTER1BR_transformed, meta_LTER1BR$site_habitat)
+#0.4521  
+
+#LTER 2 Outer 10
+
+macro_wide_data_summed_LTER2OUT10 <- macro_wide_data_summed %>%
+  filter(site_habitat == "lter_2_outer_10") %>%
+   filter(rowSums(.[, 7:68]) != 0)
+# lost 0  :) 
+
+sp_community_LTER2O10 <- as.matrix(macro_wide_data_summed_LTER2OUT10[,c(7:68)])
+meta_LTER2O10 <-macro_wide_data_summed_LTER2OUT10[,c(1:6)]
+
+rowSums(sp_community_LTER2O10)
+
+#pairwise comparisons 
+bray_LTER2O10 <- vegdist(sp_community_LTER2O10, method = "bray")
+median_vegdist <- median(bray_LTER2O10)
+#0.283019
+betadisp_LTER2O10 <- betadisper(bray_LTER2O10, meta_LTER2O10$site_habitat)
+#0.2041 
+
+```
+## Good forloop for beta
+this is good for calculating beta diversity for all 24 sites 
+```{r}
+
+# Initialize a results data frame
+results_beta <- data.frame(
+  site_habitat = character(),
+  median_bray = numeric(),
+   mean_bray = numeric(),
+  mean_betadisp = numeric(),
+  stringsAsFactors = FALSE
+)
+
+betadisp_list <- list()
+
+
+# Get unique site_habitat combinations
+sites <- unique(macro_wide_data_summed$site_habitat)
+
+for (sh in sites) {
+  # Filter for one site/habitat
+  df_sub <- macro_wide_data_summed %>%
+    filter(site_habitat == sh) %>%
+    filter(rowSums(.[, 7:68]) != 0)
+
+  # Skip if no rows left
+  if (nrow(df_sub) < 2) {
+    warning(paste("Skipping", sh, "- not enough data"))
+    next
+  }
+
+  # Community and metadata
+  sp_community <- as.matrix(df_sub[, 7:68])
+  meta <- df_sub[, 1:6]
+
+  # Bray-Curtis distances
+  bray <- vegdist(sp_community, method = "bray")
+  median_bray <- median(bray) # i used median not mean and I am not sure why? should it be mean? 
+  mean_bray <- mean(bray)
+
+  # Beta dispersion
+  betadisp <- betadisper(bray, meta$site_habitat)
+  mean_disp <- mean(betadisp$distances)
+  
+  betadisp_list[[sh]] <- betadisp
+  
+  # Store result
+  results_beta <- rbind(results_beta, data.frame(
+    site_habitat = sh,
+    #betadisp_results = betadisp_results,
+    median_bray = median_bray,
+    mean_bray = mean_bray,
+    mean_betadisp = mean_disp,
+    stringsAsFactors = FALSE
+  ))
+}
+
+# View results
+print(results_beta)
+betadisp_list
+
+#betadisp list =       0.3596 LTER 1 BR
+#betadisp list =       0.2041  LTER 2 FR10
+#okay, these match with the single sites I did above, so I think the loop is working well. 
+```
+
+## plotting for beta 
+```{r merge and plot}
+
+# will eventually want to match Noam's nice themes, but just focusing on colors for now. 
+habitat_colours <- c("Fringing" = "#D81B60",
+                     "Backreef" = "#FFC107",
+                     "Forereef 10m" = "#1E88E5",
+                     "Forereef 17m" = "#004D40")
+
+
+# merge together the beta div with the spatial synchrony output
+beta_spatialsync <- merge(spatial_synchrony, results_beta, by = "site_habitat")
+
+# some exploratory plots
+beta_spatialsync %>%
+  ggplot(aes(x = median_bray, y = spatial_synchrony, color = site)) +
+  geom_point() +
+  #scale_colour_manual(values = habitat_colours) +
+  #geom_line(method = lm) +
+  facet_wrap(~habitat)
+
+beta_spatialsync %>%
+  ggplot(aes(x = mean_bray, y = spatial_synchrony, color = site)) +
+  geom_point() +
+  #scale_colour_manual(values = habitat_colours) +
+  #geom_line(method = lm) +
+  facet_wrap(~habitat)
+
+
+beta_spatialsync %>%
+  ggplot(aes(x = mean_betadisp, y = spatial_synchrony, color = site)) +
+  geom_point() +
+  #geom_line(method = lm) +
+  facet_wrap(~habitat)
+
+#patterns are similar whether we use median bray or mean bray or mean betadisp ... do we need to try with median bray?
+
+#NO FACET
+beta_spatialsync %>%
+  ggplot(aes(x = median_bray, y = spatial_synchrony, color = habitat, shape = site)) +
+  geom_point() +
+   geom_smooth(method = "lm", se = TRUE, aes(group = habitat)) +
+  scale_colour_manual(values = habitat_colours) +
+  theme_minimal()
+  #geom_line(method = lm)
+
+
+# negative relationship between median bray and stability 
+beta_spatialsync %>%
+  ggplot(aes(x = median_bray, y = stability_mean, color = habitat, shape = site)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, aes(group = habitat)) +
+  scale_colour_manual(values = habitat_colours) +
+  theme_minimal()
+
+   #geom_line(method = lm) 
+
+```
+
+## probably the figure we want to use based on discussion 
+shows a negative relationship, don't need to touch on habitat really 
+```{r}
+# need to make pretty
+beta_spatialsync %>%
+  ggplot(aes(x = mean_bray, y = spatial_synchrony)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  #scale_colour_manual(values = habitat_colours) +
+  theme_minimal()
+```
+# Trying transformation with no removal of rare species
+
+```{r}
+
+#since we have values greater than 1, cannot use arcsin sqrt, need to use Wisconsin transformation
+
+# Initialize a results data frame
+results_beta_transformed <- data.frame(
+  site_habitat = character(),
+  median_bray = numeric(),
+  median_bray_trans = numeric(),
+  mean_bray = numeric(),
+  mean_bray_trans = numeric(),
+  mean_betadisp = numeric(),
+   mean_disp_transformed = numeric(),
+  stringsAsFactors = FALSE
+)
+
+betadisp_list_transformed <- list()
+
+# Get unique site_habitat combinations
+sites <- unique(macro_wide_data_summed$site_habitat)
+
+for (sh in sites) {
+  # Filter for one site/habitat
+  df_sub <- macro_wide_data_summed %>%
+    filter(site_habitat == sh) %>%
+    filter(rowSums(.[, 7:68]) != 0)  # Remove rows with all zeros
+  
+  # Community and metadata
+  sp_community <- as.matrix(df_sub[, 7:68])
+  meta <- df_sub[, 1:6]
+  
+  # Arc-sine square root transformation for the community matrix (required before vegdist)
+  sp_community_transformed <- wisconsin(sp_community)
+  
+  # Confirm it's working
+  print(paste("Range after transform for", sh, ":", paste(range(sp_community_transformed, na.rm = TRUE), collapse = " - ")))
+
+  
+  # Bray-Curtis distances
+   bray_raw <- vegdist(sp_community, method = "bray")
+  bray_transformed <- vegdist(sp_community_transformed, method = "bray")
+  
+  correlation <- cor(as.numeric(bray_raw), as.numeric(bray_transformed))
+  print(paste("Correlation between raw and transformed Bray-Curtis for", sh, ":", round(correlation, 4)))
+
+  
+  # Calculate median and mean Bray-Curtis distance
+  median_bray <- median(bray_raw)
+  median_bray_trans <- median(bray_transformed)
+  mean_bray <- mean(bray_raw)
+  mean_bray_trans <- mean(bray_transformed)
+  
+  # Beta dispersion
+  betadisp <- betadisper(bray_raw, meta$site_habitat)
+  betadisp_transformed <- betadisper(bray_transformed, meta$site_habitat)
+  mean_disp <- mean(betadisp$distances)
+  mean_disp_transformed <- mean(betadisp_transformed$distances)
+  
+  betadisp_list[[sh]] <- betadisp
+  betadisp_list_transformed[[sh]] <- betadisp_transformed
+  
+  # Store results
+  results_beta_transformed <- bind_rows(results_beta_transformed, data.frame(
+    site_habitat = sh,
+    median_bray = median_bray,
+    median_bray_trans = median_bray_trans,
+    mean_bray = mean_bray,
+    mean_bray_trans = mean_bray_trans,
+    mean_betadisp = mean_disp,
+    mean_disp_transformed = mean_disp_transformed,
+    stringsAsFactors = FALSE
+  ))
+}
+
+# View results
+print(results_beta_transformed)
+betadisp_list_transformed
+
+
+
+```
+
+```{r}
+beta_spatialsync_transformed <- merge(spatial_synchrony, results_beta_transformed, by = "site_habitat")
+
+# some exploratory plots
+# not transformed
+beta_spatialsync_transformed %>%
+  ggplot(aes(x = mean_bray, y = spatial_synchrony, color = site)) +
+  geom_point() +
+  #scale_colour_manual(values = habitat_colours) +
+  #geom_line(method = lm) +
+  facet_wrap(~habitat)
+
+#transformed
+beta_spatialsync_transformed %>%
+  ggplot(aes(x = mean_bray_trans, y = spatial_synchrony, color = site)) +
+  geom_point() +
+  #scale_colour_manual(values = habitat_colours) +
+  #geom_line(method = lm) +
+  facet_wrap(~habitat)
+
+
+beta_spatialsync_transformed %>%
+  ggplot(aes(x = median_bray_trans, y = spatial_synchrony, color = site)) +
+  geom_point() +
+  #scale_colour_manual(values = habitat_colours) +
+  #geom_line(method = lm) +
+  facet_wrap(~habitat)
+
+
+beta_spatialsync_transformed %>%
+  ggplot(aes(x = mean_disp_transformed, y = spatial_synchrony, color = site)) +
+  geom_point() +
+  #geom_line(method = lm) +
+  facet_wrap(~habitat)
+
+#patterns are similar whether we use transformed median bray or transformed mean bray or transformed mean betadisp
+# slightly different pattersn with the transformation
+
+```
+
+#Again, I think this is the figure we want to show. 
+```{r}
+
+beta_spatialsync_transformed %>%
+  ggplot(aes(x = mean_bray, y = spatial_synchrony)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  #scale_colour_manual(values = habitat_colours) +
+  theme_minimal()
+
+beta_spatialsync_transformed %>%
+  ggplot(aes(x = mean_bray_trans, y = spatial_synchrony)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  #scale_colour_manual(values = habitat_colours) +
+  theme_minimal()
+```
+# Trying removing the species.
+
+
+
+let's make a matrix for each habitat
+
+## Fringing
+```{r}
+
+fringing_macro_wide_data_summed <- macro_wide_data_summed %>%
+  filter(habitat == "Fringing")
+
+
+#300 rows.. 
+#make into a matrix
+fringing_macro_wide_data_summed_matrix <- as.matrix(fringing_macro_wide_data_summed[, 7:68])
+
+fringing_macro_wide_data_summed_meta <- fringing_macro_wide_data_summed[, 1:6]
+
+
+#filter rare species
+#how many quads out of 300 have a species
+fringing_site_species_presence <- colSums(fringing_macro_wide_data_summed_matrix > 0) # Presence absence 
+#divide by # of rows totla
+fringing_site_species_percentage <- (fringing_site_species_presence/nrow(fringing_macro_wide_data_summed_matrix)) # proportion of rows where a species is present
+
+fringing_site_common_species <- names(fringing_site_species_percentage[fringing_site_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+
+fringing_site_species_percentage
+fringing_site_common_species
+
+#17 species 
+
+fringing_site_common_species_matrix <- fringing_macro_wide_data_summed_matrix[,colnames(fringing_macro_wide_data_summed_matrix) %in% fringing_site_common_species] # filter original species matrix
+#okay this has 17
+
+#now need to make it back into a dataframe for the forloop
+fringing_site_common_species_df <- cbind(fringing_macro_wide_data_summed_meta, fringing_site_common_species_matrix)
+#fringing_site_rows_to_remove <- rowSums(fringing_site_species_matrix) == 0 # remove rows with no algal species observed - thought this was done already
+```
+
+will need to do the forloops for each habitat - fringing
+```{r}
+
+#since we have values greater than 1, cannot use arcsin sqrt, need to use Wisconsin transformation
+
+# Initialize a results data frame
+results_beta_transformed_fringing_commonspecies <- data.frame(
+  site_habitat = character(),
+  median_bray = numeric(),
+  median_bray_trans = numeric(),
+  mean_bray = numeric(),
+  mean_bray_trans = numeric(),
+  mean_betadisp = numeric(),
+   mean_disp_transformed = numeric(),
+  stringsAsFactors = FALSE
+)
+
+betadisp_list_fringing_commonspecies <- list()
+betadisp_list_transformed_fringing_commonspecies <- list()
+
+# Get unique site_habitat combinations
+sites_fring <- unique(fringing_site_common_species_df$site_habitat)
+
+for (sh in sites_fring) {
+  # Filter for one site/habitat
+  df_sub <- fringing_site_common_species_df %>%
+    filter(site_habitat == sh) %>%
+    filter(rowSums(.[, 7:23]) != 0)  # Remove rows with all zeros
+  
+  # Community and metadata
+  sp_community <- as.matrix(df_sub[, 7:23])
+  meta <- df_sub[, 1:6]
+  
+  # Arc-sine square root transformation for the community matrix (required before vegdist)
+  sp_community_transformed <- wisconsin(sp_community)
+  
+  # Confirm it's working
+  print(paste("Range after transform for", sh, ":", paste(range(sp_community_transformed, na.rm = TRUE), collapse = " - ")))
+
+  
+  # Bray-Curtis distances
+   bray_raw <- vegdist(sp_community, method = "bray")
+  bray_transformed <- vegdist(sp_community_transformed, method = "bray")
+  
+  correlation <- cor(as.numeric(bray_raw), as.numeric(bray_transformed))
+  print(paste("Correlation between raw and transformed Bray-Curtis for", sh, ":", round(correlation, 4)))
+
+  
+  # Calculate median and mean Bray-Curtis distance
+  median_bray <- median(bray_raw)
+  median_bray_trans <- median(bray_transformed)
+  mean_bray <- mean(bray_raw)
+  mean_bray_trans <- mean(bray_transformed)
+  
+  # Beta dispersion
+  betadisp <- betadisper(bray_raw, meta$site_habitat)
+  betadisp_transformed <- betadisper(bray_transformed, meta$site_habitat)
+  mean_disp <- mean(betadisp$distances)
+  mean_disp_transformed <- mean(betadisp_transformed$distances)
+  
+  betadisp_list_fringing_commonspecies[[sh]] <- betadisp
+  betadisp_list_transformed_fringing_commonspecies[[sh]] <- betadisp_transformed
+  
+  # Store results
+  results_beta_transformed_fringing_commonspecies <- bind_rows(results_beta_transformed_fringing_commonspecies, data.frame(
+    site_habitat = sh,
+    median_bray = median_bray,
+    median_bray_trans = median_bray_trans,
+    mean_bray = mean_bray,
+    mean_bray_trans = mean_bray_trans,
+    mean_betadisp = mean_disp,
+    mean_disp_transformed = mean_disp_transformed,
+    stringsAsFactors = FALSE
+  ))
+}
+
+# View results
+print(results_beta_transformed_fringing_commonspecies)
+betadisp_list_transformed_fringing_commonspecies
+
+
+
+```
+again, trying a one off to make sure foreloop is working 
+```{r}
+commonspecies_macro_LTER1FRI <- fringing_site_common_species_df %>%
+  filter(site_habitat == "lter_1_fringing") %>%
+   filter(rowSums(.[, 7:23]) != 0)
+
+sp_community_LTER1FRI <- as.matrix(commonspecies_macro_LTER1FRI[,c(7:23)])
+meta_LTER1FR <-commonspecies_macro_LTER1FRI[,c(1:6)]
+sp_community_LTER1FRI_transformed <- wisconsin(sp_community_LTER1FRI)
+
+rowSums(sp_community_LTER1BR)
+
+#pairwise comparisons 
+bray_LTER1FRI <- vegdist(sp_community_LTER1FRI, method = "bray")
+bray_LTER1FRI_transformed <- vegdist(sp_community_LTER1FRI_transformed, method = "bray")
+
+
+mean_vegdist <- mean(bray_LTER1FRI)
+#0.3833
+mean_vegdist_tranformed <- mean(bray_LTER1FRI_transformed)
+#0.5812
+
+#yay, they match with forloop output
+```
+
+
+## Backreef
+```{r}
+
+backreef_macro_wide_data_summed <- macro_wide_data_summed %>%
+  filter(habitat == "Backreef")
+
+
+#300 rows.. 
+#make into a matrix
+backreef_macro_wide_data_summed_matrix <- as.matrix(backreef_macro_wide_data_summed[, 7:68])
+
+backreef_macro_wide_data_summed_meta <- backreef_macro_wide_data_summed[, 1:6]
+
+
+#filter rare species
+#how many quads out of 300 have a species
+backreef_site_species_presence <- colSums(backreef_macro_wide_data_summed_matrix > 0) # Presence absence 
+#divide by # of rows totla
+backreef_site_species_percentage <- (backreef_site_species_presence/nrow(backreef_macro_wide_data_summed_matrix)) # proportion of rows where a species is present
+
+backreef_site_common_species <- names(backreef_site_species_percentage[backreef_site_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+
+backreef_site_species_percentage
+backreef_site_common_species
+
+#18 species 
+
+backreef_site_common_species_matrix <- backreef_macro_wide_data_summed_matrix[,colnames(backreef_macro_wide_data_summed_matrix) %in% backreef_site_common_species] # filter original species matrix
+#okay this has 18
+
+#now need to make it back into a dataframe for the forloop
+backreef_site_common_species_df <- cbind(backreef_macro_wide_data_summed_meta, backreef_site_common_species_matrix)
+
+```
+
+will need to do the forloops for each habitat - backreef
+```{r}
+
+#since we have values greater than 1, cannot use arcsin sqrt, need to use Wisconsin transformation
+
+# Initialize a results data frame
+results_beta_transformed_backreef_commonspecies <- data.frame(
+  site_habitat = character(),
+  median_bray = numeric(),
+  median_bray_trans = numeric(),
+  mean_bray = numeric(),
+  mean_bray_trans = numeric(),
+  mean_betadisp = numeric(),
+   mean_disp_transformed = numeric(),
+  stringsAsFactors = FALSE
+)
+
+betadisp_list_backreef_commonspecies <- list()
+betadisp_list_transformed_backreef_commonspecies <- list()
+
+# Get unique site_habitat combinations
+sites_back <- unique(backreef_site_common_species_df$site_habitat)
+
+for (sh in sites_back) {
+  # Filter for one site/habitat
+  df_sub <- backreef_site_common_species_df %>%
+    filter(site_habitat == sh) %>%
+    filter(rowSums(.[, 7:24]) != 0)  # Remove rows with all zeros
+  
+  # Community and metadata
+  sp_community <- as.matrix(df_sub[, 7:24])
+  meta <- df_sub[, 1:6]
+  
+  # Arc-sine square root transformation for the community matrix (required before vegdist)
+  sp_community_transformed <- wisconsin(sp_community)
+  
+  # Confirm it's working
+  print(paste("Range after transform for", sh, ":", paste(range(sp_community_transformed, na.rm = TRUE), collapse = " - ")))
+
+  
+  # Bray-Curtis distances
+   bray_raw <- vegdist(sp_community, method = "bray")
+  bray_transformed <- vegdist(sp_community_transformed, method = "bray")
+  
+  correlation <- cor(as.numeric(bray_raw), as.numeric(bray_transformed))
+  print(paste("Correlation between raw and transformed Bray-Curtis for", sh, ":", round(correlation, 4)))
+
+  
+  # Calculate median and mean Bray-Curtis distance
+  median_bray <- median(bray_raw)
+  median_bray_trans <- median(bray_transformed)
+  mean_bray <- mean(bray_raw)
+  mean_bray_trans <- mean(bray_transformed)
+  
+  # Beta dispersion
+  betadisp <- betadisper(bray_raw, meta$site_habitat)
+  betadisp_transformed <- betadisper(bray_transformed, meta$site_habitat)
+  mean_disp <- mean(betadisp$distances)
+  mean_disp_transformed <- mean(betadisp_transformed$distances)
+  
+  betadisp_list_backreef_commonspecies[[sh]] <- betadisp
+  betadisp_list_transformed_backreef_commonspecies[[sh]] <- betadisp_transformed
+  
+  # Store results
+  results_beta_transformed_backreef_commonspecies <- bind_rows(results_beta_transformed_backreef_commonspecies, data.frame(
+    site_habitat = sh,
+    median_bray = median_bray,
+    median_bray_trans = median_bray_trans,
+    mean_bray = mean_bray,
+    mean_bray_trans = mean_bray_trans,
+    mean_betadisp = mean_disp,
+    mean_disp_transformed = mean_disp_transformed,
+    stringsAsFactors = FALSE
+  ))
+}
+
+# View results
+print(results_beta_transformed_backreef_commonspecies)
+betadisp_list_transformed_backreef_commonspecies
+
+
+```
+
+## Forereef 10
+```{r}
+
+forereef10_macro_wide_data_summed <- macro_wide_data_summed %>%
+  filter(habitat == "Forereef 10m")
+
+
+#300 rows.. 
+#make into a matrix
+forereef10_macro_wide_data_summed_matrix <- as.matrix(forereef10_macro_wide_data_summed[, 7:68])
+
+forereef10_macro_wide_data_summed_meta <- forereef10_macro_wide_data_summed[, 1:6]
+
+
+#filter rare species
+#how many quads out of 300 have a species
+forereef10_site_species_presence <- colSums(forereef10_macro_wide_data_summed_matrix > 0) # Presence absence 
+#divide by # of rows totla
+forereef10_site_species_percentage <- (forereef10_site_species_presence/nrow(forereef10_macro_wide_data_summed_matrix)) # proportion of rows where a species is present
+
+forereef10_site_common_species <- names(forereef10_site_species_percentage[forereef10_site_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+
+forereef10_site_species_percentage
+forereef10_site_common_species
+
+#15 species 
+
+forereef10_site_common_species_matrix <- forereef10_macro_wide_data_summed_matrix[,colnames(forereef10_macro_wide_data_summed_matrix) %in% forereef10_site_common_species] # filter original species matrix
+#okay this has 15
+
+#now need to make it back into a dataframe for the forloop
+forereef10_site_common_species_df <- cbind(forereef10_macro_wide_data_summed_meta, forereef10_site_common_species_matrix)
+
+```
+
+will need to do the forloops for each habitat - forereef10
+```{r}
+
+#since we have values greater than 1, cannot use arcsin sqrt, need to use Wisconsin transformation
+
+# Initialize a results data frame
+results_beta_transformed_forereef10_commonspecies <- data.frame(
+  site_habitat = character(),
+  median_bray = numeric(),
+  median_bray_trans = numeric(),
+  mean_bray = numeric(),
+  mean_bray_trans = numeric(),
+  mean_betadisp = numeric(),
+   mean_disp_transformed = numeric(),
+  stringsAsFactors = FALSE
+)
+
+betadisp_list_forereef10_commonspecies <- list()
+betadisp_list_transformed_forereef10_commonspecies <- list()
+
+# Get unique site_habitat combinations
+sites_FO10 <- unique(forereef10_site_common_species_df$site_habitat)
+
+for (sh in sites_FO10) {
+  # Filter for one site/habitat
+  df_sub <- forereef10_site_common_species_df %>%
+    filter(site_habitat == sh) %>%
+    filter(rowSums(.[, 7:21]) != 0)  # Remove rows with all zeros
+  
+  # Community and metadata
+  sp_community <- as.matrix(df_sub[, 7:21])
+  meta <- df_sub[, 1:6]
+  
+  # Arc-sine square root transformation for the community matrix (required before vegdist)
+  sp_community_transformed <- wisconsin(sp_community)
+  
+  # Confirm it's working
+  print(paste("Range after transform for", sh, ":", paste(range(sp_community_transformed, na.rm = TRUE), collapse = " - ")))
+
+  
+  # Bray-Curtis distances
+   bray_raw <- vegdist(sp_community, method = "bray")
+  bray_transformed <- vegdist(sp_community_transformed, method = "bray")
+  
+  correlation <- cor(as.numeric(bray_raw), as.numeric(bray_transformed))
+  print(paste("Correlation between raw and transformed Bray-Curtis for", sh, ":", round(correlation, 4)))
+
+  
+  # Calculate median and mean Bray-Curtis distance
+  median_bray <- median(bray_raw)
+  median_bray_trans <- median(bray_transformed)
+  mean_bray <- mean(bray_raw)
+  mean_bray_trans <- mean(bray_transformed)
+  
+  # Beta dispersion
+  betadisp <- betadisper(bray_raw, meta$site_habitat)
+  betadisp_transformed <- betadisper(bray_transformed, meta$site_habitat)
+  mean_disp <- mean(betadisp$distances)
+  mean_disp_transformed <- mean(betadisp_transformed$distances)
+  
+  betadisp_list_forereef10_commonspecies[[sh]] <- betadisp
+  betadisp_list_transformed_forereef10_commonspecies[[sh]] <- betadisp_transformed
+  
+  # Store results
+  results_beta_transformed_forereef10_commonspecies <- bind_rows(results_beta_transformed_forereef10_commonspecies, data.frame(
+    site_habitat = sh,
+    median_bray = median_bray,
+    median_bray_trans = median_bray_trans,
+    mean_bray = mean_bray,
+    mean_bray_trans = mean_bray_trans,
+    mean_betadisp = mean_disp,
+    mean_disp_transformed = mean_disp_transformed,
+    stringsAsFactors = FALSE
+  ))
+}
+
+# View results
+print(results_beta_transformed_forereef10_commonspecies)
+betadisp_list_transformed_forereef10_commonspecies
+
+
+```
+## Forereef 17
+```{r}
+
+forereef17_macro_wide_data_summed <- macro_wide_data_summed %>%
+  filter(habitat == "Forereef 17m")
+
+
+#300 rows.. 
+#make into a matrix
+forereef17_macro_wide_data_summed_matrix <- as.matrix(forereef17_macro_wide_data_summed[, 7:68])
+
+forereef17_macro_wide_data_summed_meta <- forereef17_macro_wide_data_summed[, 1:6]
+
+
+#filter rare species
+#how many quads out of 300 have a species
+forereef17_site_species_presence <- colSums(forereef17_macro_wide_data_summed_matrix > 0) # Presence absence 
+#divide by # of rows totla
+forereef17_site_species_percentage <- (forereef17_site_species_presence/nrow(forereef17_macro_wide_data_summed_matrix)) # proportion of rows where a species is present
+
+forereef17_site_common_species <- names(forereef17_site_species_percentage[forereef17_site_species_percentage > 0.05]) # filter for presence in more than 5% of quads - only 9 species...
+
+forereef17_site_species_percentage
+forereef17_site_common_species
+
+#13 species 
+
+forereef17_site_common_species_matrix <- forereef17_macro_wide_data_summed_matrix[,colnames(forereef17_macro_wide_data_summed_matrix) %in% forereef17_site_common_species] # filter original species matrix
+#okay this has 13
+
+#now need to make it back into a dataframe for the forloop
+forereef17_site_common_species_df <- cbind(forereef17_macro_wide_data_summed_meta, forereef17_site_common_species_matrix)
+
+```
+
+will need to do the forloops for each habitat - forereef17
+```{r}
+
+#since we have values greater than 1, cannot use arcsin sqrt, need to use Wisconsin transformation
+
+# Initialize a results data frame
+results_beta_transformed_forereef17_commonspecies <- data.frame(
+  site_habitat = character(),
+  median_bray = numeric(),
+  median_bray_trans = numeric(),
+  mean_bray = numeric(),
+  mean_bray_trans = numeric(),
+  mean_betadisp = numeric(),
+   mean_disp_transformed = numeric(),
+  stringsAsFactors = FALSE
+)
+
+betadisp_list_forereef17_commonspecies <- list()
+betadisp_list_transformed_forereef17_commonspecies <- list()
+
+# Get unique site_habitat combinations
+sites_FO17 <- unique(forereef17_site_common_species_df$site_habitat)
+
+for (sh in sites_FO17) {
+  # Filter for one site/habitat
+  df_sub <- forereef17_site_common_species_df %>%
+    filter(site_habitat == sh) %>%
+    filter(rowSums(.[, 7:19]) != 0)  # Remove rows with all zeros
+  
+  # Community and metadata
+  sp_community <- as.matrix(df_sub[, 7:19])
+  meta <- df_sub[, 1:6]
+  
+  # Arc-sine square root transformation for the community matrix (required before vegdist)
+  sp_community_transformed <- wisconsin(sp_community)
+  
+  # Confirm it's working
+  print(paste("Range after transform for", sh, ":", paste(range(sp_community_transformed, na.rm = TRUE), collapse = " - ")))
+
+  
+  # Bray-Curtis distances
+   bray_raw <- vegdist(sp_community, method = "bray")
+  bray_transformed <- vegdist(sp_community_transformed, method = "bray")
+  
+  correlation <- cor(as.numeric(bray_raw), as.numeric(bray_transformed))
+  print(paste("Correlation between raw and transformed Bray-Curtis for", sh, ":", round(correlation, 4)))
+
+  
+  # Calculate median and mean Bray-Curtis distance
+  median_bray <- median(bray_raw)
+  median_bray_trans <- median(bray_transformed)
+  mean_bray <- mean(bray_raw)
+  mean_bray_trans <- mean(bray_transformed)
+  
+  # Beta dispersion
+  betadisp <- betadisper(bray_raw, meta$site_habitat)
+  betadisp_transformed <- betadisper(bray_transformed, meta$site_habitat)
+  mean_disp <- mean(betadisp$distances)
+  mean_disp_transformed <- mean(betadisp_transformed$distances)
+  
+  betadisp_list_forereef17_commonspecies[[sh]] <- betadisp
+  betadisp_list_transformed_forereef17_commonspecies[[sh]] <- betadisp_transformed
+  
+  # Store results
+  results_beta_transformed_forereef17_commonspecies <- bind_rows(results_beta_transformed_forereef17_commonspecies, data.frame(
+    site_habitat = sh,
+    median_bray = median_bray,
+    median_bray_trans = median_bray_trans,
+    mean_bray = mean_bray,
+    mean_bray_trans = mean_bray_trans,
+    mean_betadisp = mean_disp,
+    mean_disp_transformed = mean_disp_transformed,
+    stringsAsFactors = FALSE
+  ))
+}
+
+# View results
+print(results_beta_transformed_forereef17_commonspecies)
+betadisp_list_transformed_forereef17_commonspecies
+
+
+```
+# add all habitats together
+```{r}
+commonspecies_allhabs <- 
+  bind_rows(results_beta_transformed_fringing_commonspecies, 
+            results_beta_transformed_backreef_commonspecies,
+            results_beta_transformed_forereef10_commonspecies,
+            results_beta_transformed_forereef17_commonspecies)
+
+# yay, 24 rows!
+
+# now combine with spatial synchrony data
+
+beta_spatialsync_commonspecies <- merge(spatial_synchrony, commonspecies_allhabs, by = "site_habitat")
+```
+Plotting time
+```{r }
+# some exploratory plots
+# not transformed, all species
+beta_spatialsync_transformed %>%
+  ggplot(aes(x = mean_bray, y = spatial_synchrony, color = site)) +
+  geom_point() +
+  #scale_colour_manual(values = habitat_colours) +
+  #geom_line(method = lm) +
+  facet_wrap(~habitat)
+
+#transformed, all species
+beta_spatialsync_transformed %>%
+  ggplot(aes(x = mean_bray_trans, y = spatial_synchrony, color = site)) +
+  geom_point() +
+  #scale_colour_manual(values = habitat_colours) +
+  #geom_line(method = lm) +
+  facet_wrap(~habitat)
+
+## not transformed, common species
+beta_spatialsync_commonspecies %>%
+  ggplot(aes(x = mean_bray, y = spatial_synchrony, color = site)) +
+  geom_point() +
+  #scale_colour_manual(values = habitat_colours) +
+  #geom_line(method = lm) +
+  facet_wrap(~habitat)
+
+# transformed, common species
+beta_spatialsync_commonspecies %>%
+  ggplot(aes(x = mean_bray_trans, y = spatial_synchrony, color = site)) +
+  geom_point() +
+  #scale_colour_manual(values = habitat_colours) +
+  #geom_line(method = lm) +
+  facet_wrap(~habitat)
+
+
+
+#comparison between removing rare species and not removing them look very similar. looking below to make sure they not exactly the same, which would indicate I did something wrong
+
+beta_spatialsync_transformed %>%
+  select(site_habitat, site, mean_bray, mean_bray_trans) %>%
+  filter(site == "lter_6")
+  
+beta_spatialsync_commonspecies %>%
+   select(site_habitat, site, mean_bray, mean_bray_trans) %>%
+  filter(site == "lter_6")
+
+#nope, just look different but similar! good sign? 
+  
+```
+
+#Again, I think this is the figure we want to show. 
+```{r}
+
+beta_spatialsync_transformed %>%
+  ggplot(aes(x = mean_bray, y = spatial_synchrony)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  #scale_colour_manual(values = habitat_colours) +
+  theme_minimal()
+
+beta_spatialsync_transformed %>%
+  ggplot(aes(x = mean_bray_trans, y = spatial_synchrony)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  #scale_colour_manual(values = habitat_colours) +
+  theme_minimal()
+
+beta_spatialsync_commonspecies %>%
+  ggplot(aes(x = mean_bray, y = spatial_synchrony)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  #scale_colour_manual(values = habitat_colours) +
+  theme_minimal()
+
+beta_spatialsync_commonspecies %>%
+  ggplot(aes(x = mean_bray_trans, y = spatial_synchrony)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE) +
+  #scale_colour_manual(values = habitat_colours) +
+  theme_minimal()
+```
+# looking for an R2, just for kicks
+```{r}
+model_mean_bray_allspecies <- lm(spatial_synchrony ~ mean_bray, data = beta_spatialsync_transformed)
+summary(model_mean_bray_allspecies)$r.squared
+#.358
+
+model_mean_bray_trans_allspecies <- lm(spatial_synchrony ~ mean_bray_trans, data = beta_spatialsync_transformed)
+summary(model_mean_bray_trans_allspecies)$r.squared
+#.28
+
+model_mean_bray_common <- lm(spatial_synchrony ~ mean_bray, data = beta_spatialsync_commonspecies)
+summary(model_mean_bray_common)$r.squared
+#.354
+
+model_mean_bray_trans_common <- lm(spatial_synchrony ~ mean_bray_trans, data = beta_spatialsync_commonspecies)
+summary(model_mean_bray_trans_common)$r.squared
+#.270
+```
+
+
