@@ -1,0 +1,234 @@
+---
+title: "supplemental abundance figures"
+author: "L. Enright"
+date: "2025-06-10"
+output: html_document
+---
+
+# here we read in the data produced from other scripts. should rerun other scripts and make sure these are the most up to date csvs 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(codyn)
+
+macro_long_data <- read.csv(here::here("data_le", "macro_long_data.csv"), stringsAsFactors = F) 
+diversity_stability_synchrony <- read.csv(here::here("data_le", "full_plot_level_dss.csv"), stringsAsFactors = F) 
+diversity_stability_synchrony_site <- read.csv(here::here("data_le", "diversity_stability_synchrony_site.csv"), stringsAsFactors = F) 
+spatial_synchrony <- read.csv(here::here("data_le", "spatial_synchrony.csv"), stringsAsFactors = F) 
+mean_plot_level_dss <- read.csv(here::here("data_le", "mean_plot_level_dss.csv"), stringsAsFactors = F) 
+
+
+taxo <- read.csv(here::here("data_le", "MCR_Algal_Functional_Groups_02042025_updatedtax.csv"), stringsAsFactors = F)
+```
+
+```{r set colors and labels}
+
+colors_abundance <- c(
+    "sargassum_pacificum" = "#543005",
+    #"turbinaria_ornata" =  "#7B3F00",
+    "turbinaria_ornata" = "#8C510A",
+   # "lobophora_variegata" = "#8C510A",
+     "lobophora_variegata" = "#BF812D",
+    #"dictyota_bartayresiana" =  "#BF812D",
+    "dictyota_bartayresiana" = "#DFC27D",
+    "peyssonnelia_inamoena" = "#E6B88A",
+    "peyssonnelia_sp" = "#F6E8C3",
+    "halimeda_sp" = "#C7EAE5",
+    "halimeda_minima" = "#80CDC1" ,
+     "halimeda_opuntia" = "#35978F",
+    "amansia_rhodantha" = "#01665E", 
+    "asparagopsis_taxiformis" = "#003C30",
+    "Other" = "grey70")
+
+#other colors I considered
+"#5AA6D1"
+"#7BAFD4"
+"#2B83BA"
+"#F1D6A7"
+"#D2C48D"
+"#E6B88A"
+"#E9A972"
+"#704214"
+"#8B4513"
+"#6C3A08"
+"#75420B"
+"#64330A"
+
+# Use a named LIST of expressions for italics
+labs_fill <- list(
+  "Other" = "Other",
+  "sargassum_pacificum" = expression(italic("Sargassum pacificum")),
+  "turbinaria_ornata"   = expression(italic("Turbinaria ornata")),
+  "lobophora_variegata" = expression(italic("Lobophora variegata")),
+  "dictyota_bartayresiana" = expression(italic("Dictyota bartayresiana")),
+  "peyssonnelia_inamoena"  = expression(italic("Peyssonnelia inamoena")),
+  "peyssonnelia_sp" = expression(italic("Peyssonnelia") ~ "sp."),
+ # "peyssonnelia_sp"        = expression(italic("Peyssonnelia sp.")),
+    "halimeda_sp" = expression(italic("Halimeda") ~ "sp."),
+  "halimeda_minima"        = expression(italic("Halimeda minima")),
+  "halimeda_opuntia"       = expression(italic("Halimeda opuntia")),
+  "amansia_rhodantha"      = expression(italic("Amansia rhodantha")),
+  "asparagopsis_taxiformis"= expression(italic("Asparagopsis taxiformis"))
+)
+
+```
+
+
+# Clock Circle Absolute Abundance Figure 
+```{r}
+
+#pull out top 10 abundance, otherwise is messy with all ofthem 
+aggdat_hab <- aggregate(prop_cover ~ taxa * year * habitat,  data = subset(macro_long_data,
+      taxa == "sargassum_pacificum" |
+      taxa == "turbinaria_ornata" | 
+      taxa == "dictyota_bartayresiana"| 
+      taxa == "peyssonnelia_inamoena"| 
+      taxa == "peyssonnelia_sp"| 
+      taxa == "halimeda_minima"| 
+      taxa == "halimeda_sp"| 
+      taxa == "lobophora_variegata"| 
+      taxa == "halimeda_opuntia"| 
+      taxa == "amansia_rhodantha"| 
+      taxa == "asparagopsis_taxiformis"), FUN = mean)
+
+# order the habitats so figure is correct
+aggdat_hab$habitat <- factor(aggdat_hab$habitat, levels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+aggdat_hab$habitat
+
+aggdat_hab_supp <- ggplot(aggdat_hab, aes(year, prop_cover, color = taxa)) + 
+  # plot species lines
+  geom_line(size = 3) + # 3 or 4 works well. 
+  # faceted by species
+  facet_wrap(~habitat) +
+  # on polor coordinates
+  coord_polar()  +
+  scale_color_manual(values = colors_abundance, labels = labs_fill, drop = FALSE) +
+  theme_minimal() +
+  labs(x = "", y = "proportional cover", color = "Taxa") +
+   theme(
+    strip.text   = element_text(size = 25, face = "bold"),   # facet labels
+    axis.title   = element_text(size = 25),                  # axis titles
+    axis.text    = element_text(size = 20),                  # axis tick labels
+    legend.title = element_text(size = 25, face = "bold"),   # legend title
+    legend.text  = element_text(size = 20)                   # legend items
+  )
+
+
+#ggsave(filename = "output/supplement/abundanceclock_supplement_09032025v3.jpg", aggdat_hab_supp, height = 15, width = 20)
+
+```
+#Relative Abundance Bar Graph
+
+```{r}
+macro_long_data
+
+TAXA_sum_TAXA_YR <- macro_long_data %>%
+  group_by(habitat, taxa, year) %>%
+   summarise(sum_TAXA = sum(prop_cover))
+          
+MA_sum_TAXA_YR <- macro_long_data %>%
+  group_by(habitat, year) %>%
+   summarise(sum_ALLMA = sum(prop_cover))
+
+relative_abundance_TAXA_YR <- merge(TAXA_sum_TAXA_YR, MA_sum_TAXA_YR, by = c("habitat", "year"))
+
+relative_abundance_cover_TAXA_YR <- relative_abundance_TAXA_YR %>%
+  #lter 5 fringing does not have any MA in 2018 or 2023
+  mutate(relative_abundance = ifelse(sum_ALLMA > 0, sum_TAXA/sum_ALLMA, 0))
+
+highlight_species <- c("sargassum_pacificum", "turbinaria_ornata", "lobophora_variegata", 
+                       "dictyota_bartayresiana", "peyssonnelia_inamoena", "peyssonnelia_sp",
+                       "halimeda_minima", "halimeda_opuntia", "halimeda_sp",
+                       "amansia_rhodantha", "asparagopsis_taxiformis" 
+                        )
+
+data_RA <- relative_abundance_cover_TAXA_YR %>%
+  mutate(color_group = ifelse(taxa %in% highlight_species, taxa, "Other")) %>%
+  group_by(year, habitat, color_group) %>%  # Group by year, habitat, and color category
+  summarize(relative_abundance = sum(relative_abundance), .groups = "drop") %>%  # Sum abundance for "Other"
+  mutate(color_group = factor(color_group, levels = c("Other", highlight_species))) 
+
+# order the habitats so figure is correct
+data_RA$habitat <- factor(data_RA$habitat, levels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+
+#figure option 1
+
+relative_abundance_supp <- data_RA %>%
+ggplot(aes(x = year, y = relative_abundance, fill = color_group)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = colors_abundance, labels = labs_fill, drop = FALSE) +
+  labs(
+    x = "Year",
+    y = "Relative Abundance",
+    fill = "Taxa"
+  ) +
+  scale_y_continuous(labels = scales::percent) +  
+  theme_classic() +
+  facet_wrap(~habitat) +
+  theme(
+    strip.text   = element_text(size = 25, face = "bold"),   # facet labels
+    axis.title   = element_text(size = 25),                  # axis titles
+    axis.text    = element_text(size = 20),                  # axis tick labels
+    legend.title = element_text(size = 25, face = "bold"),   # legend title
+    legend.text  = element_text(size = 18)                   # legend items
+  )
+
+#ggsave(filename = "output/supplement/relative_abundance_supplement_09032025.jpg", relative_abundance_supp , height = 15, width = 20)
+```
+
+
+
+#Absolute Abundance Bar Graph
+
+```{r}
+
+#11 highlight species
+
+#average cover in each habitat/year
+
+TAXA_mean_TAXA_YR <- macro_long_data %>%
+  group_by(habitat, taxa, year) %>%
+   summarise(mean_TAXA = mean(prop_cover))
+
+#add together averages for "other species", avoids the little gray lines
+TAXA_mean_TAXA_YR_plot <- TAXA_mean_TAXA_YR %>%
+  mutate(color_group = if_else(taxa %in% highlight_species, taxa, "Other")) %>%
+  group_by(year, habitat, color_group) %>%
+  summarise(mean_TAXA_plot = sum(mean_TAXA, na.rm = TRUE), .groups = "drop") %>%
+  mutate(color_group = factor(color_group, levels = c("Other", highlight_species)))
+
+# order the habitats so figure is correct
+TAXA_mean_TAXA_YR_plot$habitat <- factor(TAXA_mean_TAXA_YR_plot$habitat, levels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+ 
+absolute_abundance_supp <- TAXA_mean_TAXA_YR_plot %>%
+ggplot(aes(x = year, y = mean_TAXA_plot, fill = color_group)) +
+  geom_bar(stat = "identity") +
+    scale_fill_manual(values = colors_abundance, labels = labs_fill, drop = FALSE) +
+  labs(
+    x = "Site",
+    y = "Average Percent Cover",
+    fill = "Taxa"
+  ) +
+  scale_y_continuous(labels = scales::percent) +  
+  theme_classic() +
+  facet_wrap(~habitat) +
+  theme(
+    strip.text   = element_text(size = 25, face = "bold"),   # facet labels
+    axis.title   = element_text(size = 25),                  # axis titles
+    axis.text    = element_text(size = 20),                  # axis tick labels
+    legend.title = element_text(size = 25, face = "bold"),   # legend title
+    legend.text  = element_text(size = 18)                   # legend items
+  )
+
+ 
+#ggsave(filename = "output/supplement/absolute_abundance_supplement_09032025.jpg", relative_abundance_supp , height = 15, width = 20)
+
+```
+
+
+
