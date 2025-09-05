@@ -21,7 +21,7 @@ filtered_ag_effects <- filter_ranges(alpha_gamma_emm, dss_spatial_ranges, "habit
                 alpha = 0.3) +
     scale_colour_manual(values = habitat_colours) +
     scale_fill_manual(values = habitat_colours) +
-    labs(y = "Regional stability", x = "Mean plot-level stability", title = "") +
+    labs(y = "Site-level stability", x = "Mean plot-level stability", title = "") +
 #    scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
     model_themes
 )
@@ -44,7 +44,7 @@ filtered_spat_stab_effects <- filter_ranges(spat_stab_emm, dss_spatial_ranges, "
                 alpha = 0.3) +
     scale_colour_manual(values = habitat_colours) +
     scale_fill_manual(values = habitat_colours) +
-    labs(y = "Regional stability", x = "Spatial synchrony", title = "") +
+    labs(y = "Site-level stability", x = "Spatial synchrony", title = "") +
 #    scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
     model_themes
 )
@@ -68,7 +68,7 @@ filtered_ratio_effects <- filter_ranges(ratio_emm, dss_spatial_ranges, "habitat"
     scale_colour_manual(values = habitat_colours) +
     scale_fill_manual(values = habitat_colours) +
     labs(y = "", x = "Spatial synchrony", title = "") +
-    ylab(expression(frac(Regional~stability, Mean~plot-level~stability))) +
+    ylab(expression(frac(Site-level~stability, Mean~plot-level~stability))) +
 #    scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
     model_themes
 )
