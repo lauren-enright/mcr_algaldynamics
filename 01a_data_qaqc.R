@@ -11,7 +11,7 @@ library(effects)
 library(devtools)
 library(here)
 
-data <- read.csv(here("data", "MCR_LTER_Annual_Survey_Benthic_Cover_20231211.csv"), stringsAsFactors = F) # replacements don't work when strings are factors
+data <- read.csv(here::here("data", "MCR_LTER_Annual_Survey_Benthic_Cover_20231211.csv"), stringsAsFactors = F) # replacements don't work when strings are factors
 
 str(data)
 
