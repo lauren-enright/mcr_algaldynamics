@@ -8,10 +8,16 @@ library(codyn)
 
 source("04a_calculate_synchrony.R")
 
+#diversity_stability_synchrony_site <- read.csv(here::here("data", "diversity_stability_synchrony_site.csv"))
+
+#want habitats to be in order.
+diversity_stability_synchrony_site$habitat <- factor(diversity_stability_synchrony_site$habitat,
+                                                levels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
 #### STABILITY ~ RICHNESS ####
 rich_stab_mod_site <- glmmTMB(cover_stability~ richness_mean*habitat, family = Gamma(link = "log"), data = diversity_stability_synchrony_site)
 summary(rich_stab_mod_site)
-Anova(rich_stab_mod_site)
+car::Anova(rich_stab_mod_site)
 
 #                        Chisq Df Pr(>Chisq)    
 # richness_mean         17.645  1  2.662e-05 ***
@@ -20,7 +26,7 @@ Anova(rich_stab_mod_site)
 hist(residuals(rich_stab_mod_site)) # blocky but fine
 plot(residuals(rich_stab_mod_site) ~ fitted(rich_stab_mod_site)) # heteroskedastic - bring to group
 performance::r2(rich_stab_mod_site)
-emtrends(rich_stab_mod_site, pairwise ~ habitat, var = "richness_mean") # no differences across habitats
+em_rich_stab_mod_site <- emtrends(rich_stab_mod_site, pairwise ~ habitat, var = "richness_mean") # no differences across habitats
 # contrast                    estimate    SE  df z.ratio p.value
 # Fringing - Backreef           0.1854 0.120 Inf   1.539  0.4138
 # Fringing - Forereef 10m      -0.2155 0.145 Inf  -1.484  0.4471
@@ -29,11 +35,13 @@ emtrends(rich_stab_mod_site, pairwise ~ habitat, var = "richness_mean") # no dif
 # Backreef - Forereef 17m      -0.4730 0.228 Inf  -2.077  0.1607
 # Forereef 10m - Forereef 17m  -0.0721 0.242 Inf  -0.298  0.9908
 
+cld_rich_stab_mod_site <- multcomp::cld(em_rich_stab_mod_site, Letters = letters, sort = FALSE)
+
 #### STABILITY ~ FUNCTIONAL RICHNESS ####
 
 rich_stab_mod_site_fg <- glmmTMB(cover_stability~ functional_richness_mean*habitat, family = Gamma(link = "log"), data = diversity_stability_site)
 summary(rich_stab_mod_site_fg)
-Anova(rich_stab_mod_site_fg)
+car::Anova(rich_stab_mod_site_fg)
 
 # 
 #                                    Chisq Df Pr(>Chisq)   
@@ -43,8 +51,8 @@ Anova(rich_stab_mod_site_fg)
 
 hist(residuals(rich_stab_mod_site_fg)) # blocky but fine
 plot(residuals(rich_stab_mod_site_fg) ~ fitted(rich_stab_mod_site_fg)) # fine
-performance::r2(rich_stab_mod_site_fg) # 0.59
-emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "functional_richness_mean") 
+performance::r2(rich_stab_mod_site_fg) #   Nagelkerke's R2: 0.59
+em_rich_stab_mod_site_fg <- emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "functional_richness_mean") 
 # Fringing different from outer 10
 #$contrasts
 # contrast                    estimate    SE  df z.ratio p.value
@@ -55,10 +63,12 @@ emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "functional_richness_m
 #  Backreef - Forereef 17m        0.530 0.451 Inf   1.177  0.6416
 #  Forereef 10m - Forereef 17m   -0.452 0.526 Inf  -0.859  0.8259
 
+cld_rich_stab_mod_site_fg <- multcomp::cld(em_rich_stab_mod_site_fg, Letters = letters, sort = FALSE)
+
 #### STABILITY ~ SYNCHRONY ####
 synch_stab_mod_site <- glmmTMB(cover_stability ~ synchrony*habitat, family = Gamma("log"), data = diversity_stability_synchrony_site)
 summary(synch_stab_mod_site)
-Anova(synch_stab_mod_site)
+car::Anova(synch_stab_mod_site)
 #                    Chisq Df Pr(>Chisq)    
 # synchrony         22.117  1  2.565e-06 ***
 # habitat            9.345  3    0.02504 *  
@@ -67,7 +77,7 @@ hist(residuals(synch_stab_mod_site)) # almost uniform
 plot(residuals(synch_stab_mod_site) ~ fitted(synch_stab_mod_site)) # same issue as always
 r.squaredGLMM(synch_stab_mod_site) # 0.678
 performance::r2(synch_stab_mod_site) # 0.702
-emtrends(synch_stab_mod_site, pairwise ~ habitat, var = "synchrony") # backreef is different from forereef 17, fringing is a p = 0.05
+em_synch_stab_mod_site <- emtrends(synch_stab_mod_site, pairwise ~ habitat, var = "synchrony") # backreef is different from forereef 17, fringing is a p = 0.05
 #
 # contrast                    estimate    SE  df z.ratio p.value
 # Fringing - Backreef           -0.262 0.972 Inf  -0.269  0.9932
@@ -76,3 +86,34 @@ emtrends(synch_stab_mod_site, pairwise ~ habitat, var = "synchrony") # backreef 
 # Backreef - Forereef 10m        1.580 0.857 Inf   1.843  0.2533
 # Backreef - Forereef 17m        3.186 1.095 Inf   2.910  0.0189
 # Forereef 10m - Forereef 17m    1.606 1.047 Inf   1.534  0.4170
+
+cld_synch_stab_mod_site <- multcomp::cld(em_synch_stab_mod_site, Letters = letters, sort = FALSE)
+
+#pull out data from models to make supplemental figures:
+
+#taxonomic richness
+t.s5.d <- as.tibble(cld_rich_stab_mod_site) %>% 
+  mutate(Predictor = "Site-level taxonomic-richness") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+#functional richness
+t.s5.e <- as.tibble(cld_rich_stab_mod_site_fg) %>% 
+  mutate(Predictor = "Site-level functional richness") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+#species synchrony
+t.s5.f <- as.tibble(cld_synch_stab_mod_site) %>% 
+  mutate(Predictor = "Site-level species synchrony") %>% 
+  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+
+rbind(t.s5.d, t.s5.e, t.s5.f) %>% 
+  mutate(`Spatial scale` = "Plot-level", 
+         Table = "S5") %>% 
+  dplyr::select(-SE, -df) -> table_s5_plotlevel
+
+table_s5_plotlevel %>% 
+  # rename to match previous version/code
+  dplyr::rename(Habitat = habitat,
+                Lower_CI = asymp.LCL,
+                Upper_CI = asymp.UCL) %>%
+  write_csv(here::here("data/supplemental_tables_tableS5_sitelevel.csv"))
