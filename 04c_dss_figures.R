@@ -110,8 +110,9 @@ supplemental_tables_tableS4_plot %>%
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.01 , y = Habitat, 
-                label = Letter), colour = "black", size = 10) +
-  theme(legend.position = "none") -> s4.taxon
+                label = .group), colour = "black", size = 10) +
+  theme(legend.position = "none") +
+  guides(color = guide_legend(reverse = TRUE)) -> s4.taxon
 
 #functional
 supplemental_tables_tableS4_plot %>% 
@@ -130,8 +131,9 @@ supplemental_tables_tableS4_plot %>%
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.01 , y = Habitat, 
-                label = Letter), colour = "black", size = 10) +
-  theme(legend.position = "none") -> s4.functional
+                label = .group), colour = "black", size = 10) +
+  theme(legend.position = "none") +
+  guides(color = guide_legend(reverse = TRUE)) -> s4.functional
 
 #Synchrony
 supplemental_tables_tableS4_plot %>% 
@@ -150,7 +152,8 @@ supplemental_tables_tableS4_plot %>%
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.10 , y = Habitat, 
-                label = Letter), colour = "black", size = 10) -> s4.synch
+                label = .group), colour = "black", size = 10) +
+  guides(color = guide_legend(reverse = TRUE)) -> s4.synch
 
 s4_figure <- s4.taxon / s4.functional / s4.synch
 
