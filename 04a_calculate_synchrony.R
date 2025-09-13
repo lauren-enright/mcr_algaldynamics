@@ -31,7 +31,7 @@ diversity_stability <- alpha_diversity_quad_macro %>%
 
 diversity_stability_synchrony <- left_join(diversity_stability, lm_synchrony, by = join_by(location))
 diversity_stability_synchrony$synchrony_trans <- sv_trans(diversity_stability_synchrony$synchrony)
-# write.csv(file = here::here("data", "full_plot_level_dss.csv"), diversity_stability_synchrony)
+#write.csv(file = here::here("data", "full_plot_level_dss.csv"), diversity_stability_synchrony)
 
 # EXTRACT RANGES
 dss_ranges <- extract_ranges(diversity_stability_synchrony, "habitat",
@@ -44,7 +44,7 @@ macro_long_data_site <- pivot_longer(
   names_to = "taxa",
   values_to = "percent_cover") %>% 
   mutate(prop_cover = percent_cover/100) %>% 
-  select(-percent_cover)
+  dplyr::select(-percent_cover)
 
 # write_csv(macro_long_data, here("Data", "macro_long_data.csv"))
 
@@ -69,7 +69,7 @@ diversity_stability_site <- alpha_diversity_site_macro %>%
 diversity_stability_synchrony_site <- left_join(diversity_stability_site, lm_synchrony_site, by = join_by(site_habitat))
 diversity_stability_synchrony_site$synchrony_trans <- sv_trans(diversity_stability_synchrony_site$synchrony)
 
-# write_csv(diversity_stability_synchrony_site, here("data", "diversity_stability_synchrony_site.csv"))
+#write_csv(diversity_stability_synchrony_site, here::here("data", "diversity_stability_synchrony_site.csv"))
 
 dss_ranges_site <- extract_ranges(diversity_stability_synchrony_site, "habitat",
                                   c("richness_mean", "functional_richness_mean", "cover_stability", "synchrony"))
