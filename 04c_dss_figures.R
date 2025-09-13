@@ -1,6 +1,9 @@
 source("04b_dss_models.R")
 library(ggplot2)
 library(ggpubr)
+library(patchwork)
+
+supplemental_tables_tableS4_plot <- read.csv(here::here("data", "supplemental_tables_tableS4_plotlevel.csv"))
 
 #### STABILITY ~ RICHNESS ####
 # SETUP
@@ -86,3 +89,74 @@ filtered_synch_stab_effects <- filter_ranges(synch_stab_emm, dss_ranges, "habita
                        font.label = list(size = 26, color = "black", face = "plain")))
 
 # ggsave(filename = "output/figure_4v3.png", figure_4, height = 6, width = 18)
+
+# Supplemental figure S4
+
+#taxonomic
+supplemental_tables_tableS4_plot %>% 
+  filter(Table == "S4") %>% 
+  filter(Predictor == "Taxonomic richness") %>% 
+  # order the habitats by distance from shore
+  mutate(Habitat = factor(Habitat, levels = c("Forereef 17m", "Forereef 10m",  "Backreef", "Fringing"))) %>% 
+  ggplot(aes(x = Mean, y = Habitat, color = Habitat)) +
+  geom_point(size = 6) +
+  # add confidence intervals:
+  geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
+  facet_wrap(~ Predictor) +
+  scale_colour_manual(values = habitat_colours) +
+  xlab("Coefficient") +
+  ylab("") +
+  ggtitle("(a) Taxonomic richness") +
+  model_themes + 
+  # add letters denoting significance
+  geom_text(aes(x = Upper_CI + 0.01 , y = Habitat, 
+                label = Letter), colour = "black", size = 10) +
+  theme(legend.position = "none") -> s4.taxon
+
+#functional
+supplemental_tables_tableS4_plot %>% 
+  filter(Table == "S4") %>% 
+  filter(Predictor == "Functional richness") %>% 
+  # order the habitats by distance from shore
+  mutate(Habitat = factor(Habitat, levels = c("Forereef 17m", "Forereef 10m",  "Backreef", "Fringing"))) %>% 
+  ggplot(aes(x = Mean, y = Habitat, color = Habitat)) +
+  geom_point(size = 6) +
+  # add confidence intervals:
+  geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
+  scale_colour_manual(values = habitat_colours) +
+  xlab("Coefficient") +
+  ylab("") +
+  ggtitle("(b) Functional richness") +
+  model_themes + 
+  # add letters denoting significance
+  geom_text(aes(x = Upper_CI + 0.01 , y = Habitat, 
+                label = Letter), colour = "black", size = 10) +
+  theme(legend.position = "none") -> s4.functional
+
+#Synchrony
+supplemental_tables_tableS4_plot %>% 
+  filter(Table == "S4") %>% 
+  filter(Predictor == "Synchrony") %>% 
+  # order the habitats by distance from shore
+  mutate(Habitat = factor(Habitat, levels = c("Forereef 17m", "Forereef 10m",  "Backreef", "Fringing"))) %>% 
+  ggplot(aes(x = Mean, y = Habitat, color = Habitat)) +
+  geom_point(size = 6) +
+  # add confidence intervals:
+  geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
+  scale_colour_manual(values = habitat_colours) +
+  xlab("Coefficient") +
+  ylab("") +
+  ggtitle("(c) Synchrony") +
+  model_themes + 
+  # add letters denoting significance
+  geom_text(aes(x = Upper_CI + 0.10 , y = Habitat, 
+                label = Letter), colour = "black", size = 10) -> s4.synch
+
+s4_figure <- s4.taxon / s4.functional / s4.synch
+
+
+#ggsave(filename = "output/figure_s4_plotlevel.png", s4_figure, height = 17, width = 13)
+#if you make it narrower than 13 it cuts off the legend
+
+
+
