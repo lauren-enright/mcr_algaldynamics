@@ -64,20 +64,32 @@ t.s2.a <- as_tibble(emtrends(cover_mod, pairwise ~ habitat, var = "richness")$em
   mutate(Predictor = "Taxonomic richness",
          `Spatial scale` = "Plot-level") %>% 
   # rename this so it matches for joining purposes
-  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+  rename_if(str_detect(names(.), ".trend"), ~"Mean") %>%
+  mutate( #need to change letters by hand if post hoc contrasts change
+    Letter = case_when(
+      habitat == "Fringing" ~ "a",
+      habitat == "Backreef"  ~ "b",
+      habitat == "Forereef 10m"  ~ "b",
+      habitat == "Forereef 17m"  ~ "b"))
 
 #functional richness by cover
 
 t.s2.b <- as_tibble(emtrends(cover_mod_fg, pairwise ~ habitat, var = "functional_richness")$emtrends) %>% 
   mutate(Predictor = "Functional richness",
          `Spatial scale` = "Plot-level") %>% 
-  rename_if(str_detect(names(.), ".trend"), ~"Mean")
+  rename_if(str_detect(names(.), ".trend"), ~"Mean") %>%
+  mutate( #need to change letters by hand if post hoc contrasts change
+    Letter = case_when(
+      habitat == "Fringing" ~ "a",
+      habitat == "Backreef"  ~ "b",
+      habitat == "Forereef 10m"  ~ "c",
+      habitat == "Forereef 17m"  ~ "d"))
 
 #joining together
 
 rbind(t.s2.a, t.s2.b) %>% 
   mutate(Table = "S2_plotlevel") %>% 
-  select(-SE, -df) -> table_s2_plot
+  dplyr::select(-SE, -df) -> table_s2_plot
 
 table_s2_plot %>% 
   # rename to match previous version/code
@@ -85,7 +97,6 @@ table_s2_plot %>%
          Lower_CI = asymp.LCL,
          Upper_CI = asymp.UCL) %>%
   # make a blank column to fill in the letter designations manually
-  mutate(Letter = NA) %>%
   # save as CSV
   write_csv(here::here("data/supplemental_tables_tableS2_plot.csv"))
 
