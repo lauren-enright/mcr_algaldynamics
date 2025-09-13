@@ -102,7 +102,7 @@ supplemental_tables_tableS4_plot %>%
   geom_point(size = 6) +
   # add confidence intervals:
   geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
-  facet_wrap(~ Predictor) +
+  #facet_wrap(~ Predictor) +
   scale_colour_manual(values = habitat_colours) +
   xlab("Coefficient") +
   ylab("") +
@@ -155,7 +155,7 @@ supplemental_tables_tableS4_plot %>%
 s4_figure <- s4.taxon / s4.functional / s4.synch
 
 
-#ggsave(filename = "output/figure_s4_plotlevel.png", s4_figure, height = 17, width = 13)
+ggsave(filename = "output/figure_s4_plotlevel.png", s4_figure, height = 17, width = 13)
 #if you make it narrower than 13 it cuts off the legend
 
 
