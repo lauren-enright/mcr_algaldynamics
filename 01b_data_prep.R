@@ -128,7 +128,7 @@ alpha_diversity_site_macro$prop_cover <- alpha_diversity_site_macro$percent_cove
 
 alpha_diversity_site_macro$cover_trans <- sv_trans(alpha_diversity_site_macro$prop_cover)
 #### repeat for functional group data ####
-algae_fg_raw2 <- read_csv(here("data","MCR_Algal_Functional_Groups_08202025_updatedtax_v3.csv"))
+algae_fg_raw2 <- read_csv(here::here("data","MCR_Algal_Functional_Groups_08202025_updatedtax_v3.csv"))
 
 
 #clean column names
@@ -219,3 +219,6 @@ alpha_diversity_quad_macro <- merge(alpha_diversity_quad_macro,
 alpha_diversity_site_macro<-merge(alpha_diversity_site_macro,
                                   fg_summary_site_wide_SUM[,c("year", "site",  "habitat", "functional_richness")],
                                   by = c("year", "site",  "habitat"))
+
+#write.csv(alpha_diversity_quad_macro, "data/alpha_diversity_quad_macro.csv", row.names = FALSE)
+#write.csv(alpha_diversity_site_macro, "data/alpha_diversity_site_macro.csv", row.names = FALSE)
