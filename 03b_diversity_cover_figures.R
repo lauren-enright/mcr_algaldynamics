@@ -10,7 +10,6 @@ library(DHARMa)
 library(ggplot2)
 library(ggpubr)
 
-supplemental_tables_tableS2_plot <- read.csv(here::here("data", "supplemental_tables_tableS2_plot.csv"))
 
 #### COVER ~ RICHNESS ####
 # SETUP
@@ -26,7 +25,7 @@ cover_emm <- emmip(cover_mod,
 filtered_cover_effects <- filter_ranges(trend = cover_emm, range_obj = diversity_ranges_quad, group = "habitat", value = "richness")
 
 # PLOT
-(figure_3a <- 
+(figure_2a <- 
     ggplot() +
 #    geom_point(data = alpha_diversity_quad_macro,
 #               aes(x = richness, y = cover_trans, colour = habitat), size = 1, alpha = 0.75) + 
@@ -38,7 +37,6 @@ filtered_cover_effects <- filter_ranges(trend = cover_emm, range_obj = diversity
     labs(y = "Cover\n", x = "Taxonomic richness", title = "") +
     model_themes 
 )
-# ggsave(filename = "output/figure_3a.png", figure_3a, height = 10, width = 14)
 
 #### COVER ~ FUNCTIONAL RICHNESS ####
 # SETUP
@@ -49,10 +47,10 @@ cover_emm_fg <- emmip(cover_mod_fg,
 filtered_cover_effects_fg <- filter_ranges(cover_emm_fg, diversity_ranges_quad, "habitat", "functional_richness")
 
 # PLOT
-(figure_3b <- 
+(figure_2b <- 
     ggplot() +
-    geom_jitter(data = alpha_diversity_quad_macro,
-               aes(x = functional_richness, y = cover_trans, colour = habitat), width = 0.2, size = 1, alpha = 0.1) + 
+    #geom_jitter(data = alpha_diversity_quad_macro,
+             #  aes(x = functional_richness, y = cover_trans, colour = habitat), width = 0.2, size = 1, alpha = 0.1) + 
     geom_line(data = filtered_cover_effects_fg, aes(x = functional_richness, y = inv_logit(yvar), colour = habitat)) +
     geom_ribbon(data = filtered_cover_effects_fg, aes(x = functional_richness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
                 alpha = 0.5) +
@@ -65,14 +63,14 @@ filtered_cover_effects_fg <- filter_ranges(cover_emm_fg, diversity_ranges_quad, 
 
 #### PANEL GRAPH ####
 
-(figure_3 <- ggarrange(figure_3a, figure_3b,  
+(figure_2 <- ggarrange(figure_2a, figure_2b,  
                        ncol = 2, nrow = 1, 
                        common.legend = TRUE,
                        labels = c("a.", "b."),
                        legend = "bottom", 
                        font.label = list(size = 26, color = "black", face = "plain")) )
 
-# ggsave(filename = "output/figure_3v3.png", figure_3, height = 8, width = 16)
+#ggsave(filename = "output/figure_2_09182025.png", figure_2, height = 8, width = 16)
 
 #adding supplemental figures
 
