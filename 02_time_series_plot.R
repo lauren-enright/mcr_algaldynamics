@@ -4,7 +4,14 @@ library(tidyverse)
 library(ggplot2)
 library(ggpubr)
 
-source("01b_data_prep.R")
+#want to have appropriate functions and plot themes
+source("00_functions_and_aes.R")
+
+#source("01b_data_prep.R")
+
+#read in cover_df from script 01b 
+
+cover_df <- read.csv(here::here("data", "cover_df_09162025.csv"))
 
 #### CREATE MEAN AND SE DATAFRAMES ####
 
@@ -60,7 +67,7 @@ plot_list <- lapply(levels(figure_1_data$habitat), function(hab) {
   ggplot(data = subset(figure_1_data, habitat == hab)) +
     geom_point(aes(x = year, y = percent_cover, colour = functional_group), size = 3) +
     geom_errorbar(aes(x = year, ymin = percent_cover - se, ymax = percent_cover + se, colour = functional_group), 
-                  width = 0, size = 1.3) +
+                  width = 0.1, linewidth = 2) +
     geom_line(aes(x = year, y = percent_cover, colour = functional_group), linewidth = 1) +
     annotate("segment", x = 2006, xend = 2010, y = 75, yend = 75, linewidth = 2, colour = "grey") +
     geom_vline(xintercept = 2010, linetype = 2, colour = "black", size = 1) +
@@ -74,10 +81,10 @@ plot_list <- lapply(levels(figure_1_data$habitat), function(hab) {
 
 (figure_1 <- ggarrange(plotlist = plot_list, 
                        ncol = 2, nrow = 2, 
-                       labels = c("a.", "b.", "c.", "d."),
+                       labels = c("a. Fringing reef", "b. Back reef", "c. Fore reef 10 m", "d. Fore reef 17 m"),
                        common.legend = TRUE,
                        legend = "bottom", 
                        font.label = list(size = 24, color = "black", face = "plain")))
 
 
-# ggsave(filename = "output/figure_1v4.png", figure_1, height = 10, width = 14)
+#ggsave(filename = "output/figure_1v5.png", figure_1, height = 10, width = 14)
