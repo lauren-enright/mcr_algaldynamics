@@ -1,15 +1,26 @@
 rm(list = ls())
-source("04a_calculate_synchrony.R")
+#source("04a_calculate_synchrony.R")
 library(tidyverse)
 library(vegan)
 library(codyn)
+library(here)
+
+source("00_functions_and_aes.R")
+
+#read in from script 04a
+diversity_stability_synchrony <- read.csv(here::here("data", "full_plot_level_dss_09172025.csv")) 
+alpha_diversity_quad_macro <- read.csv(here::here("data", "alpha_diversity_quad_macro_09162025.csv"))
+diversity_stability_synchrony_site <- read.csv(here::here("data", "diversity_stability_synchrony_site_09172025.csv"))
+macro_functional_groups_long <- read.csv(here::here("data", "macroalgalfunctionalgroups_long_09162025.csv"), stringsAsFactors = F)
+
+
+
 
 #### SPATIAL SYNCHRONY ####
 # calculate mean synchrony and stability within a site
 mean_synchrony_stability <- diversity_stability_synchrony %>% 
   dplyr::group_by(habitat, site) %>% 
-  dplyr::summarise(
-    richness_mean = mean(richness_mean, na.rm = T),
+  dplyr::summarise(richness_mean = mean(richness_mean, na.rm = T),
     functional_richness_mean = mean(functional_richness_mean, na.rm = T),
     synchrony_mean = mean(synchrony, na.rm = T),
     stability_mean = mean(cover_stability, na.rm = T),
@@ -22,12 +33,12 @@ spatial_synchrony <- codyn::synchrony(df = alpha_diversity_quad_macro,
                                       abundance.var = "macroalgal_prop_cover",
                                       metric = "Loreau",
                                       replicate.var = "site_habitat")
-colnames(spatial_synchrony) <- c("site_habitat", "spatial_synchrony") # rename to avoid overwrite
+colnames(spatial_synchrony) <- c("site_habitat", "spatial_synchrony") # rename to avoid overwrite 
 
-
+#spatial synch matches
 
 # merge with site level dss metrics
-dss_spatial <- merge(diversity_stability_site, spatial_synchrony, by = "site_habitat")
+dss_spatial <- merge(diversity_stability_synchrony_site, spatial_synchrony, by = "site_habitat") #this matches
 dss_spatial_2 <- merge(dss_spatial, mean_synchrony_stability[, which(names(mean_synchrony_stability) %in%
                                                                        c("habitat", "site", "synchrony_mean", "stability_mean"))],
                        by = c("habitat", "site"))
@@ -35,7 +46,7 @@ dss_spatial_2 <- merge(dss_spatial, mean_synchrony_stability[, which(names(mean_
 
 dss_spatial_2$ratio <- dss_spatial_2$cover_stability/dss_spatial_2$stability_mean
 
-# write.csv(file = here::here("data", "spatial_synchrony.csv"), dss_spatial_2)
+#write.csv(file = here::here("data", "spatial_synchrony_09172025.csv"), dss_spatial_2)
 
 # calculate ranges
 dss_spatial_ranges <- extract_ranges(dss_spatial_2, "habitat", c("spatial_synchrony", "synchrony_mean", "stability_mean"))
@@ -43,9 +54,9 @@ dss_spatial_ranges <- extract_ranges(dss_spatial_2, "habitat", c("spatial_synchr
 #### BRAY ####
 ##### setup #####
 # SUM the data across years for each quad 
-macro_long_data_summed <- macro_long_data %>%
+macro_long_data_summed <- macro_functional_groups_long %>%
   group_by(location, site, habitat, site_habitat, transect, quadrat, taxa) %>%
-  summarise(sum_taxa = sum(prop_cover)) %>%
+  dplyr::summarise(sum_taxa = sum(prop_cover)) %>%
   ungroup()
 
 # pivot wide
@@ -74,7 +85,7 @@ for (sh in sites) {
   # Filter for one site/habitat
   df_sub <- macro_wide_data_summed %>%
     filter(site_habitat == sh) %>%
-    filter(rowSums(.[, 7:68]) != 0)
+    filter(rowSums(.[, 7:69]) != 0) #updated to 69, there are 63 macroalgal taxa and 6 meta columns
   
   # Skip if no rows left
   if (nrow(df_sub) < 2) {
@@ -83,7 +94,7 @@ for (sh in sites) {
   }
   
   # Community and metadata
-  sp_community <- as.matrix(df_sub[, 7:68])
+  sp_community <- as.matrix(df_sub[, 7:69])
   meta <- df_sub[, 1:6]
   
   # Bray-Curtis distances
