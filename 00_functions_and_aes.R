@@ -89,6 +89,12 @@ habitat_colours <- c("Fringing" = "#D81B60",
                      "Forereef 10m" = "#1E88E5",
                      "Forereef 17m" = "#004D40")
 
+habitat_labels <- c("Fringing" = "Fringing reef",
+                     "Backreef" = "Back reef",
+                     "Forereef 10m" = "Fore reef 10 m",
+                     "Forereef 17m" = "Fore reef 17 m")
+
+
 functional_group_colours <- c("Coral" = "darkmagenta",
                               "CCA" = "deeppink3",
                               "Macroalgae" = "chartreuse4",
