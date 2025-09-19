@@ -34,7 +34,7 @@ filtered_ag_effects$habitat <- factor(filtered_ag_effects$habitat,
     labs(y = "Site-level stability", x = "Mean plot-level stability", title = "") +
 #    scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
     model_themes +
-    ylim(c(0.5,5))
+    ylim(c(0.5,5.5))
 )
 
 #### REGIONAL STABILITY ~ SPATIAL SYNCHRONY ####
@@ -62,7 +62,7 @@ filtered_spat_stab_effects$habitat <- factor(filtered_spat_stab_effects$habitat,
     labs(y = "Site-level stability", x = "Spatial synchrony", title = "") +
     #    scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
     model_themes +
-    ylim(c(0.5,5))
+    ylim(c(0.5,5.5))
 )
 
 #LOOKS DIFFERENT THAN OLD VERISON BC NO INTERACTION 
