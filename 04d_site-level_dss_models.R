@@ -51,13 +51,7 @@ rich_stab_mod_site_fg <- glmmTMB(cover_stability~ functional_richness_mean*habit
 summary(rich_stab_mod_site_fg)
 car::Anova(rich_stab_mod_site_fg)
 
-# NOAM
-#                                    Chisq Df Pr(>Chisq)   
-# functional_richness_mean          2.2098  1   0.137136   
-# habitat                          14.5000  3   0.002298 **
-# functional_richness_mean:habitat 12.6102  3   0.005560 **
 
-#LAUREN
 #Response: cover_stability
 #Chisq Df Pr(>Chisq)   
 #functional_richness_mean          1.6373  1   0.200691   
@@ -69,18 +63,7 @@ plot(residuals(rich_stab_mod_site_fg) ~ fitted(rich_stab_mod_site_fg)) # fine
 performance::r2(rich_stab_mod_site_fg) #   Nagelkerke's R2: 0.59
 em_rich_stab_mod_site_fg <- emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "functional_richness_mean") 
 # Fringing different from outer 10
-#NOAM
-#$contrasts
-# contrast                    estimate    SE  df z.ratio p.value
-#  Fringing - Backreef            0.255 0.304 Inf   0.840  0.8356
-#  Fringing - Forereef 10m        1.237 0.407 Inf   3.038  0.0127
-#  Fringing - Forereef 17m        0.786 0.374 Inf   2.102  0.1525
-#  Backreef - Forereef 10m        0.982 0.479 Inf   2.051  0.1695
-#  Backreef - Forereef 17m        0.530 0.451 Inf   1.177  0.6416
-#  Forereef 10m - Forereef 17m   -0.452 0.526 Inf  -0.859  0.8259
 
-#LAUREN
-#$contrasts
 #contrast                    estimate    SE  df z.ratio p.value
 #Fringing - Backreef            0.281 0.321 Inf   0.874  0.8185
 #Fringing - Forereef 10m        1.285 0.416 Inf   3.087  0.0109
@@ -105,7 +88,7 @@ plot(residuals(synch_stab_mod_site) ~ fitted(synch_stab_mod_site)) # same issue 
 #r.squaredGLMM(synch_stab_mod_site) # 0.678
 performance::r2(synch_stab_mod_site) # 0.702
 em_synch_stab_mod_site <- emtrends(synch_stab_mod_site, pairwise ~ habitat, var = "synchrony") # backreef is different from forereef 17, fringing is a p = 0.05
-# this matches
+
 # contrast                    estimate    SE  df z.ratio p.value
 # Fringing - Backreef           -0.262 0.972 Inf  -0.269  0.9932
 # Fringing - Forereef 10m        1.318 0.918 Inf   1.437  0.4764
