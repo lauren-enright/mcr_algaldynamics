@@ -15,9 +15,9 @@ source("00_functions_and_aes.R")
 
 #read in data created in 
 macro_functional_groups_long <- read.csv(here::here("data", "macroalgalfunctionalgroups_long_09162025.csv"), stringsAsFactors = F)
-alpha_diversity_quad_macro <- read.csv(here::here("data", "alpha_diversity_quad_macro_09162025.csv"))
-site_macro_wide <- read.csv(here::here("data", "site_macro_alpha_wide_09172025.csv"))
-alpha_diversity_site_macro <- read.csv(here::here("data", "alpha_diversity_site_macro_09162025.csv"))
+alpha_diversity_quad_macro <- read.csv(here::here("data", "alpha_diversity_quad_macro_09182025.csv"))
+site_macro_wide <- read.csv(here::here("data", "site_macro_alpha_wide_09182025.csv"))
+alpha_diversity_site_macro <- read.csv(here::here("data", "alpha_diversity_site_macro_09182025.csv"))
 
 #### SPECIES SYNCHRONY ####
 lm_synchrony <- codyn::synchrony(df = macro_functional_groups_long,
