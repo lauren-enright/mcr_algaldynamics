@@ -13,6 +13,16 @@ source("00_functions_and_aes.R")
 
 cover_df <- read.csv(here::here("data", "cover_df_09162025.csv"))
 
+
+#make habitat a factor
+cover_df$habitat <- as.factor(cover_df$habitat)
+levels(cover_df$habitat)
+#change order
+
+cover_df$habitat <- factor(cover_df$habitat,
+                           levels = c("Fringing", "Backreef",
+                                      "Forereef 10m", "Forereef 17m"))
+
 #### CREATE MEAN AND SE DATAFRAMES ####
 
 
