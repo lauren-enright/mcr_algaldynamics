@@ -28,12 +28,7 @@ dss_ranges <- extract_ranges(diversity_stability_synchrony, "habitat",
 rich_stab_mod <- glmmTMB(cover_stability~ richness_mean*habitat + (1|site), family = Gamma(link = "log"), data = diversity_stability_synchrony)
 summary(rich_stab_mod)
 car::Anova(rich_stab_mod)
-#NOAM
-#                          Chisq Df Pr(>Chisq)    
-# richness_mean         2720.311  1  < 2.2e-16 ***
-# habitat                325.657  3  < 2.2e-16 ***
-# richness_mean:habitat   33.857  3  2.124e-07 ***
-#LAUREN
+
 #                        Chisq Df Pr(>Chisq)    
 #richness_mean         2721.440  1  < 2.2e-16 ***
 #habitat                325.876  3  < 2.2e-16 ***
@@ -44,16 +39,7 @@ plot(residuals(rich_stab_mod) ~ fitted(rich_stab_mod)) # heteroskedastic - bring
 #r.squaredGLMM(rich_stab_mod) # 0.803, 0.808
 performance::r2(rich_stab_mod) # marginal: 0.812, conditional: 0.816 - yes, matches
 em_rich_stab_mod <- emtrends(rich_stab_mod, pairwise ~ habitat, var = "richness_mean") # fringing not diff from outer17, backreef not different from outer10
-# $contrasts
-#NOAM
-#  contrast                     estimate     SE  df z.ratio p.value
-#  Fringing - Backreef          0.186640 0.0414 Inf   4.511  <.0001
-#  Fringing - Forereef 10m      0.187248 0.0455 Inf   4.114  0.0002
-#  Fringing - Forereef 17m      0.027482 0.0463 Inf   0.594  0.9340
-#  Backreef - Forereef 10m      0.000608 0.0405 Inf   0.015  1.0000
-#  Backreef - Forereef 17m     -0.159158 0.0411 Inf  -3.875  0.0006
-#  Forereef 10m - Forereef 17m -0.159766 0.0439 Inf  -3.640  0.0016
-#LAUREN
+
 #contrasts
 #contrast                     estimate     SE  df z.ratio p.value
 #Fringing - Backreef          0.186671 0.0414 Inf   4.512  <.0001
@@ -71,12 +57,8 @@ rich_stab_mod_fg <- glmmTMB(cover_stability ~ functional_richness_mean*habitat +
 summary(rich_stab_mod_fg)
 car::Anova(rich_stab_mod_fg)
 
-#NOAM                                    Chisq Df Pr(>Chisq)    
-# functional_richness_mean         3077.168  1  < 2.2e-16 ***
-# habitat                           120.732  3  < 2.2e-16 ***
-# functional_richness_mean:habitat   22.582  3  4.935e-05 ***
-#LAUREN
-#Chisq Df Pr(>Chisq)    
+#                                    Chisq Df Pr(>Chisq)    
+  
 #functional_richness_mean         3099.815  1  < 2.2e-16 ***
 #habitat                           120.580  3  < 2.2e-16 ***
 #functional_richness_mean:habitat   25.078  3  1.487e-05 ***
@@ -86,14 +68,7 @@ plot(residuals(rich_stab_mod_fg) ~ fitted(rich_stab_mod_fg)) # same as usual
 performance::r2(rich_stab_mod_fg) # marginal: 0.823, conditional: 0.832, matches 
 em_rich_stab_mod_fg <- emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "functional_richness_mean") 
 #  fringing different from all others
-# contrast                    estimate     SE  df z.ratio p.value
-#  Fringing - Backreef           0.1723 0.0466 Inf   3.698  0.0012
-#  Fringing - Forereef 10m       0.2224 0.0517 Inf   4.304  0.0001
-#  Fringing - Forereef 17m       0.1866 0.0488 Inf   3.826  0.0008
-#  Backreef - Forereef 10m       0.0501 0.0472 Inf   1.061  0.7131
-#  Backreef - Forereef 17m       0.0142 0.0440 Inf   0.324  0.9883
-#  Forereef 10m - Forereef 17m  -0.0358 0.0476 Inf  -0.753  0.8756
-#LAUREN
+
 #contrast                    estimate     SE  df z.ratio p.value
 #Fringing - Backreef           0.1829 0.0466 Inf   3.921  0.0005
 #Fringing - Forereef 10m       0.2337 0.0517 Inf   4.520  <.0001
@@ -108,14 +83,7 @@ cld_rich_stab_mod_fg <- multcomp::cld(em_rich_stab_mod_fg, Letters = letters, so
 synch_stab_mod <- glmmTMB(cover_stability ~ synchrony*habitat + (1|site), family = Gamma("log"), data = diversity_stability_synchrony)
 summary(synch_stab_mod)
 car::Anova(synch_stab_mod)
-#NOAM
-#                     Chisq Df Pr(>Chisq)    
-# synchrony         1308.34  1  < 2.2e-16 ***
-# habitat            103.13  3  < 2.2e-16 ***
-# synchrony:habitat  327.96  3  < 2.2e-16 ***
-
-#LAUREN --> only different by 0.01 for synch and interaction.. 
-#Chisq Df Pr(>Chisq)    
+   
 #synchrony         1308.33  1  < 2.2e-16 ***
 #  habitat            103.13  3  < 2.2e-16 ***
 #  synchrony:habitat  327.97  3  < 2.2e-16 ***
