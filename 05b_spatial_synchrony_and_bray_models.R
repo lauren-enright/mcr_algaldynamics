@@ -222,7 +222,7 @@ t.s6.a <- as_tibble(cld_em_alpha_gamma_stab_mod) %>%
 t.s6.b <- as_tibble(cld_spatial_synchrony_mod2) %>%
   mutate(Predictor = "Spatial synchrony") %>% 
   rename_if(str_detect(names(.), ".trend"), ~"Mean") %>%
-  rename(Mean = response) #note these are different things, but just want for plotting.. 
+  dplyr::rename(Mean = response) #note these are different things, but just want for plotting.. 
 
 
 rbind(t.s6.a, t.s6.b) %>% 
