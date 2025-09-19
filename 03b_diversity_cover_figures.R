@@ -112,7 +112,7 @@ supplemental_tables_tableS2_plot %>%
   scale_colour_manual(values = habitat_colours, label = habitat_labels) +
   xlab("Coefficient") +
   ylab("") +
-  ggtitle("(a) Functional Richness") +
+  ggtitle("(b) Functional Richness") +
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.10 , y = Habitat, 
@@ -122,29 +122,6 @@ supplemental_tables_tableS2_plot %>%
 s2_figure <- s2.taxo + s2.functional +  plot_layout(guides = "collect") &          # collect legends into one
   theme(legend.position = "bottom")  
 
-
-supplemental_tables_tableS2_plot %>% 
-  #filter(Table == "S2") %>% 
-  #filter(`Spatial scale` == "Plot-level") %>% 
-  # order the habitats by distance from shore
-  mutate(Habitat = factor(Habitat, levels = c("Forereef 17m", "Forereef 10m",  "Backreef", "Fringing"))) %>% 
-  ggplot(aes(x = Mean, y = Habitat, color = Habitat)) +
-  geom_point(size = 6) +
-  # add confidence intervals:
-  geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
-  facet_wrap(~ Predictor) +
-  scale_colour_manual(values = habitat_colours) +
-  xlab("Coefficient") +
-  ylab("") +
-  ggtitle("(a) Plot-level") +
-  model_themes + 
-  # add letters denoting significance
-  geom_text(aes(x = Upper_CI + 0.03 , y = Habitat, 
-                label = .group), colour = "black", size = 10) +
-  theme(legend.position = "none",
-          strip.text = element_text(size = 16, face = "bold")  # change size/style
-        ) -> s2.plt.level
-
-ggsave(filename = "output/Supp_FigS2.png", s2_figure, height = 10, width = 22)
+#ggsave(filename = "output/Supp_FigS2.png", s2_figure, height = 10, width = 22)
 
 
