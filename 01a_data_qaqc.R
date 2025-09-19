@@ -155,16 +155,6 @@ colnames(data)
 
 #combwide --> 21000 obs of 92 variables
 
-#test_old <- read.csv(here::here("data", "allbenthicdata_cleaned.csv"))
-#this old, but has 92 columns so I think the old code notes about 91 are just wrong?
-#has only 19701 obserbations 
-test_old2 <- read.csv(here::here("data", "allbenthicdata_cleaned_colnames.csv"))
-#has 19750  obserbations 
-#10 columns 
-#7 are meta data 
-
-colnames(test_old2)
-
 
 #change NAs to 0s 
 
