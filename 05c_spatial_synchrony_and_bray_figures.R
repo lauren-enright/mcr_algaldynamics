@@ -25,7 +25,7 @@ filtered_ag_effects$habitat <- factor(filtered_ag_effects$habitat,
 (alpha_gamma_stability_plot <- 
     ggplot() +
     geom_point(data = dss_spatial_2,
-               aes(x = stability_mean, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+               aes(x = stability_mean, y = cover_stability, colour = habitat), size = 3, alpha = 0.5) + 
     geom_line(data = filtered_ag_effects, aes(x = stability_mean, y = exp(yvar), colour = habitat), linewidth = 1.5) +
     geom_ribbon(data = filtered_ag_effects, aes(x = stability_mean, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
                 alpha = 0.3) +
@@ -53,7 +53,7 @@ filtered_spat_stab_effects$habitat <- factor(filtered_spat_stab_effects$habitat,
 (spatial_synchrony_plot <- 
     ggplot() +
     geom_point(data = dss_spatial_2,
-               aes(x = spatial_synchrony, y = cover_stability, colour = habitat), size = 1, alpha = 0.5) + 
+               aes(x = spatial_synchrony, y = cover_stability, colour = habitat), size = 3, alpha = 0.5) + 
     geom_line(data = filtered_spat_stab_effects, aes(x = spatial_synchrony, y = exp(yvar), colour = habitat), size = 1.5) +
     geom_ribbon(data = filtered_spat_stab_effects, aes(x = spatial_synchrony, ymin = exp(LCL), ymax = exp(UCL), fill = habitat),
                 alpha = 0.3) +
@@ -113,11 +113,13 @@ ratio_emm2_filterered <- ratio_emm2 %>% filter(spatial_synchrony >= rng_ratio [1
     geom_line(data = ratio_emm2_filterered, aes(x = spatial_synchrony, y = exp(yvar)), size = 1.5) +
     geom_ribbon(data = ratio_emm2_filterered, aes(x = spatial_synchrony, ymin = exp(LCL), ymax = exp(UCL)),
                 alpha = 0.3) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
    #scale_colour_manual(values = habitat_colours) +
     #scale_fill_manual(values = habitat_colours) +
     labs(y = "", x = "Spatial synchrony", title = "") +
-    ylab(expression(frac(Site-level~stability, Mean~plot-level~stability))) +
-    #    scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
+    ylab("Site-level stability\n────────────\nMean plot-level stability") +
+    #ylab(expression(frac(Site-level~stability, Mean~plot-level~stability))) +
+     #   scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
     model_themes
 )
 
@@ -185,7 +187,7 @@ bray_emm2_filterered <- bray_emm2 %>% filter(mean_bray >= rng_bray[1], mean_bray
                        labels = c("a.", "b.", "c.", "d."),
                        font.label = list(size = 26, color = "black", face = "plain")))
 
-#ggsave(filename = "output/figure4_09172025.png", figure_4, height = 18, width = 18)
+ggsave(filename = "output/figure4_09192025.png", figure_4, height = 18, width = 18)
 
 
 #### Figure S6: #####
