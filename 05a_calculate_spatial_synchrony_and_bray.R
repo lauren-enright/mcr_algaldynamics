@@ -9,7 +9,7 @@ source("00_functions_and_aes.R")
 
 #read in from script 04a
 diversity_stability_synchrony <- read.csv(here::here("data", "full_plot_level_dss_09172025.csv")) 
-alpha_diversity_quad_macro <- read.csv(here::here("data", "alpha_diversity_quad_macro_09162025.csv"))
+alpha_diversity_quad_macro <- read.csv(here::here("data", "alpha_diversity_quad_macro_09182025.csv"))
 diversity_stability_synchrony_site <- read.csv(here::here("data", "diversity_stability_synchrony_site_09172025.csv"))
 macro_functional_groups_long <- read.csv(here::here("data", "macroalgalfunctionalgroups_long_09162025.csv"), stringsAsFactors = F)
 
