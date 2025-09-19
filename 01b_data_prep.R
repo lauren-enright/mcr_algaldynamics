@@ -123,7 +123,7 @@ fg_NAs_QAQC <- macro_functional_groups %>%
 
 #THIS IS THE DATA WE WANT TO WRITE OUT - THIS WILL GO ON EDI
 
-#write.csv(macro_functional_groups, "data/macroalgalfunctionalgroups_long_09162025.csv", row.names = FALSE)
+write.csv(macro_functional_groups, "data/macroalgalfunctionalgroups_long_09162025.csv", row.names = FALSE)
 
 #### GENERAL COVER DATAFRAME ####
 # For figures 1 and merging with figure 2
@@ -161,7 +161,7 @@ cover_df %>%
 
 
 #write this out... 
-#write.csv(cover_df, "data/cover_df_09162025.csv", row.names = FALSE)
+write.csv(cover_df, "data/cover_df_09162025.csv", row.names = FALSE)
 
 
 
