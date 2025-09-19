@@ -20,33 +20,26 @@ dss_spatial_2$habitat <- factor(dss_spatial_2$habitat,
 alpha_gamma_stab_mod <- glmmTMB(cover_stability ~ stability_mean*habitat, family = Gamma("log"), data = dss_spatial_2)
 summary(alpha_gamma_stab_mod)
 car::Anova(alpha_gamma_stab_mod)
-#NOAM
-#                          Chisq Df Pr(>Chisq)    
-# stability_mean         61.2742  1  4.965e-15 ***
-# habitat                12.9328  3   0.004784 ** 
-# stability_mean:habitat  9.4834  3   0.023508 * 
-performance::r2(alpha_gamma_stab_mod) # 0.838 #matches
-#LAUREN
-#Response: cover_stability
 #                        Chisq Df Pr(>Chisq)    
 #stability_mean         61.2725  1   4.97e-15 ***
 #habitat                12.9323  3   0.004785 ** 
-#stability_mean:habitat  9.4832  3   0.023511 *  
+#stability_mean:habitat  9.4832  3   0.023511 *
+performance::r2(alpha_gamma_stab_mod) # 0.838 #matches
+
+  
 em_alpha_gamma_stab_mod <- emtrends(alpha_gamma_stab_mod, pairwise ~ habitat, var = "stability_mean") # backreef different from fringe and forereef 10
 
 #NOAM
 # $contrasts
 #  contrast                    estimate    SE  df z.ratio p.value
-#  Fringing - Backreef            1.078 0.381 Inf   2.828  0.0242
-#  Fringing - Forereef 10m        0.175 0.345 Inf   0.509  0.9571
-#  Fringing - Forereef 17m        0.380 0.305 Inf   1.248  0.5965
-#  Backreef - Forereef 10m       -0.903 0.349 Inf  -2.589  0.0474
-#  Backreef - Forereef 17m       -0.698 0.309 Inf  -2.256  0.1085
-#  Forereef 10m - Forereef 17m    0.205 0.263 Inf   0.779  0.8639
+#   Fringing - Backreef            1.078 0.381 Inf   2.828  0.0242
+#   Fringing - Forereef 10m        0.175 0.345 Inf   0.509  0.9571
+#   Fringing - Forereef 17m        0.380 0.305 Inf   1.248  0.5965
+#   Backreef - Forereef 10m       -0.903 0.349 Inf  -2.589  0.0475
+#   Backreef - Forereef 17m       -0.698 0.309 Inf  -2.256  0.1085
+#   Forereef 10m - Forereef 17m    0.205 0.263 Inf   0.779  0.8638
 
-#LAUREN --> very slight differences in p-value for these 2 
-# Backreef - Forereef 10m       -0.903 0.349 Inf  -2.589  0.0475
-#Forereef 10m - Forereef 17m    0.205 0.263 Inf   0.779  0.8638
+
 
 cld_em_alpha_gamma_stab_mod <- multcomp::cld(em_alpha_gamma_stab_mod, Letters = letters, sort = FALSE)
 
@@ -56,15 +49,7 @@ hist(residuals(spatial_synchrony_mod)) # a little skew
 plot(residuals(spatial_synchrony_mod) ~ predict(spatial_synchrony_mod))
 summary(spatial_synchrony_mod)
 car::Anova(spatial_synchrony_mod)
-#NOAM
-#                             Chisq Df Pr(>Chisq)    
-# spatial_synchrony         16.2942  1  5.423e-05 ***
-# habitat                   19.5302  3  0.0002124 ***
-# spatial_synchrony:habitat  6.7253  3  0.0811882 .  
-
-#LAUREN
-#Response: cover_stability
-#                         Chisq Df Pr(>Chisq)    
+  
 #spatial_synchrony         16.2914  1  5.431e-05 ***
 #habitat                   19.5303  3  0.0002124 ***
 #spatial_synchrony:habitat  6.7239  3  0.0812368 .  
@@ -83,7 +68,7 @@ car::Anova(spatial_synchrony_mod2)
 #spatial_synchrony 11.483  1  0.0007024 ***
 #habitat           16.655  3  0.0008321 ***
 
-#NOAM OG CODE
+#NOAM OG CODE - won't work if we're not going interaction anymore
 emtrends(spatial_synchrony_mod2, pairwise ~ habitat, var = "spatial_synchrony") # no sig differences but close
 # contrast                    estimate    SE  df z.ratio p.value
 # Fringing - Backreef            0.404 1.764 Inf   0.229  0.9958
@@ -191,13 +176,7 @@ hist(residuals(bray_mod)) # looks good
 plot(residuals(bray_mod) ~ predict(bray_mod)) # looks good
 summary(bray_mod)
 car::Anova(bray_mod) 
-#Noam
-#                             Chisq Df Pr(>Chisq)    
-# mean_bray         14.004  1  0.0001824 ***
-# habitat           11.796  3  0.0081172 ** 
-# mean_bray:habitat 16.732  3  0.0008023 ***
 
-#Lauren
 #Response: spatial_synchrony
 #Chisq Df Pr(>Chisq)    
 #mean_bray         14.020  1  0.0001809 ***
@@ -208,13 +187,7 @@ performance::r2(bray_mod) # 0.743 #this matches
 
 #NOAM
 emtrends(bray_mod, pairwise ~ habitat, var = "mean_bray") 
-#  Fringing - Backreef            4.380 1.98 Inf   2.210  0.1205
-#  Fringing - Forereef 10m        4.086 1.94 Inf   2.111  0.1495
-#  Fringing - Forereef 17m       -4.568 2.33 Inf  -1.957  0.2045
-#  Backreef - Forereef 10m       -0.294 2.21 Inf  -0.133  0.9992
-#  Backreef - Forereef 17m       -8.948 2.57 Inf  -3.486  0.0028
-#  Forereef 10m - Forereef 17m   -8.654 2.53 Inf  -3.420  0.0035
-#LAUREN
+
 #$contrasts
 #contrast                    estimate   SE  df z.ratio p.value
 #Fringing - Backreef            4.376 1.98 Inf   2.211  0.1201
