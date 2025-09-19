@@ -8,10 +8,10 @@ library(effects)
 library(DHARMa)
 library(multcomp)
 
-#source("01b_data_prep.R")
+source("01b_data_prep.R")
 source("00_functions_and_aes.R")
 
-alpha_diversity_quad_macro <- read.csv(here::here("data", "alpha_diversity_quad_macro_09162025.csv"))
+alpha_diversity_quad_macro <- read.csv(here::here("data", "alpha_diversity_quad_macro_09182025.csv"))
 #alpha_diversity_site_macro <- read.csv(here::here("data", "alpha_diversity_site_macro.csv"))
 
 alpha_diversity_quad_macro$habitat <- factor(alpha_diversity_quad_macro$habitat,
@@ -21,12 +21,7 @@ alpha_diversity_quad_macro$habitat <- factor(alpha_diversity_quad_macro$habitat,
 cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro)
 summary(cover_mod)
 car::Anova(cover_mod)
-#NOAM
-#                     Chisq Df Pr(>Chisq)    
-# richness         30918.96  1  < 2.2e-16 ***
-# habitat            141.68  3  < 2.2e-16 ***
-# richness:habitat   294.44  3  < 2.2e-16 ***
-#LAUREN
+
 #Response: cover_trans
 #Chisq Df Pr(>Chisq)    
 #richness         30916.15  1  < 2.2e-16 ***
@@ -37,16 +32,7 @@ hist(residuals(cover_mod)) # looks fine
 plot(residuals(cover_mod) ~ fitted(cover_mod)) # negative trend but it can't be less than 0 so not too concerned. some wave pattern
 performance::r2(cover_mod) # marginal: 0.635, conditional: 0.654
 em_cover_mod <- emtrends(cover_mod, pairwise ~ habitat, var = "richness") # backreef not different from forereef, forereef also not different
-#NOAM
-# contrast                    estimate     SE  df z.ratio p.value
-# Fringing - Backreef          0.34715 0.0241 Inf  14.407  <.0001
-# Fringing - Forereef 10m      0.34862 0.0240 Inf  14.513  <.0001
-# Fringing - Forereef 17m      0.38937 0.0250 Inf  15.593  <.0001
-# Backreef - Forereef 10m      0.00147 0.0205 Inf   0.072  0.9999
-# Backreef - Forereef 17m      0.04223 0.0214 Inf   1.975  0.1974
-# Forereef 10m - Forereef 17m  0.04076 0.0209 Inf   1.947  0.2087
 
-#LAUREN
 #contrast                    estimate     SE  df z.ratio p.value
 #Fringing - Backreef          0.34720 0.0241 Inf  14.409  <.0001
 #Fringing - Forereef 10m      0.34865 0.0240 Inf  14.514  <.0001
@@ -65,11 +51,6 @@ cover_mod_fg <- glmmTMB(cover_trans ~ functional_richness*habitat + (1|site/loca
 summary(cover_mod_fg)
 car::Anova(cover_mod_fg)
 
-#Noam
-#                                 Chisq Df Pr(>Chisq)    
-# functional_richness         31565.55  1  < 2.2e-16 ***
-# habitat                        49.36  3  1.093e-10 ***
-# functional_richness:habitat   444.61  3  < 2.2e-16 ***
 #Lauren
 #Chisq Df Pr(>Chisq)    
 #functional_richness         31722.867  1  < 2.2e-16 ***
@@ -79,15 +60,7 @@ car::Anova(cover_mod_fg)
 hist(residuals(cover_mod_fg)) # good
 performance::r2(cover_mod_fg) # Noam: margingal = 0.63, conditional = 0.65 #Lauren = same 
 em_cover_mod_fg <- emtrends(cover_mod_fg, pairwise ~ habitat, var = "functional_richness") 
-#Noam
-# contrast                    estimate     SE  df z.ratio p.value
-# Fringing - Backreef            0.220 0.0266 Inf   8.287  <.0001
-# Fringing - Forereef 10m        0.352 0.0261 Inf  13.453  <.0001
-# Fringing - Forereef 17m        0.531 0.0263 Inf  20.211  <.0001
-# Backreef - Forereef 10m        0.131 0.0231 Inf   5.683  <.0001
-# Backreef - Forereef 17m        0.310 0.0232 Inf  13.396  <.0001
-# Forereef 10m - Forereef 17m    0.179 0.0223 Inf   8.035  <.0001
-#Lauren
+
 #contrast                    estimate     SE  df z.ratio p.value
 #Fringing - Backreef            0.225 0.0265 Inf   8.500  <.0001
 #Fringing - Forereef 10m        0.357 0.0261 Inf  13.701  <.0001
