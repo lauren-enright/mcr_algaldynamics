@@ -45,6 +45,7 @@ dss_spatial_2 <- merge(dss_spatial, mean_synchrony_stability[, which(names(mean_
 
 
 dss_spatial_2$ratio <- dss_spatial_2$cover_stability/dss_spatial_2$stability_mean
+dss_spatial_2$ratio_reversed <- dss_spatial_2$stability_mean/dss_spatial_2$cover_stability
 
 #write.csv(file = here::here("data", "spatial_synchrony_09172025.csv"), dss_spatial_2)
 

@@ -101,6 +101,7 @@ hist(residuals(ratio_mod1a)) # looks good
 plot(residuals(ratio_mod1a) ~ predict(ratio_mod1a)) # looks good
 summary(ratio_mod1a)
 car::Anova(ratio_mod1a)
+performance::check_model(ratio_mod1b)
    
 #NOAM                             Chisq Df Pr(>Chisq)    
 # spatial_synchrony         258.466  1  < 2.2e-16 ***
@@ -169,6 +170,45 @@ car::Anova(ratio_mod3)
 #log(spatial_synchrony) 774.21  1  < 2.2e-16 ***
 
 performance::r2(ratio_mod3)  #0.97
+
+#this is not logged - reversed ratio
+ratio_mod4 <- glmmTMB(ratio_reversed ~ spatial_synchrony, family = Gamma("log"), data = dss_spatial_2)
+
+hist(residuals(ratio_mod4)) # THIS LOOKS WEIRD?
+plot(residuals(ratio_mod4) ~ predict(ratio_mod4)) # looks fine I think?
+summary(ratio_mod4)
+car::Anova(ratio_mod4)
+#                  Chisq Df Pr(>Chisq)    
+#spatial_synchrony 96.93  1  < 2.2e-16 ***
+# ---
+
+#with habitat
+ratio_mod5 <- glmmTMB(ratio_reversed ~ spatial_synchrony*habitat, family = Gamma("log"), data = dss_spatial_2)
+
+hist(residuals(ratio_mod5)) # THIS LOOKS WEIRD?
+plot(residuals(ratio_mod5) ~ predict(ratio_mod5)) # looks fine I think?
+summary(ratio_mod5)
+car::Anova(ratio_mod5)
+performance::r2(ratio_mod5)
+
+#Chisq Df Pr(>Chisq)    
+#spatial_synchrony         226.574  1  < 2.2e-16 ***
+#  habitat                    23.516  3  3.152e-05 ***
+#  spatial_synchrony:habitat  32.783  3  3.578e-07 ***
+
+#with habitat - logged
+ratio_mod6 <- glmmTMB(ratio_reversed ~ log(spatial_synchrony)*habitat, family = Gamma("log"), data = dss_spatial_2)
+
+hist(residuals(ratio_mod6)) # THIS LOOKS WEIRD?
+plot(residuals(ratio_mod6) ~ predict(ratio_mod6)) # looks fine I think?
+summary(ratio_mod6)
+car::Anova(ratio_mod6)
+performance::r2(ratio_mod6)
+
+#Chisq Df Pr(>Chisq)    
+#log(spatial_synchrony)         953.8486  1  < 2.2e-16 ***
+# habitat                         19.7816  3  0.0001884 ***
+# log(spatial_synchrony):habitat   2.7373  3  0.4339214  
 
 #### SPATIAL SYNCHRONY ~ BRAY ####
 bray_mod <- glmmTMB(spatial_synchrony ~ mean_bray*habitat, family = beta_family(), data = beta_spatialsync)

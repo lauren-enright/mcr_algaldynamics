@@ -123,6 +123,25 @@ ratio_emm2_filterered <- ratio_emm2 %>% filter(spatial_synchrony >= rng_ratio [1
     model_themes
 )
 
+### Plot - with reversed ratio
+
+(ratio_plot3 <- 
+    ggplot() +
+    geom_point(data = dss_spatial_2,
+               aes(x = spatial_synchrony, y = ratio_reversed), size = 3, alpha = 0.5) + 
+    geom_smooth(method = "loess") +
+    geom_line(data = ratio_emm2_filterered, aes(x = spatial_synchrony, y = exp(yvar)), size = 1.5) +
+    geom_ribbon(data = ratio_emm2_filterered, aes(x = spatial_synchrony, ymin = exp(LCL), ymax = exp(UCL)),
+                alpha = 0.3) +
+    geom_hline(yintercept = 1, linetype = "dashed", color = "black") +
+    #scale_colour_manual(values = habitat_colours) +
+    #scale_fill_manual(values = habitat_colours) +
+    labs(y = "", x = "Spatial synchrony", title = "") +
+    ylab("Site-level stability\n────────────\nMean plot-level stability") +
+    #ylab(expression(frac(Site-level~stability, Mean~plot-level~stability))) +
+    #   scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
+    model_themes
+)
 
 #### SPATIAL SYNCHRONY ~ BRAY ####
 # SETUP
