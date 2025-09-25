@@ -33,9 +33,9 @@ filtered_cover_effects <- filter_ranges(trend = cover_emm, range_obj = diversity
     geom_line(data = filtered_cover_effects, aes(x = richness, y = inv_logit(yvar), colour = habitat)) +
     geom_ribbon(data = filtered_cover_effects, aes(x = richness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
                 alpha = 0.5) +
-    scale_colour_manual(values = habitat_colours) +
-    scale_fill_manual(values = habitat_colours) +
-    labs(y = "Cover\n", x = "Taxonomic richness", title = "") +
+    scale_colour_manual(values = habitat_colours, labels = habitat_labels) +
+    scale_fill_manual(values = habitat_colours, labels = habitat_labels) +
+    labs(y = "Proportional Cover\n", x = "Taxonomic richness", title = "") +
     model_themes 
 )
 
@@ -55,8 +55,8 @@ filtered_cover_effects_fg <- filter_ranges(cover_emm_fg, diversity_ranges_quad, 
     geom_line(data = filtered_cover_effects_fg, aes(x = functional_richness, y = inv_logit(yvar), colour = habitat)) +
     geom_ribbon(data = filtered_cover_effects_fg, aes(x = functional_richness, ymin = inv_logit(LCL), ymax = inv_logit(UCL), fill = habitat),
                 alpha = 0.5) +
-    scale_colour_manual(values = habitat_colours) +
-    scale_fill_manual(values = habitat_colours) +
+    scale_colour_manual(values = habitat_colours, labels = habitat_labels) +
+    scale_fill_manual(values = habitat_colours, labels = habitat_labels) +
     labs(y = "", x = "Functional richness", title = "") +
     model_themes
 )
@@ -71,7 +71,7 @@ filtered_cover_effects_fg <- filter_ranges(cover_emm_fg, diversity_ranges_quad, 
                        legend = "bottom", 
                        font.label = list(size = 26, color = "black", face = "plain")) )
 
-#ggsave(filename = "output/figure_2_09182025.png", figure_2, height = 8, width = 16)
+#ggsave(filename = "output/figure2_09252025.jpg", figure_2, height = 8, width = 16)
 
 #adding supplemental figures
 

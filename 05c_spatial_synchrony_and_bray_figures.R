@@ -79,7 +79,8 @@ filtered_spat_stab_effects$habitat <- factor(filtered_spat_stab_effects$habitat,
 #filtered_ratio_effects <- filter_ranges(ratio_emm, dss_spatial_ranges, "habitat", "spatial_synchrony")
 
 # using for model not by habitat
-ratio_emm2 <- emmip(ratio_mod2,
+#using ratio mod 3
+ratio_emm2 <- emmip(ratio_mod3,
                    ~ spatial_synchrony,
                    at = list(spatial_synchrony = seq(0,1,0.01)), plotit = F, CIs = T)  
 
@@ -105,7 +106,8 @@ ratio_emm2_filterered <- ratio_emm2 %>% filter(spatial_synchrony >= rng_ratio [1
 #)
 
 # PLOT - without habitat model
-(ratio_plot2 <- 
+#with model 3
+(ratio_plot3 <- 
     ggplot() +
     geom_point(data = dss_spatial_2,
                aes(x = spatial_synchrony, y = ratio), size = 3, alpha = 0.5) + 
@@ -199,14 +201,14 @@ bray_emm2_filterered <- bray_emm2 %>% filter(mean_bray >= rng_bray[1], mean_bray
 
 
 #### PANEL GRAPH ####
-(figure_4 <- ggarrange(alpha_gamma_stability_plot, spatial_synchrony_plot, ratio_plot2, bray_plot,
+(figure_4 <- ggarrange(alpha_gamma_stability_plot, spatial_synchrony_plot, ratio_plot3, bray_plot,
                        ncol = 2, nrow = 2, 
                        common.legend = TRUE,
                        legend = "bottom", 
                        labels = c("a.", "b.", "c.", "d."),
                        font.label = list(size = 26, color = "black", face = "plain")))
 
-ggsave(filename = "output/figure4_09192025.png", figure_4, height = 18, width = 18)
+#ggsave(filename = "output/figure4_09252025.jpg", figure_4, height = 18, width = 18)
 
 
 #### Figure S6: #####

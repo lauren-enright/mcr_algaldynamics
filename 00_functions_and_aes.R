@@ -65,7 +65,7 @@ trends_theme <- theme_bw() +
         legend.position = 'bottom', # move legend to bottom,
         legend.key.size = unit(2, 'cm'), # increase legend size
         legend.box = 'horizontal', # make legend horizontal
-        legend.box.background = element_rect(colour = "black")) 
+        legend.box.background = element_blank()) 
 
 model_themes <-   theme_bw() + 
   theme(axis.title.x = element_text(size=24), 
@@ -82,7 +82,7 @@ model_themes <-   theme_bw() +
         legend.key.size = unit(2, 'cm'), # increase legend size
         legend.position = 'bottom', # move legend to bottom
         legend.box = 'horizontal', # make legend horizontal
-        legend.box.background = element_rect(colour = "black"))  # add box around legend
+        legend.box.background = element_blank())  # add box around legend
 
 habitat_colours <- c("Fringing" = "#D81B60",
                      "Backreef" = "#FFC107",

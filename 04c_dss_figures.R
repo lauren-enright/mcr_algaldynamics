@@ -107,7 +107,7 @@ filtered_synch_stab_effects <- filter_ranges(synch_stab_emm, dss_ranges, "habita
                        labels = c("a.", "b.", "c.", "d.", "e.", "f."),
                        font.label = list(size = 26, color = "black", face = "plain")))
 
-#ggsave(filename = "output/figure_3_v4_09172025.png", figure_3, height = 6, width = 18)
+#ggsave(filename = "output/figure3_v5_09252025.jpg", figure_3, height = 6, width = 18)
 
 # Supplemental figure S4
 
