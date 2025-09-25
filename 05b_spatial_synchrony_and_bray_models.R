@@ -61,6 +61,7 @@ spatial_synchrony_mod2 <- glmmTMB(cover_stability ~ spatial_synchrony + habitat,
 hist(residuals(spatial_synchrony_mod2)) # a little skew
 plot(residuals(spatial_synchrony_mod2) ~ predict(spatial_synchrony_mod2))
 summary(spatial_synchrony_mod2)
+performance::r2(spatial_synchrony_mod2) # 0.54 #this matches
 car::Anova(spatial_synchrony_mod2)
 
 #Response: cover_stability
