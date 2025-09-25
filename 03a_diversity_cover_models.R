@@ -8,7 +8,7 @@ library(effects)
 library(DHARMa)
 library(multcomp)
 
-source("01b_data_prep.R")
+#source("01b_data_prep.R")
 source("00_functions_and_aes.R")
 
 alpha_diversity_quad_macro <- read.csv(here::here("data", "alpha_diversity_quad_macro_09182025.csv"))
@@ -16,6 +16,10 @@ alpha_diversity_quad_macro <- read.csv(here::here("data", "alpha_diversity_quad_
 
 alpha_diversity_quad_macro$habitat <- factor(alpha_diversity_quad_macro$habitat,
                      levels = c("Fringing", "Backreef", "Forereef 10m", "Forereef 17m"))
+
+cor(alpha_diversity_quad_macro$richness, alpha_diversity_quad_macro$functional_richness, use = "complete.obs", method = "pearson")
+cor.test(alpha_diversity_quad_macro$richness, alpha_diversity_quad_macro$functional_richness, method = "pearson")   # or "spearman"
+
 
 #### COVER ~ RICHNESS ####
 cover_mod <- glmmTMB(cover_trans ~ richness*habitat + (1|site/location) + (1|year), family = beta_family(), data = alpha_diversity_quad_macro)
