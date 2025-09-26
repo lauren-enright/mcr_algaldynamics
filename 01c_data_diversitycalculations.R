@@ -16,6 +16,7 @@ cover_df <- read.csv(here::here("data", "cover_df_09162025.csv"))
 
 colnames(macro_functional_groups_long)
 unique(macro_functional_groups_long$taxa)
+unique(macro_functional_groups_long$functional_group)
 
 
 # Summarize to check against functional group sums later..
@@ -167,9 +168,9 @@ alpha_diversity_all_site_macro<-merge(alpha_diversity_site_macro,
 
 #write out csvs
 
-write.csv(alpha_diversity_all_quad_macro, "data/alpha_diversity_quad_macro_09262025.csv", row.names = FALSE)
-write.csv(alpha_diversity_all_site_macro, "data/alpha_diversity_site_macro_09262025.csv", row.names = FALSE)
-write.csv(site_macro, "data/site_macro_alpha_wide_09262025.csv", row.names = FALSE)
+#write.csv(alpha_diversity_all_quad_macro, "data/alpha_diversity_quad_macro_09262025.csv", row.names = FALSE)
+#write.csv(alpha_diversity_all_site_macro, "data/alpha_diversity_site_macro_09262025.csv", row.names = FALSE)
+#write.csv(site_macro, "data/site_macro_alpha_wide_09262025.csv", row.names = FALSE)
 
 
 
