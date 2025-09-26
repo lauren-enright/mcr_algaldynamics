@@ -71,7 +71,7 @@ filtered_cover_effects_fg <- filter_ranges(cover_emm_fg, diversity_ranges_quad, 
                        legend = "bottom", 
                        font.label = list(size = 26, color = "black", face = "plain")) )
 
-#ggsave(filename = "output/figure2_09252025.jpg", figure_2, height = 8, width = 16)
+#ggsave(filename = "output/figure2_09262025.jpg", figure_2, height = 8, width = 16)
 
 #adding supplemental figures
 

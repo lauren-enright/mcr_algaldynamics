@@ -107,7 +107,7 @@ filtered_synch_stab_effects <- filter_ranges(synch_stab_emm, dss_ranges, "habita
                        labels = c("a.", "b.", "c.", "d.", "e.", "f."),
                        font.label = list(size = 26, color = "black", face = "plain")))
 
-#ggsave(filename = "output/figure3_v5_09252025.jpg", figure_3, height = 6, width = 18)
+#ggsave(filename = "output/figure3_v6_09262025.jpg", figure_3, height = 6, width = 18)
 
 # Supplemental figure S4
 
@@ -177,7 +177,7 @@ supplemental_tables_tableS4_plot %>%
 s4_figure <- s4.taxon / s4.functional / s4.synch
 
 
-#ggsave(filename = "output/figure_s4_plotlevel_v2_09172025.png", height = 17, width = 13)
+#ggsave(filename = "output/Supp_FigS4_09262025.jpg", height = 17, width = 13)
 #if you make it narrower than 13 it cuts off the legend
 
 

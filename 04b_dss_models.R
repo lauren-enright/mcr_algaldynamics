@@ -12,8 +12,8 @@ source("00_functions_and_aes.R")
 #source("04a_calculate_synchrony.R")
 
 #read in data produced in 04a_calculate_synchrony script
-diversity_stability_synchrony <- read.csv(here::here("data", "full_plot_level_dss_09172025.csv")) 
-diversity_stability_synchrony_site <- read.csv(here::here("data", "diversity_stability_synchrony_site_09172025.csv"))
+diversity_stability_synchrony <- read.csv(here::here("data", "full_plot_level_dss_09262025.csv")) 
+diversity_stability_synchrony_site <- read.csv(here::here("data", "diversity_stability_synchrony_site_09262025.csv"))
 
 #want habitats to be in order.
 diversity_stability_synchrony$habitat <- factor(diversity_stability_synchrony$habitat,
@@ -29,6 +29,7 @@ rich_stab_mod <- glmmTMB(cover_stability~ richness_mean*habitat + (1|site), fami
 summary(rich_stab_mod)
 car::Anova(rich_stab_mod)
 
+#great, matches
 #                        Chisq Df Pr(>Chisq)    
 #richness_mean         2721.440  1  < 2.2e-16 ***
 #habitat                325.876  3  < 2.2e-16 ***
@@ -63,9 +64,17 @@ car::Anova(rich_stab_mod_fg)
 #habitat                           120.580  3  < 2.2e-16 ***
 #functional_richness_mean:habitat   25.078  3  1.487e-05 ***
 
+#new, with 8 functional groups
+
+#Chisq Df Pr(>Chisq)    
+#functional_richness_mean         3104.718  1  < 2.2e-16 ***
+#habitat                           119.466  3  < 2.2e-16 ***
+# functional_richness_mean:habitat   24.858  3  1.653e-05 ***
+
 hist(residuals(rich_stab_mod_fg)) # looks fine
 plot(residuals(rich_stab_mod_fg) ~ fitted(rich_stab_mod_fg)) # same as usual 
 performance::r2(rich_stab_mod_fg) # marginal: 0.823, conditional: 0.832, matches 
+#new for 8 functional groups: #Conditional R2: 0.833, Marginal R2: 0.824
 em_rich_stab_mod_fg <- emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "functional_richness_mean") 
 #  fringing different from all others
 
@@ -77,13 +86,24 @@ em_rich_stab_mod_fg <- emtrends(rich_stab_mod_fg, pairwise ~ habitat, var = "fun
 #Backreef - Forereef 17m       0.0152 0.0439 Inf   0.346  0.9858
 #Forereef 10m - Forereef 17m  -0.0356 0.0475 Inf  -0.750  0.8767
 
+#new, with 8 functional groups
+#$contrasts
+#contrast                    estimate     SE  df z.ratio p.value
+#Fringing - Backreef           0.1791 0.0467 Inf   3.836  0.0007
+#Fringing - Forereef 10m       0.2337 0.0517 Inf   4.521  <.0001
+#Fringing - Forereef 17m       0.1979 0.0488 Inf   4.056  0.0003
+#Backreef - Forereef 10m       0.0546 0.0471 Inf   1.159  0.6525
+#Backreef - Forereef 17m       0.0189 0.0439 Inf   0.429  0.9735
+#Forereef 10m - Forereef 17m  -0.0357 0.0475 Inf  -0.753  0.8755
+
 cld_rich_stab_mod_fg <- multcomp::cld(em_rich_stab_mod_fg, Letters = letters, sort = FALSE)
 
 #### STABILITY ~ SYNCHRONY ####
 synch_stab_mod <- glmmTMB(cover_stability ~ synchrony*habitat + (1|site), family = Gamma("log"), data = diversity_stability_synchrony)
 summary(synch_stab_mod)
 car::Anova(synch_stab_mod)
-   
+  
+#great, matches.  
 #synchrony         1308.33  1  < 2.2e-16 ***
 #  habitat            103.13  3  < 2.2e-16 ***
 #  synchrony:habitat  327.97  3  < 2.2e-16 ***

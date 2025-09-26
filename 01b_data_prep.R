@@ -87,7 +87,9 @@ macro_long_data <- pivot_longer(
 
 #NOW SWITCHING THE SCRIPT ORDER, NEED TO ADD FG species to get a dataframe to give to Hillary, then ALL analyses need to come from this dataframe.. 
 
-algae_fg_raw <- read_csv(here::here("data","MCR_Algal_Functional_Groups_09132025_updatedtax_v4.csv"))
+#algae_fg_raw <- read_csv(here::here("data","MCR_Algal_Functional_Groups_09132025_updatedtax_v4.csv"))
+algae_fg_raw <- read_csv(here::here("data","MCR_Algal_Functional_Groups_09262025_updatedtax_v5.csv"))
+
 
 #clean column names
 algae_fg <- algae_fg_raw %>%
@@ -105,8 +107,13 @@ algae_fg <- algae_fg %>%
   dplyr::rename(taxa = species) %>%
   dplyr::rename(functional_group = morphology)
 
-unique(algae_fg$functional_group) # 9 functional groups
+unique(algae_fg$functional_group) # 9 functional groups, 8 after removing foliose 
 unique(algae_fg$taxa) #63 taxa
+
+#how many taxa in each functional group?
+algae_fg %>%
+  group_by(functional_group) %>%
+  tally()
 
 #merge functional groups  
 macro_functional_groups <- merge(macro_long_data, algae_fg, by = "taxa", all.x = TRUE)
@@ -114,16 +121,17 @@ macro_functional_groups <- merge(macro_long_data, algae_fg, by = "taxa", all.x =
 
 
 unique(macro_functional_groups$taxa) #63
-unique(macro_functional_groups$functional_group) #9
+unique(macro_functional_groups$functional_group) #9, now 8
 
 fg_NAs_QAQC <- macro_functional_groups %>%
   filter(is.na(functional_group))
+
 
 #yay, 0 
 
 #THIS IS THE DATA WE WANT TO WRITE OUT - THIS WILL GO ON EDI
 
-write.csv(macro_functional_groups, "data/macroalgalfunctionalgroups_long_09162025.csv", row.names = FALSE)
+#write.csv(macro_functional_groups, "data/macroalgalfunctionalgroups_long_09262025.csv", row.names = FALSE)
 
 #### GENERAL COVER DATAFRAME ####
 # For figures 1 and merging with figure 2
@@ -161,136 +169,5 @@ cover_df %>%
 
 
 #write this out... 
-write.csv(cover_df, "data/cover_df_09162025.csv", row.names = FALSE)
-
-
-
-#now, i think we need to flip long data to wide
-
-
-taxa_sum_check <- macro_functional_groups %>%
-  dplyr::group_by(location, year) %>%
-  dplyr::summarise(sum_macrocover = sum(prop_cover))
-
-macro_functional_groups %>%
-  filter(location == "lter_2_backreef_algae_transect_1_quad_1") %>%
-  filter(year == "2022")
-
-# aggregate for site-level analyses
-
-site_macro <- macroalgae %>%
-  dplyr::group_by(year, site, habitat,site_habitat) %>%
-  dplyr::summarize(across(acanthophora_spicifera:valonia_ventricosa, \(x) mean(x, na.rm = TRUE))) 
-
-site_meta_cols <- c("year", "site", "habitat", "site_habitat")
-site_meta_df <- site_macro[,which(names(site_macro) %in% meta_cols)]
-
-
-#### CALCULATE DIVERSITY METRICS ####
-alpha_diversity_quad_macro <-
-  data.frame(
-    year = macroalgae$year,
-    location = macroalgae$location,
-    shannon = diversity(macroalgae[, -which(names(macroalgae) %in% meta_cols)], "shannon"),
-    richness = rowSums(macroalgae[, -which(names(macroalgae) %in% meta_cols)] > 0)
-  )
-
-alpha_diversity_quad_macro <- merge(meta_df, alpha_diversity_quad_macro, by = c("location", "year"))
-
-macroalgal_cover_quad <- cover_df[,c("year", "habitat", "site", "location", "macroalgae")]
-
-alpha_diversity_quad_macro <-
-  left_join(alpha_diversity_quad_macro, macroalgal_cover_quad,by = join_by(location, year, site, habitat)) %>% 
-  mutate(macroalgal_prop_cover = macroalgae / 100) %>% 
-  dplyr::select(-macroalgae)
-
-alpha_diversity_quad_macro$cover_trans <- sv_trans(alpha_diversity_quad_macro$macroalgal_prop_cover)
-
-##### REPEAT FOR SITES ######
-alpha_diversity_site_macro <-
-  data.frame(
-    year = site_macro$year,
-    site_habitat = site_macro$site_habitat,
-    shannon = diversity(site_macro[ , -which(names(site_macro) %in% meta_cols)], "shannon"),
-    richness = rowSums(site_macro[ , -which(names(site_macro) %in% meta_cols)] > 0)
-  ) %>% 
-  left_join(site_meta_df, alpha_diversity_site_macro, by = c("site_habitat", "year"))
-
-# add cover
-alpha_diversity_site_macro$percent_cover <- rowSums(site_macro[,-which(names(site_macro)  %in% colnames(site_meta_df))]) 
-
-alpha_diversity_site_macro$prop_cover <- alpha_diversity_site_macro$percent_cover/100
-
-alpha_diversity_site_macro$cover_trans <- sv_trans(alpha_diversity_site_macro$prop_cover)
-
-
-
-#summarizing functional groups at the quad level
-fg_summary <- macro_functional_groups %>%
-  dplyr::group_by(location, year, functional_group, habitat, site) %>%
-  dplyr::summarise(sum_fg_cover = sum(prop_cover)) 
-
-max(fg_summary$sum_fg_cover)
-
-
-#summarizing functional groups at the site level
-#NOTE that this is ADDED and not averaged. This data is only used to find richness at the site level. LE did this as adding and as a sum, both end up the same from a richness perspective. 
-fg_summary_site_SUM <- macro_functional_groups %>%
-  dplyr::group_by(site, year, habitat, functional_group) %>%
-  dplyr::summarise(sum_fg_cover = sum(prop_cover))
-
-
-
-#QAQC
-fg_summary_qaqc <- macro_functional_groups %>%
-  dplyr::group_by(location, year, functional_group) %>%
-  dplyr::summarise(sum_fg_cover = sum(prop_cover))
-
-fg_qaqc <- fg_summary_qaqc %>%
-  dplyr::group_by(location, year) %>%
-  dplyr::summarise(sum_fg_check = sum(sum_fg_cover))
-
-check_them <- merge(taxa_sum_check, fg_qaqc)
-
-check_them %>%
-  filter(all.equal(sum_macrocover, sum_fg_check) != TRUE)
-
-#pivot wide at quad level
-fg_summary_wide <- fg_summary %>%
-  tidyr::pivot_wider(names_from = "functional_group", values_from = "sum_fg_cover")
-
-colnames(fg_summary_wide)
-#richness at every quad/year combination 
-fg_summary_wide$functional_richness <- vegan::specnumber(fg_summary_wide[5:13])
-
-unique(fg_summary_wide$functional_richness)
-#0 to 4
-
-##### REPEAT AT SITE LEVEL 
-#pivot wide at site level
-fg_summary_site_wide_SUM <- fg_summary_site_SUM %>%
-  pivot_wider(names_from = "functional_group", values_from = "sum_fg_cover")
-
-#richness at every site/year combination ---> NOT AVERAGED,
-fg_summary_site_wide_SUM$functional_richness <- vegan::specnumber(fg_summary_site_wide_SUM[4:12])
-
-
-#merge Noam's data with functional group summary 
-alpha_diversity_quad_macro <- merge(alpha_diversity_quad_macro,
-                                    fg_summary_wide[,c("location", "year", "site",  "habitat", "functional_richness")],
-                                    by = c("location", "year", "site", "habitat"))
-
-alpha_diversity_quad_macro %>%
-  dplyr::select(location, year, richness, functional_richness) %>%
-  dplyr::filter(location == "lter_1_backreef_algae_transect_1_quad_1")
-
-
-#merge site level cover with site functional group richness
-alpha_diversity_site_macro<-merge(alpha_diversity_site_macro,
-                                  fg_summary_site_wide_SUM[,c("year", "site",  "habitat", "functional_richness")],
-                                  by = c("year", "site",  "habitat"))
-
-write.csv(alpha_diversity_quad_macro, "data/alpha_diversity_quad_macro.csv", row.names = FALSE)
-write.csv(alpha_diversity_site_macro, "data/alpha_diversity_site_macro.csv", row.names = FALSE)
-
+#write.csv(cover_df, "data/cover_df_09162025.csv", row.names = FALSE)
 

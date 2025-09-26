@@ -10,7 +10,7 @@ library(here)
 source("00_functions_and_aes.R")
 #source("04a_calculate_synchrony.R")
 
-diversity_stability_synchrony_site <- read.csv(here::here("data", "diversity_stability_synchrony_site_09172025.csv"))
+diversity_stability_synchrony_site <- read.csv(here::here("data", "diversity_stability_synchrony_site_09262025.csv"))
 
 #want habitats to be in order.
 diversity_stability_synchrony_site$habitat <- factor(diversity_stability_synchrony_site$habitat,
@@ -32,7 +32,7 @@ car::Anova(rich_stab_mod_site)
 # richness_mean:habitat  8.075  3    0.04449 *  
 hist(residuals(rich_stab_mod_site)) # blocky but fine
 plot(residuals(rich_stab_mod_site) ~ fitted(rich_stab_mod_site)) # heteroskedastic - bring to group
-performance::r2(rich_stab_mod_site)
+performance::r2(rich_stab_mod_site) #  Nagelkerke's R2: 0.684
 em_rich_stab_mod_site <- emtrends(rich_stab_mod_site, pairwise ~ habitat, var = "richness_mean") # no differences across habitats
 #this matches
 # contrast                    estimate    SE  df z.ratio p.value
@@ -58,9 +58,15 @@ car::Anova(rich_stab_mod_site_fg)
 #habitat                          13.8071  3   0.003180 **
 #functional_richness_mean:habitat 12.8182  3   0.005047 **
 
+#new, with 8 functional groups
+#Chisq Df Pr(>Chisq)   
+#functional_richness_mean          1.5896  1   0.207387   
+#habitat                          13.7512  3   0.003264 **
+#functional_richness_mean:habitat 12.9510  3   0.004744 **
+
 hist(residuals(rich_stab_mod_site_fg)) # blocky but fine
 plot(residuals(rich_stab_mod_site_fg) ~ fitted(rich_stab_mod_site_fg)) # fine
-performance::r2(rich_stab_mod_site_fg) #   Nagelkerke's R2: 0.59
+performance::r2(rich_stab_mod_site_fg) #   Nagelkerke's R2: 0.59 - OLD, new 8 functional groups:  Nagelkerke's R2: 0.584
 em_rich_stab_mod_site_fg <- emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, var = "functional_richness_mean") 
 # Fringing different from outer 10
 
@@ -71,6 +77,17 @@ em_rich_stab_mod_site_fg <- emtrends(rich_stab_mod_site_fg, pairwise ~ habitat, 
 #Backreef - Forereef 10m        1.005 0.487 Inf   2.065  0.1648
 #Backreef - Forereef 17m        0.553 0.459 Inf   1.206  0.6230
 #Forereef 10m - Forereef 17m   -0.452 0.530 Inf  -0.853  0.8289
+
+#new, with 8 functional groups
+
+#contrasts
+#contrast                    estimate    SE  df z.ratio p.value
+#Fringing - Backreef            0.294 0.334 Inf   0.881  0.8146
+#Fringing - Forereef 10m        1.293 0.416 Inf   3.104  0.0103
+#Fringing - Forereef 17m        0.841 0.383 Inf   2.194  0.1249
+#Backreef - Forereef 10m        0.999 0.494 Inf   2.021  0.1802
+#Backreef - Forereef 17m        0.547 0.467 Inf   1.172  0.6445
+#Forereef 10m - Forereef 17m   -0.452 0.529 Inf  -0.854  0.8284
 
 cld_rich_stab_mod_site_fg <- multcomp::cld(em_rich_stab_mod_site_fg, Letters = letters, sort = FALSE)
 

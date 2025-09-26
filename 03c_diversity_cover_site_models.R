@@ -4,7 +4,7 @@ source("00_functions_and_aes.R")
 
 # read in data
 
-alpha_diversity_site_macro <- read.csv(here::here("data", "alpha_diversity_site_macro_09182025.csv"))
+alpha_diversity_site_macro <- read.csv(here::here("data", "alpha_diversity_site_macro_09262025.csv"))
 
 #### Taxonomic Diversity ####
 
@@ -17,7 +17,7 @@ car::Anova(site_cover_mod)
 # habitat           6.6248  3    0.08487 .  
 # richness:habitat  3.2966  3    0.34811  
 
-#Lauren
+#Lauren #okay same
 #                   Chisq Df Pr(>Chisq)    
 #richness         58.9195  1  1.643e-14 ***
 #  habitat           6.6247  3    0.08487 .  
@@ -35,7 +35,7 @@ performance::r2(site_cover_mod) # marginal: 0.22, conditional: 0.59; matches
 site_cover_mod2 <- glmmTMB(cover_trans ~ richness + habitat + (1|site_habitat) + (1|year), family = beta_family(), data = alpha_diversity_site_macro)
 summary(site_cover_mod2)
 car::Anova(site_cover_mod2)
-#           Chisq Df Pr(>Chisq)    
+#           Chisq Df Pr(>Chisq)     #same
 #richness 58.0746  1  2.524e-14 ***
 # habitat   6.7036  3    0.08197 .  
 
@@ -63,9 +63,25 @@ car::Anova(site_cover_mod_fg)
 #habitat                      4.2211  3    0.23855    
 #functional_richness:habitat  6.6844  3    0.08267 . 
 
+#with 8 functional groups
+#Response: cover_trans -- NEW
+#Chisq Df Pr(>Chisq)    
+#functional_richness         24.1671  1  8.833e-07 ***
+# habitat                      4.1546  3    0.24525    
+#functional_richness:habitat  6.5034  3    0.08953 .
+
+#with 8 functional groups?
+#Response: cover_trans
+#Chisq Df Pr(>Chisq)    
+#functional_richness         24.1673  1  8.832e-07 ***
+#  habitat                      4.1544  3    0.24527    
+#functional_richness:habitat  6.5034  3    0.08953 .  
+
+
 hist(residuals(site_cover_mod_fg)) # positive skew
 plot(residuals(site_cover_mod_fg) ~ fitted(site_cover_mod_fg)) # a little heteroscedastic but can't be less than 0
 performance::r2(site_cover_mod_fg) # NOAM: 0.180, 0.563 LAUREN: Conditional R2: 0.567, Marginal: 0.173
+#new with 8 funtional groups:Conditional R2: 0.566, Marginal R2: 0.169
 
 #don't need a post hoc test here because no interaction and habitat was also not signficant. 
 
@@ -78,6 +94,13 @@ car::Anova(site_cover_mod_fg2)
 #functional_richness 25.0504  1  5.585e-07 ***
 #habitat              3.9032  3     0.2721   
 
+#new -- 8 functional groups # okay cool 
+#Chisq Df Pr(>Chisq)    
+#functional_richness 23.1372  1  1.508e-06 ***
+# habitat              3.8533  3     0.2777  
+
+
 hist(residuals(site_cover_mod_fg2)) # positive skew
 plot(residuals(site_cover_mod_fg2) ~ fitted(site_cover_mod_fg2)) # a little heteroscedastic but can't be less than 0
 performance::r2(site_cover_mod_fg2) #Conditional R2: 0.563, Marginal: 0.150
+#new - 8 fg =   Conditional R2: 0.563; Marginal R2: 0.145

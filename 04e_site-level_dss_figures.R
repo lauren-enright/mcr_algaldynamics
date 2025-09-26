@@ -23,8 +23,8 @@ filtered_rich_stab_effects_site <- filter_ranges(rich_stab_emm_site, dss_ranges_
    scale_fill_manual(values = habitat_colours, labels = habitat_labels) +
    scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
    labs(y = "Site-level Stability", x = "Taxonomic richness", title = "") +
-   model_themes +
-  theme(axis.title.y = element_text(size = 30))
+   model_themes
+  #theme(axis.title.y = element_text(size = 30))
 )
 
 # ggsave(filename = "output/figure_4d.png", figure_4d, height = 10, width = 14)
@@ -193,5 +193,6 @@ supplemental_tables_tableS5_plot  %>%
                        labels = c("a.", "b.", "c.", "d.", "e.", "f."),
                        font.label = list(size = 26, color = "black", face = "plain")))
 
-ggsave(filename = "output/Supp_FigS5.png", supplement5_site_dss, height = 30, width = 45)
+
+#ggsave(filename = "output/Supp_FigS5.png", supplement5_site_dss, height = 22, width = 18)
 

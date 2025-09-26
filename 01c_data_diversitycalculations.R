@@ -11,13 +11,11 @@ library(vegan)
 
 
 ## read in data from script 01b
-macro_functional_groups_long <- read.csv(here::here("data", "macroalgalfunctionalgroups_long_09162025.csv"), stringsAsFactors = F)
+macro_functional_groups_long <- read.csv(here::here("data", "macroalgalfunctionalgroups_long_09262025.csv"), stringsAsFactors = F)
 cover_df <- read.csv(here::here("data", "cover_df_09162025.csv"))
 
 colnames(macro_functional_groups_long)
 unique(macro_functional_groups_long$taxa)
-
-
 
 
 # Summarize to check against functional group sums later..
@@ -140,7 +138,7 @@ macro_taxa_groups_wide_functionalgroup <- macro_taxa_groups_long_functionalgroup
   tidyr::pivot_wider(names_from = "functional_group", values_from = "sum_fg_cover")
 
 #richness at every quad/year combination 
-macro_taxa_groups_wide_functionalgroup$functional_richness <- vegan::specnumber(macro_taxa_groups_wide_functionalgroup[5:13])
+macro_taxa_groups_wide_functionalgroup$functional_richness <- vegan::specnumber(macro_taxa_groups_wide_functionalgroup[5:12])
 
 unique(macro_taxa_groups_wide_functionalgroup$functional_richness)
 #0 to 4
@@ -151,7 +149,7 @@ fg_summary_site_wide_SUM <- fg_summary_site_SUM %>%
   pivot_wider(names_from = "functional_group", values_from = "sum_fg_cover")
 
 #richness at every site/year combination ---> NOT AVERAGED,
-fg_summary_site_wide_SUM$functional_richness <- vegan::specnumber(fg_summary_site_wide_SUM[4:12])
+fg_summary_site_wide_SUM$functional_richness <- vegan::specnumber(fg_summary_site_wide_SUM[4:11])
 
 
 #merge taxonomic data with functional group summary 
@@ -169,9 +167,9 @@ alpha_diversity_all_site_macro<-merge(alpha_diversity_site_macro,
 
 #write out csvs
 
-write.csv(alpha_diversity_all_quad_macro, "data/alpha_diversity_quad_macro_09182025.csv", row.names = FALSE)
-write.csv(alpha_diversity_all_site_macro, "data/alpha_diversity_site_macro_09182025.csv", row.names = FALSE)
-write.csv(site_macro, "data/site_macro_alpha_wide_09182025.csv", row.names = FALSE)
+write.csv(alpha_diversity_all_quad_macro, "data/alpha_diversity_quad_macro_09262025.csv", row.names = FALSE)
+write.csv(alpha_diversity_all_site_macro, "data/alpha_diversity_site_macro_09262025.csv", row.names = FALSE)
+write.csv(site_macro, "data/site_macro_alpha_wide_09262025.csv", row.names = FALSE)
 
 
 
