@@ -84,7 +84,7 @@ plot_list <- lapply(levels(figure_1_data$habitat), function(hab) {
     geom_vline(xintercept = 2019, linetype = 2, colour = "red", size = 1) +
     scale_colour_manual(values = functional_group_colours) +
     scale_x_continuous(breaks = seq(2007, 2023, 2)) +
-    labs(y = "Percent Cover",
+    labs(y = "Cover",
          x = "Year", title = "") +  
     trends_theme
 })
@@ -97,4 +97,4 @@ plot_list <- lapply(levels(figure_1_data$habitat), function(hab) {
                        font.label = list(size = 24, color = "black", face = "plain")))
 
 
-#ggsave(filename = "output/figure1_v6_092252025.jpg", figure_1, height = 10, width = 14)
+#ggsave(filename = "output/figure1_v6_11212025.jpg", figure_1, height = 10, width = 14)

@@ -35,7 +35,7 @@ filtered_cover_effects <- filter_ranges(trend = cover_emm, range_obj = diversity
                 alpha = 0.5) +
     scale_colour_manual(values = habitat_colours, labels = habitat_labels) +
     scale_fill_manual(values = habitat_colours, labels = habitat_labels) +
-    labs(y = "Proportional Cover\n", x = "Taxonomic richness", title = "") +
+    labs(y = "Cover\n", x = "Taxonomic richness", title = "") +
     model_themes 
 )
 
@@ -71,7 +71,7 @@ filtered_cover_effects_fg <- filter_ranges(cover_emm_fg, diversity_ranges_quad, 
                        legend = "bottom", 
                        font.label = list(size = 26, color = "black", face = "plain")) )
 
-#ggsave(filename = "output/figure2_09262025.jpg", figure_2, height = 8, width = 16)
+#ggsave(filename = "output/figure2_11212024.jpg", figure_2, height = 8, width = 16)
 
 #adding supplemental figures
 

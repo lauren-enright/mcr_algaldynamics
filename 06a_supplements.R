@@ -14,7 +14,7 @@ library(tidyverse)
 library(codyn)
 library(here)
 
-macro_functional_groups_long <- read.csv(here::here("data", "macroalgalfunctionalgroups_long_09162025.csv"), stringsAsFactors = F)
+macro_functional_groups_long <- read.csv(here::here("data", "macroalgalfunctionalgroups_long_09262025.csv"), stringsAsFactors = F)
 
 #### Figure S1: Clock Circle Absolute Abundance Figure ####
 # set colors and labels. these will not be used in any other figures
@@ -86,7 +86,7 @@ aggdat_hab$habitat <- factor(aggdat_hab$habitat, levels = c("Fringing", "Backree
 
 aggdat_hab$habitat
 
-aggdat_hab_supp <- ggplot(aggdat_hab, aes(year, prop_cover, color = taxa)) + 
+(aggdat_hab_supp <- ggplot(aggdat_hab, aes(year, prop_cover, color = taxa)) + 
   # plot species lines
   geom_line(size = 3) + # 3 or 4 works well. 
   # faceted by species
@@ -94,18 +94,20 @@ aggdat_hab_supp <- ggplot(aggdat_hab, aes(year, prop_cover, color = taxa)) +
   # on polor coordinates
   coord_polar()  +
   scale_color_manual(values = colors_abundance, labels = labs_fill, drop = FALSE) +
-  theme_minimal() +
-  labs(x = "", y = "proportional cover", color = "Taxa") +
+  theme_classic() +
+  labs(x = "", y = "Cover", color = "Taxa") +
   theme(
+    panel.grid.major = element_line(color = "grey40", linewidth = 0.6),
+    panel.grid.minor = element_line(color = "grey40", linewidth = 0.4),
     strip.text   = element_text(size = 25, face = "bold"),   # facet labels
     axis.title   = element_text(size = 25),                  # axis titles
     axis.text    = element_text(size = 20),                  # axis tick labels
     legend.title = element_text(size = 25, face = "bold"),   # legend title
     legend.text  = element_text(size = 20)                   # legend items
-  )
+  ))
 
 
-#ggsave(filename = "output/Supp_FigS1.jpg", aggdat_hab_supp, height = 15, width = 20)
+# ggsave(filename = "output/Supp_FigS1_11212025.jpg", aggdat_hab_supp, height = 15, width = 20)
 
 
 
