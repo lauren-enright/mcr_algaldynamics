@@ -275,11 +275,18 @@ supplement_S6 <- s6.a + s6.b +
 supplement_S7 <- dss_spatial_2 %>%
   ggplot(aes(x = habitat, y = spatial_synchrony, color = habitat)) +
   geom_boxplot() +
-  geom_point(shape = 1) +
+  geom_point(shape = 1, size = 3.5) +
   scale_colour_manual(values = habitat_colours,labels = habitat_labels) +
   #scale_fill_manual(values = habitat_colours, labels = habitat_labels) +
   labs(y = "Spatial synchrony", x = "", title = "") +
+  scale_x_discrete(labels = c(
+    "Forereef 17m" = "Fore reef 17 m",
+    "Forereef 10m" = "Fore reef 10 m",
+    "Backreef"     = "Back reef",
+    "Fringing"     = "Fringing reef")) +
   #    scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
-  model_themes
+  model_themes 
 
-#ggsave(filename = "output/Supp_FigS7.png", supplement_S7, height = 10, width = 15)
+supplement_S7
+
+#ggsave(filename = "output/Supp_FigS7_12102025.jpg", supplement_S7, height = 10, width = 15)
