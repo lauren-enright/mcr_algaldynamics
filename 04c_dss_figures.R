@@ -134,7 +134,7 @@ supplemental_tables_tableS4_plot %>%
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.01 , y = Habitat, 
                 label = .group), colour = "black", size = 10) +
-  geom_vline(xintercept = 0, linetype = "dotted", color = "grey25") +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
   theme(legend.position = "none") +
   guides(color = guide_legend(reverse = TRUE)) -> s4.taxon
 
@@ -162,7 +162,7 @@ supplemental_tables_tableS4_plot %>%
                 label = .group), colour = "black", size = 10) +
   theme(legend.position = "none",
         plot.margin = margin(t = 10, r = 40, b = 10, l = 10)) +
-  geom_vline(xintercept = 0, linetype = "dotted", color = "grey25") +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
   guides(color = guide_legend(reverse = TRUE)) -> s4.functional
 
 #Synchrony
@@ -188,13 +188,13 @@ supplemental_tables_tableS4_plot %>%
   geom_text(aes(x = Upper_CI + 0.10 , y = Habitat, 
                 label = .group), colour = "black", size = 10) +
  # scale_x_continuous(limits = c(-0.1, NA)) +
-  geom_vline(xintercept = 0, linetype = "dotted", color = "grey25") +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
   guides(color = guide_legend(reverse = TRUE)) -> s4.synch
 
 s4_figure <- s4.taxon / s4.functional / s4.synch
 
 
-ggsave(filename = "output/Supp_FigS4_12152025.jpg", height = 17, width = 14)
+#ggsave(filename = "output/Supp_FigS4_12152025.jpg", height = 17, width = 14)
 #if you make it narrower than 14 it cuts off the legend
 
 
