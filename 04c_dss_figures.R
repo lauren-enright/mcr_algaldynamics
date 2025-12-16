@@ -90,10 +90,10 @@ filtered_synch_stab_effects <- filter_ranges(synch_stab_emm, dss_ranges, "habita
                 alpha = 0.3) +
     scale_colour_manual(values = habitat_colours, labels = habitat_labels) +
     scale_fill_manual(values = habitat_colours, labels = habitat_labels) +
-    labs(x = "Synchrony", y = "", title = "") +
+    labs(x = "Species synchrony", y = "", title = "") +
     model_themes
 )
-# ggsave(filename = "output/figure_4c.png", figure_4c, height = 10, width = 14)
+#ggsave(filename = "output/figure_4c.png", figure_4c, height = 10, width = 14)
 
 #same 16 rows removal warning... 
 
@@ -107,7 +107,7 @@ filtered_synch_stab_effects <- filter_ranges(synch_stab_emm, dss_ranges, "habita
                        labels = c("a.", "b.", "c.", "d.", "e.", "f."),
                        font.label = list(size = 26, color = "black", face = "plain")))
 
-#ggsave(filename = "output/figure3_v6_09262025.jpg", figure_3, height = 6, width = 18)
+#ggsave(filename = "output/figure3_v7_12152025.jpg", figure_3, height = 6, width = 18)
 
 # Supplemental figure S4
 
@@ -123,13 +123,18 @@ supplemental_tables_tableS4_plot %>%
   geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
   #facet_wrap(~ Predictor) +
   scale_colour_manual(values = habitat_colours, labels = habitat_labels) +
+  scale_y_discrete(labels = c("Fringing" = "Fringing reef",
+                              "Backreef" = "Back reef",
+                              "Forereef 10m" = "Forereef 10 m",
+                              "Forereef 17m" = "Forereef 17 m"))+
   xlab("Coefficient") +
   ylab("") +
-  ggtitle("(a) Taxonomic richness") +
+  ggtitle("a. Taxonomic richness") +
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.01 , y = Habitat, 
                 label = .group), colour = "black", size = 10) +
+  geom_vline(xintercept = 0, linetype = "dotted", color = "grey25") +
   theme(legend.position = "none") +
   guides(color = guide_legend(reverse = TRUE)) -> s4.taxon
 
@@ -144,14 +149,20 @@ supplemental_tables_tableS4_plot %>%
   # add confidence intervals:
   geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
   scale_colour_manual(values = habitat_colours, labels = habitat_labels) +
+  scale_y_discrete(labels = c("Fringing" = "Fringing reef",
+                              "Backreef" = "Back reef",
+                              "Forereef 10m" = "Forereef 10 m",
+                              "Forereef 17m" = "Forereef 17 m"))+
   xlab("Coefficient") +
   ylab("") +
-  ggtitle("(b) Functional richness") +
+  ggtitle("b. Functional richness") +
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.01 , y = Habitat, 
                 label = .group), colour = "black", size = 10) +
-  theme(legend.position = "none") +
+  theme(legend.position = "none",
+        plot.margin = margin(t = 10, r = 40, b = 10, l = 10)) +
+  geom_vline(xintercept = 0, linetype = "dotted", color = "grey25") +
   guides(color = guide_legend(reverse = TRUE)) -> s4.functional
 
 #Synchrony
@@ -165,20 +176,26 @@ supplemental_tables_tableS4_plot %>%
   # add confidence intervals:
   geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
   scale_colour_manual(values = habitat_colours, label = habitat_labels) +
+  scale_y_discrete(labels = c("Fringing" = "Fringing reef",
+                              "Backreef" = "Back reef",
+                              "Forereef 10m" = "Forereef 10 m",
+                              "Forereef 17m" = "Forereef 17 m"))+
   xlab("Coefficient") +
   ylab("") +
-  ggtitle("(c) Synchrony") +
+  ggtitle("c. Species synchrony") +
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.10 , y = Habitat, 
                 label = .group), colour = "black", size = 10) +
+ # scale_x_continuous(limits = c(-0.1, NA)) +
+  geom_vline(xintercept = 0, linetype = "dotted", color = "grey25") +
   guides(color = guide_legend(reverse = TRUE)) -> s4.synch
 
 s4_figure <- s4.taxon / s4.functional / s4.synch
 
 
-#ggsave(filename = "output/Supp_FigS4_09262025.jpg", height = 17, width = 13)
-#if you make it narrower than 13 it cuts off the legend
+ggsave(filename = "output/Supp_FigS4_12152025.jpg", height = 17, width = 14)
+#if you make it narrower than 14 it cuts off the legend
 
 
 
