@@ -225,11 +225,12 @@ supplemental_tableS6 %>%
   scale_colour_manual(values = habitat_colours, label = habitat_labels) +
   xlab("Coefficient") +
   ylab("") +
-  ggtitle("(a) Mean plot-level stability") +
+  ggtitle("a. Mean plot-level stability") +
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.10 , y = Habitat, 
                 label = .group), colour = "black", size = 10) +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
   guides(color = guide_legend(reverse = TRUE)) +
   #theme(legend.position = "none") +
   scale_y_discrete(labels = c(
@@ -250,11 +251,12 @@ supplemental_tableS6 %>%
   scale_colour_manual(values = habitat_colours, label = habitat_labels) +
   xlab("Coefficient") +
   ylab("") +
-  ggtitle("(b) Spatial synchrony") +
+  ggtitle("b. Spatial synchrony") +
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.10 , y = Habitat, 
                 label = .group), colour = "black", size = 10) +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
   guides(color = guide_legend(reverse = TRUE)) +
   scale_y_discrete(labels = c(
     "Forereef 17m" = "Fore reef 17 m",
@@ -266,7 +268,7 @@ supplement_S6 <- s6.a + s6.b +
   plot_layout(guides = "collect") &
   theme(legend.position = "bottom")
 
-#ggsave(filename = "output/Supp_FigS6.png", supplement_S6, height = 10, width = 20)
+#ggsave(filename = "output/Supp_FigS6_121625.jpg", supplement_S6, height = 10, width = 20)
 
 #### Figure S7: Box Plots of Spatial Synchrony by Habitat ####
 

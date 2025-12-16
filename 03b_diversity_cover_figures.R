@@ -87,17 +87,24 @@ supplemental_tables_tableS2_plot %>%
   # order the habitats by distance from shore
   mutate(Habitat = factor(Habitat, levels = c("Forereef 17m", "Forereef 10m",  "Backreef", "Fringing"))) %>% 
   ggplot(aes(x = Mean, y = Habitat, color = Habitat)) +
-  geom_point(size = 6) +
+  geom_point(size = 5) +
   # add confidence intervals:
-  geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
+  geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 3) +
   scale_colour_manual(values = habitat_colours, label = habitat_labels) +
   xlab("Coefficient") +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
   ylab("") +
-  ggtitle("(a) Taxonomic Richness") +
+  ggtitle("a. Taxonomic Richness") +
   model_themes + 
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.10 , y = Habitat, 
                 label = .group), colour = "black", size = 10) +
+  scale_y_discrete(labels = c(
+    "Fringing"     = "Fringing reef",
+    "Backreef"     = "Back reef",
+    "Forereef 10m" = "Fore reef 10 m",
+    "Forereef 17m" = "Forereef 17 m"
+  )) +
   guides(color = guide_legend(reverse = TRUE)) -> s2.taxo
 
 supplemental_tables_tableS2_plot %>% 
@@ -106,14 +113,22 @@ supplemental_tables_tableS2_plot %>%
   # order the habitats by distance from shore
   mutate(Habitat = factor(Habitat, levels = c("Forereef 17m", "Forereef 10m",  "Backreef", "Fringing"))) %>% 
   ggplot(aes(x = Mean, y = Habitat, color = Habitat)) +
-  geom_point(size = 6) +
+  geom_point(size = 5) +
   # add confidence intervals:
-  geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 2.5) +
-  scale_colour_manual(values = habitat_colours, label = habitat_labels) +
+  geom_linerange(aes(xmin = Lower_CI, xmax = Upper_CI), linewidth = 3) +
+  scale_color_manual(values = habitat_colours, label = habitat_labels) +
   xlab("Coefficient") +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1, color = "gray") +
   ylab("") +
-  ggtitle("(b) Functional Richness") +
+  ggtitle("b. Functional Richness") +
+  scale_y_discrete(labels = c(
+    "Fringing" = "Fringing reef",
+    "Backreef" = "Back reef",
+    "Forereef 10m" = "Fore reef 10 m",
+    "Forereef 17m" = "Fore reef 17 m"
+  )) +
   model_themes + 
+ # theme(legend.position = "none") +
   # add letters denoting significance
   geom_text(aes(x = Upper_CI + 0.10 , y = Habitat, 
                 label = .group), colour = "black", size = 10) +
@@ -122,6 +137,6 @@ supplemental_tables_tableS2_plot %>%
 s2_figure <- s2.taxo + s2.functional +  plot_layout(guides = "collect") &          # collect legends into one
   theme(legend.position = "bottom")  
 
-#ggsave(filename = "output/Supp_FigS2.png", s2_figure, height = 10, width = 22)
+#ggsave(filename = "output/Supp_FigS2_121625.jpg", s2_figure, height = 10, width = 22)
 
 

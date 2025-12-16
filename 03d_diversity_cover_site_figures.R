@@ -94,6 +94,6 @@ filtered_site_fg_cover_effects$habitat <- factor(filtered_site_fg_cover_effects$
                        legend = "bottom", 
                        font.label = list(size = 26, color = "black", face = "plain")))
 
-#ggsave(filename = "output/figure_S3_v2_11212025.png", figure_S3, height = 10, width = 18)
+#ggsave(filename = "output/Supp_FigS3_12162025.jpg", figure_S3, height = 10, width = 18)
 
 

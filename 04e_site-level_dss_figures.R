@@ -22,10 +22,16 @@ filtered_rich_stab_effects_site <- filter_ranges(rich_stab_emm_site, dss_ranges_
    scale_colour_manual(values = habitat_colours, labels = habitat_labels) +
    scale_fill_manual(values = habitat_colours, labels = habitat_labels) +
    scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
-   labs(y = "Site-level Stability", x = "Taxonomic richness", title = "") +
-   model_themes
+   labs(y = "Site-level stability", x = "Taxonomic richness", title = "") +
+   model_themes +
+   theme(
+      axis.title.x = element_text(size = 35),
+      axis.title.y = element_text(size = 35)
+    )
   #theme(axis.title.y = element_text(size = 30))
 )
+
+#size 30 works well for option 1
 
 # ggsave(filename = "output/figure_4d.png", figure_4d, height = 10, width = 14)
 
@@ -50,9 +56,12 @@ filtered_rich_stab_effects_site <- filter_ranges(rich_stab_emm_site_fg, dss_rang
     scale_fill_manual(values = habitat_colours, labels = habitat_labels) +
     scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
     scale_x_continuous(limits = c(1.75, 4.2), breaks = c(1,2,3,4)) +
-    labs(y = "", x = "Functional richness", title = "") +
-    model_themes
-)
+    labs(y = "Site-level stability", x = "Functional richness", title = "") +
+    model_themes +
+    theme(
+      axis.title.x = element_text(size = 35),
+      axis.title.y = element_text(size = 35)
+    ))
 
 #ggsave(filename = "output/figure_4e_v2.png", figure_4e, height = 10, width = 14)
 
@@ -74,9 +83,13 @@ filtered_synch_stab_effects_site <- filter_ranges(synch_stab_emm_site, dss_range
                 alpha = 0.3) +
     scale_colour_manual(values = habitat_colours) +
     scale_fill_manual(values = habitat_colours) +
-    labs(x = "Synchrony", y = "", title = "") +
+    labs(x = "Species synchrony", y = "Site-level stability", title = "") +
     scale_y_continuous(limits = c(0.5, 4.2), breaks = c(1,2,3,4)) +
-    model_themes
+    model_themes +
+    theme(
+      axis.title.x = element_text(size = 35),
+      axis.title.y = element_text(size = 35)
+    )
 )
 # ggsave(filename = "output/figure_4f.png", figure_4f, height = 10, width = 14)
 
@@ -111,11 +124,13 @@ supplemental_tables_tableS5_plot %>%
     "Fringing"     = "Fringing reef",
     "Backreef"     = "Back reef",
     "Forereef 10m" = "Fore reef 10 m",
-    "Forereef 17m" = "Forereef 17 m"
+    "Forereef 17m" = "Fore reef 17 m"
   )) +
   theme(legend.position = "none",
         #axis.text.y = element_text(size = 27, angle = 90, hjust = 0.5, vjust = 0.5),
-        axis.text.y = element_text(size = 20)) -> s5.taxon.d
+        axis.text.y = element_text(size = 30),
+        axis.title.x = element_text(size = 35)
+        ) -> s5.taxon.d
 
 #Site-level functional richness
 
@@ -142,12 +157,13 @@ supplemental_tables_tableS5_plot %>%
     "Fringing"     = "Fringing reef",
     "Backreef"     = "Back reef",
     "Forereef 10m" = "Fore reef 10 m",
-    "Forereef 17m" = "Forereef 17 m"
+    "Forereef 17m" = "Fore reef 17 m"
   )) +
   theme(legend.position = "none",
       # axis.text.y = element_blank(),
       #  axis.ticks.y = element_blank(),
-        axis.text.y = element_text(size = 20)) -> s5.functional.e
+        axis.text.y = element_text(size = 30),
+      axis.title.x = element_text(size = 35)) -> s5.functional.e
 
 #Site-level species synchrony
 
@@ -174,16 +190,17 @@ supplemental_tables_tableS5_plot  %>%
     "Fringing"     = "Fringing reef",
     "Backreef"     = "Back reef",
     "Forereef 10m" = "Fore reef 10 m",
-    "Forereef 17m" = "Forereef 17 m"
+    "Forereef 17m" = "Fore reef 17 m"
   )) +
   theme(legend.position = "none",
       # axis.text.y = element_blank(),
        # axis.ticks.y = element_blank(),
-        axis.text.y = element_text(size = 20)) -> s5.synch.f
+        axis.text.y = element_text(size = 30),
+      axis.title.x = element_text(size = 35)) -> s5.synch.f
 
 # pull all 6 panels together...
 
-(supplement5_site_dss <- ggarrange(figure_s5a, figure_s5b, figure_s5c, 
+(supplement5_site_dss_v1 <- ggarrange(figure_s5a, figure_s5b, figure_s5c, 
                                     s5.taxon.d, s5.functional.e, s5.synch.f,
                        ncol = 3, nrow = 2, 
                        common.legend = TRUE,
@@ -192,7 +209,18 @@ supplemental_tables_tableS5_plot  %>%
                        legend = "bottom", 
                        labels = c("a.", "b.", "c.", "d.", "e.", "f."),
                        font.label = list(size = 26, color = "black", face = "plain")))
+#option 2
+(supplement5_site_dss_v2 <- ggarrange(figure_s5a,  s5.taxon.d, figure_s5b, s5.functional.e, figure_s5c, 
+                                   s5.synch.f,
+                                   ncol = 2, nrow = 3, 
+                                   common.legend = TRUE,
+                                   heights = c(2.5,2.5, 2.5),
+                                   widths = c(2, 2),
+                                   legend = "bottom", 
+                                   labels = c("a.", "b.", "c.", "d.", "e.", "f."),
+                                   font.label = list(size = 26, color = "black", face = "plain")))
 
-
-#ggsave(filename = "output/Supp_FigS5.png", supplement5_site_dss, height = 22, width = 18)
-
+#ggsave(filename = "output/Supp_FigS5_12162025_v3.jpg", supplement5_site_dss, height = 30, width = 25)
+ggsave(filename = "output/Supp_FigS5_12162025_v5.jpg", supplement5_site_dss_v2, height = 30, width = 25)
+#options: 22 and 18
+#options: 22 and 30 
