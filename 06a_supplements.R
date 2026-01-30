@@ -19,6 +19,8 @@ macro_functional_groups_long <- read.csv(here::here("data", "macroalgalfunctiona
 #### Figure S1: Clock Circle Absolute Abundance Figure ####
 # set colors and labels. these will not be used in any other figures
 
+habitat_labels_supp <- c()
+
 colors_abundance <- c(
   "sargassum_pacificum" = "#543005",
   #"turbinaria_ornata" =  "#7B3F00",
@@ -55,10 +57,10 @@ labs_fill <- list(
   "Other" = "Other",
   "sargassum_pacificum" = expression(italic("Sargassum pacificum")),
   "turbinaria_ornata"   = expression(italic("Turbinaria ornata")),
-  "lobophora_variegata" = expression(italic("Lobophora variegata")),
+  "lobophora_variegata" =  expression(italic("Lobophora") ~ "spp."),
   "dictyota_bartayresiana" = expression(italic("Dictyota bartayresiana")),
   "peyssonnelia_inamoena"  = expression(italic("Peyssonnelia inamoena")),
-  "peyssonnelia_sp" = expression(italic("Peyssonnelia") ~ "sp."),
+  "peyssonnelia_sp" = expression(italic("Peyssonnelia") ~ "spp."),
   # "peyssonnelia_sp"        = expression(italic("Peyssonnelia sp.")),
   "halimeda_sp" = expression(italic("Halimeda") ~ "sp."),
   "halimeda_minima"        = expression(italic("Halimeda minima")),
@@ -86,28 +88,46 @@ aggdat_hab$habitat <- factor(aggdat_hab$habitat, levels = c("Fringing", "Backree
 
 aggdat_hab$habitat
 
+yr_min <- min(aggdat_hab$year, na.rm = TRUE)
+yr_max <- max(aggdat_hab$year, na.rm = TRUE)
+y_max  <- max(aggdat_hab$prop_cover, na.rm = TRUE)
+
+spoke_2007 <- data.frame(year = 2007, y0 = 0, y1 = y_max*1.001)
+
 (aggdat_hab_supp <- ggplot(aggdat_hab, aes(year, prop_cover, color = taxa)) + 
   # plot species lines
   geom_line(size = 3) + # 3 or 4 works well. 
   # faceted by species
-  facet_wrap(~habitat) +
+  facet_wrap(~habitat,
+             labeller = as_labeller(c(
+               "Fringing" = "a. Fringing reef",
+               "Backreef" = "b. Back reef",
+               "Forereef 10m" = "c. Fore reef 10 m",
+               "Forereef 17m" = "d. Fore reef 17 m"
+             ))) +
   # on polor coordinates
-  coord_polar()  +
+  coord_polar(clip = "off")  +
   scale_color_manual(values = colors_abundance, labels = labs_fill, drop = FALSE) +
   theme_classic() +
   labs(x = "", y = "Cover", color = "Taxa") +
+    scale_x_continuous(breaks = seq(yr_min, yr_max, by = 2)) +
+    scale_y_continuous(
+      limits = c(0, y_max*1.001),
+      expand = c(0, 0)
+    ) +
   theme(
     panel.grid.major = element_line(color = "grey40", linewidth = 0.6),
-    panel.grid.minor = element_line(color = "grey40", linewidth = 0.4),
+    panel.grid.minor = element_line(color = "grey40", linewidth = 0.3),
     strip.text   = element_text(size = 25, face = "bold"),   # facet labels
     axis.title   = element_text(size = 25),                  # axis titles
     axis.text    = element_text(size = 20),                  # axis tick labels
     legend.title = element_text(size = 25, face = "bold"),   # legend title
-    legend.text  = element_text(size = 20)                   # legend items
+    legend.text  = element_text(size = 20),                   # legend items
+    plot.margin = margin(55, 90, 55, 90) 
   ))
 
 
-# ggsave(filename = "output/Supp_FigS1_11212025.jpg", aggdat_hab_supp, height = 15, width = 20)
+ggsave(filename = "output/Supp_FigS1_01302026.jpg", aggdat_hab_supp, height = 15, width = 20)
 
 
 
