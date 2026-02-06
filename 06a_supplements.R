@@ -19,8 +19,6 @@ macro_functional_groups_long <- read.csv(here::here("data", "macroalgalfunctiona
 #### Figure S1: Clock Circle Absolute Abundance Figure ####
 # set colors and labels. these will not be used in any other figures
 
-habitat_labels_supp <- c()
-
 colors_abundance <- c(
   "sargassum_pacificum" = "#543005",
   #"turbinaria_ornata" =  "#7B3F00",
@@ -62,7 +60,7 @@ labs_fill <- list(
   "peyssonnelia_inamoena"  = expression(italic("Peyssonnelia inamoena")),
   "peyssonnelia_sp" = expression(italic("Peyssonnelia") ~ "spp."),
   # "peyssonnelia_sp"        = expression(italic("Peyssonnelia sp.")),
-  "halimeda_sp" = expression(italic("Halimeda") ~ "sp."),
+  "halimeda_sp" = expression(italic("Halimeda") ~ "spp."),
   "halimeda_minima"        = expression(italic("Halimeda minima")),
   "halimeda_opuntia"       = expression(italic("Halimeda opuntia")),
   "amansia_rhodantha"      = expression(italic("Amansia rhodantha")),
@@ -127,7 +125,7 @@ spoke_2007 <- data.frame(year = 2007, y0 = 0, y1 = y_max*1.001)
   ))
 
 
-ggsave(filename = "output/Supp_FigS1_01302026.jpg", aggdat_hab_supp, height = 15, width = 20)
+#ggsave(filename = "output/Supp_FigS1_02062026.jpg", aggdat_hab_supp, height = 15, width = 20)
 
 
 
