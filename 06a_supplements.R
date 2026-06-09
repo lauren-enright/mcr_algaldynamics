@@ -128,6 +128,40 @@ spoke_2007 <- data.frame(year = 2007, y0 = 0, y1 = y_max*1.001)
 #ggsave(filename = "output/Supp_FigS1_02062026.jpg", aggdat_hab_supp, height = 15, width = 20)
 
 
+(aggdat_hab_supp_bar <- ggplot(aggdat_hab, aes(year, prop_cover, fill = taxa)) + 
+    # plot species lines
+    geom_col() + # 3 or 4 works well. 
+    # faceted by species
+    facet_wrap(~habitat,
+               labeller = as_labeller(c(
+                 "Fringing" = "a. Fringing reef",
+                 "Backreef" = "b. Back reef",
+                 "Forereef 10m" = "c. Fore reef 10 m",
+                 "Forereef 17m" = "d. Fore reef 17 m"
+               ))) +
+    # on polor coordinates
+    #coord_polar(clip = "off")  +
+    #scale_color_manual(values = colors_abundance, labels = labs_fill, drop = FALSE) +
+    scale_fill_manual(values = colors_abundance, labels = labs_fill, drop = FALSE) +
+    theme_classic() +
+    labs(x = "", y = "Cover", color = "Taxa") +
+    scale_x_continuous(breaks = seq(yr_min, yr_max, by = 2)) +
+   # scale_y_continuous(
+     # limits = c(0, y_max*1.001),
+    #  expand = c(0, 0)
+   # ) +
+    theme(
+      #panel.grid.major = element_line(color = "grey40", linewidth = 0.6),
+     # panel.grid.minor = element_line(color = "grey40", linewidth = 0.3),
+      strip.text   = element_text(size = 25, face = "bold"),   # facet labels
+      axis.title   = element_text(size = 25),                  # axis titles
+      axis.text    = element_text(size = 20),                  # axis tick labels
+      legend.title = element_text(size = 25, face = "bold"),   # legend title
+      legend.text  = element_text(size = 20),                   # legend items
+      plot.margin = margin(55, 90, 55, 90),
+      axis.text.x = element_text(size = 22, angle = 45, hjust = 1)
+    ))
+
 
 
 
