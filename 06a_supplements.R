@@ -127,8 +127,34 @@ spoke_2007 <- data.frame(year = 2007, y0 = 0, y1 = y_max*1.001)
 
 #ggsave(filename = "output/Supp_FigS1_02062026.jpg", aggdat_hab_supp, height = 15, width = 20)
 
+# trying a bar plots ..
 
-(aggdat_hab_supp_bar <- ggplot(aggdat_hab, aes(year, prop_cover, fill = taxa)) + 
+focal_taxa <- c(
+  "sargassum_pacificum",
+  "turbinaria_ornata",
+  "dictyota_bartayresiana",
+  "peyssonnelia_inamoena",
+  "peyssonnelia_sp",
+  "halimeda_minima",
+  "halimeda_sp",
+  "lobophora_variegata",
+  "halimeda_opuntia",
+  "amansia_rhodantha",
+  "asparagopsis_taxiformis"
+)
+
+aggdat_hab_other <- macro_functional_groups_long %>%
+  mutate(
+    taxa_grouped = if_else(taxa %in% focal_taxa, taxa, "Other")
+  ) %>%
+  group_by(taxa_grouped, year, habitat) %>%
+  summarise(
+    prop_cover = mean(prop_cover, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+
+(aggdat_hab_supp_bar <- ggplot(aggdat_hab_other, aes(year, prop_cover, fill = taxa_grouped)) + 
     # plot species lines
     geom_col() + # 3 or 4 works well. 
     # faceted by species
