@@ -289,6 +289,14 @@ wide_alldata_filtered_cleaned_column_names <-
   ) 
 
 #this is the only csv we need to write out of this script as of september 15, 2025
-write.csv(wide_alldata_filtered_cleaned_column_names, "data/allbenthicdata_cleaned_colnames_09162025.csv", row.names = FALSE)
+#write.csv(wide_alldata_filtered_cleaned_column_names, "data/allbenthicdata_cleaned_colnames_09162025.csv", row.names = FALSE)
 
+#mistake quads - looking more on June 25, 2026
 
+new <- mistakes_quad_level %>%
+  filter(sum !=99) %>% #36 
+  filter(Habitat %in% c("Backreef", "Fringing")) %>%
+  filter(Year == "2020") %>%
+  distinct(Location)
+
+#36
