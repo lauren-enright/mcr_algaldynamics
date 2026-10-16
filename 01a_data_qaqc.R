@@ -139,6 +139,8 @@ unique(quad_level_summary$sum)
 
 #write.csv(mistakes_quad_level, "mistakes_quad_level.csv", row.names = FALSE)
 
+#
+
 ### CREATE DATAFRAME THAT IS JUST ALGAE
 
 #not_algae <- c("Ascidian", "Bare Space", "Coral", "Coral Rubble", "Corallimorpharia", "Heteractis sp.", "Millepora platyphylla", "No data", "Sand", "Sarcophyton sp.", "Shell Debris", "Soft Coral", "Sponge", "Tridacna sp.", "Zooxanthellae")
@@ -291,7 +293,7 @@ wide_alldata_filtered_cleaned_column_names <-
 #this is the only csv we need to write out of this script as of september 15, 2025
 #write.csv(wide_alldata_filtered_cleaned_column_names, "data/allbenthicdata_cleaned_colnames_09162025.csv", row.names = FALSE)
 
-#mistake quads - looking more on June 25, 2026
+#mistake quads - looking more on June 25, 2026 and October 16, 2026
 
 new <- mistakes_quad_level %>%
   filter(sum !=99) %>% #36 
@@ -299,4 +301,12 @@ new <- mistakes_quad_level %>%
   filter(Year == "2020") %>%
   distinct(Location)
 
-#36
+#36 --> these 36 we are throwing out anyway, because we are not using 2020 data for backreef and fringing 
+
+remainingweridos <- mistakes_quad_level %>%
+  filter(sum !=99) %>% #36 
+  filter(!(Habitat %in% c("Backreef", "Fringing") & Year == 2020)) %>%
+  distinct(Location)
+
+#double checked these against what is removed from analysis, and they match. 27 quads total, 13 from these werid less than 100 
+#... quads and then 14 that were recorded to never have any data. 
